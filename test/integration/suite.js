@@ -16,12 +16,35 @@ async function waitFor(what, check, timeoutMs = 120000) {
   throw new Error(`Timed out waiting for: ${what}`);
 }
 
+// On failure, print the extension's own output channel so CI logs show why.
+function dumpExtensionLog(extension) {
+  console.log(`extension active: ${extension && extension.isActive}`);
+  const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+    entry.isDirectory() ? walk(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`]);
+  try {
+    for (const file of walk(`${process.env.IMT_USER_DATA}/logs`).filter(file => /Translate Anywhere/.test(file))) {
+      console.log(`--- ${file}\n${fs.readFileSync(file, 'utf8')}`);
+    }
+  } catch (error) {
+    console.log(`No extension log: ${error.message}`);
+  }
+}
+
 async function run() {
+  const extension = vscode.extensions.getExtension('musingzone.vscode-translate-anywhere');
+  try {
+    await stage(extension);
+  } catch (error) {
+    dumpExtensionLog(extension);
+    throw error;
+  }
+}
+
+async function stage(extension) {
   const files = pathsFor(process.env.IMT_APP_ROOT);
   const pristine = JSON.parse(process.env.IMT_PRISTINE);
   const patched = () => fs.readFileSync(files.bundle, 'utf8').includes('IMMERSIVE_TRANSLATE_BEGIN')
     && fs.readFileSync(files.webview, 'utf8').includes('IMMERSIVE_TRANSLATE_BEGIN');
-  const extension = vscode.extensions.getExtension('musingzone.vscode-translate-anywhere');
   if (!extension) throw new Error('Extension not found');
   // activate() only settles after the "Reload Window" notification is answered, so watch the effects instead.
   if (process.env.IMT_STAGE === 'integrate') {

@@ -115,10 +115,11 @@ async function main() {
     fs.symlinkSync(root, devRoot, 'junction');
   }
   const launch = stage => runTests({
-    vscodeExecutablePath: executable,
+    // test-electron still assumes macOS's binary is called Electron; read the real name from Info.plist.
+    vscodeExecutablePath: codeExecutableFor(appRoot, executable),
     extensionDevelopmentPath: devRoot,
     extensionTestsPath: path.join(devRoot, 'test', 'integration', 'suite.js'),
-    extensionTestsEnv: { TRANSLATE_ANYWHERE_PORT: process.env.TRANSLATE_ANYWHERE_PORT || '17865', IMT_STAGE: stage, IMT_APP_ROOT: appRoot, IMT_PRISTINE: JSON.stringify(pristine) },
+    extensionTestsEnv: { TRANSLATE_ANYWHERE_PORT: process.env.TRANSLATE_ANYWHERE_PORT || '17865', IMT_STAGE: stage, IMT_USER_DATA: userData, IMT_APP_ROOT: appRoot, IMT_PRISTINE: JSON.stringify(pristine) },
     launchArgs: [workspace, '--user-data-dir', userData, '--extensions-dir', path.join(temp, 'extensions')]
   });
   try {
