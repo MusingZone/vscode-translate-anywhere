@@ -21,7 +21,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.vsix --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md). The *offline* packages bundle the dictionary."
+        # Re-runs upload into the existing release instead of failing.
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.vsix --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.vsix --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md). The *offline* packages bundle the dictionary."
+          fi
       - name: Publish to the Visual Studio Marketplace
         shell: bash
-        run: npx --yes @vscode/vsce publish --oidc --packagePath dist/vscode-translate-anywhere-win32-x64-*.vsix dist/vscode-translate-anywhere-win32-arm64-*.vsix
+        # --oidc (Trusted Publishing) needs vsce 4.1+.
+        run: npx --yes @vscode/vsce@^4.1.0 publish --oidc --skip-duplicate --packagePath dist/vscode-translate-anywhere-win32-x64-*.vsix dist/vscode-translate-anywhere-win32-arm64-*.vsix
