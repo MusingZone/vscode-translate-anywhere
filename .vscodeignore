@@ -1,0 +1,24 @@
+# Only runtime files go into the VSIX.
+# This file builds the "lite" package published to the Marketplace; tools/package.js derives
+# the offline package from it by dropping the dictionary rule below.
+data/dictionary.json.gz
+.git/**
+.github/**
+.vscode/**
+dist/**
+docs/**
+test/**
+tools/vendor/**
+tools/package.js
+tools/*.py
+**/__pycache__/**
+node_modules/**
+images/icon.svg
+JOURNAL.md
+PUBLISHING.md
+CONTRIBUTING.md
+README.zh-CN.md
+.gitignore
+.gitattributes
+*.vsix
+*.log

@@ -1,0 +1,29 @@
+name: Release
+# Push a tag such as v0.3.0 to build all VSIXs, attach them to a GitHub release
+# and (when the VSCE_PAT secret exists) publish the lite packages to the Marketplace.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test test/core.test.js
+      - run: node tools/package.js
+      - name: GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.vsix --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md). The *offline* packages bundle the dictionary."
+      - name: Publish to the Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        shell: bash
+        run: npx --yes @vscode/vsce publish --packagePath dist/vscode-translate-anywhere-win32-x64-*.vsix dist/vscode-translate-anywhere-win32-arm64-*.vsix
