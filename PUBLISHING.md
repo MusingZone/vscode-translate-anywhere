@@ -86,13 +86,21 @@ curl.exe -sIL https://cdn.jsdelivr.net/gh/MusingZone/vscode-translate-anywhere@d
 2. Choose **Create publisher**:
    - **ID**: `MusingZone`. It must equal `"publisher"` in `package.json` and cannot be changed later. IDs are case-insensitive.
    - **Name**: `MusingZone`. Optionally add the GitHub URL and a logo.
-3. Create a **Personal Access Token** for vsce:
-   1. Open <https://dev.azure.com/>. If you have no organization, create one (any name).
-   2. Go to **User settings → Personal access tokens → New Token**.
-   3. Set **Organization** to **All accessible organizations**. This is required; a single organization does not work.
-   4. Under **Scopes**, choose **Custom defined → Show all scopes → Marketplace → Manage**.
-   5. Choose an expiry and keep the token in a password manager. Never commit it.
-4. Log in: `npx @vscode/vsce login MusingZone`, then paste the token.
+3. Set up **Trusted Publishing** so GitHub Actions can publish without a stored token:
+   1. On the publisher page, open **Trusted Publishing → Create**.
+   2. Fill in:
+      - Policy name: `Release workflow`
+      - Repository owner: `MusingZone`
+      - Repository: `vscode-translate-anywhere`
+      - Workflow: `release.yml`
+      - Environment: leave empty
+   3. `release.yml` already has `id-token: write` and runs `vsce publish --oidc`.
+
+   See <https://code.visualstudio.com/api/working-with-extensions/publishing-extension#secure-automated-publishing-to-visual-studio-marketplace>.
+4. Optional, only for publishing from your own machine: create an Azure DevOps **Personal Access Token**.
+   - Use **All accessible organizations** with the **Marketplace → Manage** scope.
+   - Then run `npx @vscode/vsce login MusingZone`.
+   - Never commit the token.
 
 ## 5. Pre-flight checklist (every release)
 
@@ -150,7 +158,12 @@ git tag v0.3.0
 git push origin v0.3.0
 ```
 
-The `Release` workflow (`.github/workflows/release.yml`) runs the tests, builds all four VSIXs and attaches them to a GitHub release named after the tag. If the repository secret `VSCE_PAT` exists, it also publishes the lite packages to the Marketplace. Without the secret, publish manually as above.
+The `Release` workflow (`.github/workflows/release.yml`) does three things:
+1. Runs the tests.
+2. Builds all four VSIXs and attaches them to a GitHub release named after the tag.
+3. Publishes the lite packages to the Marketplace through Trusted Publishing (OIDC).
+
+Without a Trusted Publishing policy, the publish step fails. In that case, publish manually as above.
 
 **Open VSX (optional; used by VSCodium, Cursor, Windsurf and others).**
 
@@ -165,7 +178,7 @@ The patcher locates the installation through `vscode.env.appRoot`. Test on each 
 1. Run `npm version patch --no-git-tag-version` (or `minor`).
 2. Update `CHANGELOG.md`.
 3. Commit and push.
-4. Push the tag `v<version>`. CI then releases and, with `VSCE_PAT`, publishes.
+4. Push the tag `v<version>`. CI then releases and publishes.
 
 Installed users update automatically. After a VS Code update, the extension re-applies its integration by itself.
 
