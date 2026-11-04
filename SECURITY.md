@@ -9,7 +9,7 @@ You should receive a response within 7 days.
 ## Security design notes
 
 - **Installation changes.** The extension changes VS Code's own UI files only after explicit consent (`translateAnywhere.integration.enabled`). Originals are backed up and restored atomically, and the extension refuses to overwrite files changed by anyone else.
-- **Elevation.** For system-wide installations, a single maintenance operation runs through Windows UAC. No service, scheduled task or persistent elevated process is created.
+- **Elevation.** For system-wide installations, a single maintenance operation runs elevated through the platform's own prompt (UAC on Windows, the administrator password dialog on macOS, polkit `pkexec` on Linux). No service, scheduled task or persistent elevated process is created.
 - **Local bridge.**
   - Listens on `127.0.0.1:17865` only.
   - Every request needs a random 256-bit token generated per installation and stored in the extension's global storage.

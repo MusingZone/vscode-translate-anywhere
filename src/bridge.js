@@ -2,7 +2,8 @@
 const http = require('node:http');
 const { timingSafeEqual } = require('node:crypto');
 
-const PORT = 17865;
+// Overridable only so integration tests can run next to an everyday VS Code window.
+const PORT = Number(process.env.TRANSLATE_ANYWHERE_PORT) || 17865;
 function allowedOrigin(origin) {
   return origin === 'vscode-file://vscode-app' ||
     /^vscode-webview:\/\/[a-z0-9-]+$/i.test(origin || '');

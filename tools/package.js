@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Builds the release VSIXs into dist/ (dictionaries: English–Chinese ECDICT, German–Chinese HanDeDict):
-//   vscode-translate-anywhere-<target>-<version>.vsix          lite: dictionary downloaded on first use (Marketplace build)
-//   vscode-translate-anywhere-offline-<target>-<version>.vsix  offline: dictionary bundled (GitHub Releases)
+//   vscode-translate-anywhere-<target>-<version>.vsix   lite, one per desktop platform: dictionaries downloaded on first use
+//                                                       (Marketplace build)
+//   vscode-translate-anywhere-offline-<version>.vsix    offline, universal: dictionaries bundled (GitHub Releases)
 // Usage: node tools/package.js [--lite-only|--offline-only] [--target win32-x64] [-- extra vsce args]
 'use strict';
 const fs = require('node:fs');
@@ -13,7 +14,9 @@ const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
 const extra = args.includes('--') ? args.slice(args.indexOf('--') + 1) : [];
 const own = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
-const targets = own.includes('--target') ? [own[own.indexOf('--target') + 1]] : ['win32-x64', 'win32-arm64'];
+// The extension is plain JavaScript; the Marketplace keeps one lite package per desktop platform (UI extension).
+const TARGETS = ['win32-x64', 'win32-arm64', 'darwin-x64', 'darwin-arm64', 'linux-x64', 'linux-arm64', 'linux-armhf'];
+const targets = own.includes('--target') ? [own[own.indexOf('--target') + 1]] : TARGETS;
 const variants = own.includes('--lite-only') ? ['lite'] : own.includes('--offline-only') ? ['offline'] : ['lite', 'offline'];
 const { name, version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const DICTIONARY_RULES = ['data/dictionary.json.gz', 'data/dictionary-de.json.gz'];
@@ -36,11 +39,12 @@ const vsce = process.env.VSCE ? [process.execPath, process.env.VSCE] : fs.exists
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 try {
   for (const variant of variants) {
-    for (const target of targets) {
-      const out = path.join('dist', `${name}-${variant === 'offline' ? 'offline-' : ''}${target}-${version}.vsix`);
-      const cmd = [...vsce, 'package', '--target', target, '-o', out,
+    // The offline package is universal: it is installed manually from a VSIX on any platform.
+    for (const target of variant === 'offline' ? [null] : targets) {
+      const out = path.join('dist', `${name}-${target ? target : 'offline'}-${version}.vsix`);
+      const cmd = [...vsce, 'package', ...(target ? ['--target', target] : []), '-o', out,
         ...(variant === 'offline' ? ['--ignoreFile', offlineIgnore] : []), ...extra];
-      console.log(`> ${variant} ${target}`);
+      console.log(`> ${variant} ${target || 'universal'}`);
       const result = spawnSync(cmd[0], cmd.slice(1), { cwd: root, stdio: 'inherit', shell: cmd[0].endsWith('.cmd') });
       if (result.status !== 0) process.exit(result.status || 1);
       console.log(`  ${out} (${(fs.statSync(path.join(root, out)).size / 1048576).toFixed(2)} MB)`);

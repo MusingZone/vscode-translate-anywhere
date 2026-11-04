@@ -574,3 +574,82 @@ test('German dictionary data, mirrors and packaging stay consistent', () => {
     assert.match(real.lookup('Übersetzung').translation, /翻译/);
   }
 });
+
+const { execFileSync } = require('node:child_process');
+const { elevationPlan, codeExecutableFor, readOnlyInstallReason } = require('../src/elevation');
+
+test('elevation plans are built per platform and quote paths safely', () => {
+  const base = { appRoot: "/opt/VS Code's/resources/app", stateFolder: '/home/u/state', extensionRoot: '/home/u/ext',
+    codeExecutable: '/opt/VS Code\'s/code', mode: 'apply', resultFile: '/home/u/state/elevation-1.json', owner: '1000:1000' };
+  const win = elevationPlan({ ...base, platform: 'win32' });
+  assert.equal(win.file, 'powershell.exe');
+  assert.match(Buffer.from(win.args[2], 'base64').toString('utf16le'), /Start-Process -FilePath powershell\.exe -Verb RunAs/);
+  const mac = elevationPlan({ ...base, platform: 'darwin', prompt: 'Say "hi"' });
+  assert.equal(mac.file, 'osascript');
+  assert.match(mac.args[1], /^do shell script ".*" with administrator privileges with prompt "Say \\"hi\\""$/s);
+  assert.ok(mac.shell.startsWith("ELECTRON_RUN_AS_NODE=1 '/opt/VS Code'\\''s/code' "));
+  assert.ok(mac.shell.endsWith(" 'apply' '/home/u/state/elevation-1.json' '1000:1000'"));
+  const linux = elevationPlan({ ...base, platform: 'linux' });
+  assert.deepEqual(linux.args.slice(0, 3), ['/usr/bin/env', 'ELECTRON_RUN_AS_NODE=1', base.codeExecutable]);
+  assert.equal(linux.file, 'pkexec');
+  assert.ok(linux.shell.startsWith('sudo env ELECTRON_RUN_AS_NODE=1 '));
+  assert.equal(elevationPlan({ ...base, platform: 'linux', privileged: false }).file, '/bin/sh');
+  assert.equal(readOnlyInstallReason('/snap/code/190/usr/share/code/resources/app', {}), 'snap');
+  assert.equal(readOnlyInstallReason('/app/share/code/resources/app', {}), 'flatpak');
+  assert.equal(readOnlyInstallReason('/private/var/folders/x/AppTranslocation/ABC/d/Visual Studio Code.app/Contents/Resources/app', {}), 'translocated');
+  assert.equal(readOnlyInstallReason('/usr/share/code/resources/app', {}), null);
+  assert.equal(readOnlyInstallReason('C:\\Program Files\\Microsoft VS Code\\resources\\app', {}), null);
+});
+
+test('macOS elevation runs the main app binary named in Info.plist', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'imt-mac-'));
+  try {
+    const contents = path.join(temp, 'Visual Studio Code.app', 'Contents');
+    fs.mkdirSync(path.join(contents, 'MacOS'), { recursive: true });
+    fs.mkdirSync(path.join(contents, 'Resources', 'app'), { recursive: true });
+    fs.writeFileSync(path.join(contents, 'Info.plist'), '<dict><key>CFBundleExecutable</key>\n<string>Electron</string></dict>');
+    fs.writeFileSync(path.join(contents, 'MacOS', 'Electron'), '');
+    const appRoot = path.join(contents, 'Resources', 'app');
+    assert.equal(codeExecutableFor(appRoot, '/helper', 'darwin'), path.join(contents, 'MacOS', 'Electron'));
+    assert.equal(codeExecutableFor(appRoot, '/helper', 'linux'), '/helper');
+  } finally {
+    fs.rmSync(temp, { recursive: true });
+  }
+});
+
+test('the elevated maintenance step patches and restores (unprivileged run of the real plan on this OS)', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "imt elev's-"));
+  try {
+    const root = path.join(temp, 'app');
+    const state = path.join(temp, 'state');
+    const originals = fixture();
+    const files = pathsFor(root);
+    for (const [key, file] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, originals[key]);
+    }
+    fs.mkdirSync(state, { recursive: true });
+    fs.writeFileSync(path.join(state, 'bridge-token'), 'tok');
+    const extensionRoot = path.resolve(__dirname, '..');
+    const run = mode => {
+      const resultFile = path.join(state, `elevation-${crypto.randomUUID()}.json`);
+      if (process.platform === 'win32') {
+        execFileSync(process.execPath, [path.join(extensionRoot, 'tools', 'maintenance.js'), root, state, extensionRoot, mode, resultFile]);
+      } else {
+        // The exact command the elevated prompt runs, minus the privilege request (osascript on macOS, sh on Linux).
+        const plan = elevationPlan({ appRoot: root, stateFolder: state, extensionRoot, codeExecutable: process.execPath, mode, resultFile, privileged: false });
+        execFileSync(plan.file, plan.args);
+      }
+      const result = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+      fs.unlinkSync(resultFile);
+      return result;
+    };
+    assert.deepEqual(run('apply'), { ok: true, changed: true });
+    assert.ok(fs.readFileSync(files.bundle, 'utf8').includes('IMMERSIVE_TRANSLATE_BEGIN'));
+    assert.ok(fs.readFileSync(files.bundle, 'utf8').includes('"token":"tok"'));
+    assert.deepEqual(run('restore'), { ok: true, changed: true });
+    for (const [key, file] of Object.entries(files)) assert.equal(fs.readFileSync(file, 'utf8'), originals[key]);
+  } finally {
+    fs.rmSync(temp, { recursive: true });
+  }
+});

@@ -1,6 +1,6 @@
 name: Release
-# Push a tag such as v0.3.0 to build all VSIXs, attach them to a GitHub release
-# and publish the lite packages to the Marketplace with Trusted Publishing (OIDC, no stored token).
+# Push a tag such as v0.5.0 to run the Windows/macOS/Linux tests, build all VSIXs, attach them to a GitHub release
+# and publish the platform-specific lite packages to the Marketplace with Trusted Publishing (OIDC, no stored token).
 on:
   push:
     tags: ['v*']
@@ -8,17 +8,18 @@ permissions:
   contents: write
   id-token: write
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
   release:
-    runs-on: windows-latest
+    needs: test
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test test/core.test.js
       - run: node tools/package.js
       - name: GitHub release
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         # Re-runs upload into the existing release instead of failing.
@@ -26,9 +27,8 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/*.vsix --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/*.vsix --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md). The *offline* packages bundle the dictionary."
+            gh release create "$GITHUB_REF_NAME" dist/*.vsix --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md). Install the VSIX matching your platform; the *offline* package works on every platform and bundles the dictionaries."
           fi
       - name: Publish to the Visual Studio Marketplace
-        shell: bash
         # --oidc (Trusted Publishing) needs vsce 4.1+.
-        run: npx --yes @vscode/vsce@^4.1.0 publish --oidc --skip-duplicate --packagePath dist/vscode-translate-anywhere-win32-x64-*.vsix dist/vscode-translate-anywhere-win32-arm64-*.vsix
+        run: npx --yes @vscode/vsce@^4.1.0 publish --oidc --skip-duplicate --packagePath dist/vscode-translate-anywhere-{win32,darwin,linux}-*.vsix

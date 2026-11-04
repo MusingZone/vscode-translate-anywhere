@@ -2,6 +2,18 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - macOS and Linux
+
+### Added
+- **macOS** (Apple Silicon and Intel) and **Linux** (x64, ARM64, ARMhf) support. The Marketplace now offers a package for every desktop platform.
+- Administrator confirmation on every platform when the VS Code installation is not writable: UAC on Windows, the system password dialog on macOS, polkit (`pkexec`) on Linux. Files written while elevated are handed back to your user account.
+- On Linux without a polkit agent, the error offers a **Copy Terminal Command** button with the equivalent `sudo` command.
+- Clear messages for installations that cannot be modified: macOS App Translocation (VS Code started from Downloads or a disk image), Snap and Flatpak.
+- An integration test that downloads the current VS Code Stable and patches, relaunches and restores it for real. CI runs it on Windows, macOS and Linux before every release.
+
+### Changed
+- The offline VSIX is now a single universal package, `vscode-translate-anywhere-offline-<version>.vsix`.
+
 ## [0.4.0] - German
 
 ### Added

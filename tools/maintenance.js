@@ -1,7 +1,17 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const [appRoot, stateFolder, extensionRoot, mode, resultFile] = process.argv.slice(2);
+const [appRoot, stateFolder, extensionRoot, mode, resultFile, owner] = process.argv.slice(2);
+// macOS/Linux elevation runs this as root: hand the backups, state and result files back to the user.
+function restoreOwner() {
+  if (!owner || typeof process.getuid !== 'function' || process.getuid() !== 0) return;
+  const [uid, gid] = owner.split(':').map(Number);
+  if (!Number.isInteger(uid) || !Number.isInteger(gid) || uid === 0) return;
+  for (const name of fs.readdirSync(stateFolder)) {
+    const file = path.join(stateFolder, name);
+    try { if (fs.statSync(file).uid === 0) fs.chownSync(file, uid, gid); } catch { /* best effort */ }
+  }
+}
 try {
   if (!['apply', 'restore'].includes(mode)) throw new Error('Invalid maintenance mode');
   if (path.dirname(resultFile) !== stateFolder || !/^elevation-[a-f0-9-]+\.json$/.test(path.basename(resultFile))) {
@@ -23,4 +33,6 @@ try {
 } catch (error) {
   fs.writeFileSync(resultFile, JSON.stringify({ ok: false, error: error.message }), 'utf8');
   process.exitCode = 1;
+} finally {
+  try { restoreOwner(); } catch { /* best effort */ }
 }

@@ -104,7 +104,7 @@ The English → Chinese dictionary is [ECDICT](https://github.com/skywind3000/EC
 | Option | How |
 | --- | --- |
 | **Automatic download** *(default)* | On first use the dictionary is downloaded once, from GitHub Releases with jsDelivr and raw.githubusercontent mirrors as fallbacks, and checked with SHA-256. Until it is ready, every selection uses AI. |
-| **Offline VSIX** | Download `vscode-translate-anywhere-offline-<platform>-<version>.vsix` from [GitHub Releases](https://github.com/MusingZone/vscode-translate-anywhere/releases) and run **Extensions: Install from VSIX…**. No network access is needed. |
+| **Offline VSIX** | Download `vscode-translate-anywhere-offline-<version>.vsix` (one package for every platform) from [GitHub Releases](https://github.com/MusingZone/vscode-translate-anywhere/releases) and run **Extensions: Install from VSIX…**. No network access is needed. |
 | **Local file** | Click **Choose file…** in the sidebar (or set `translateAnywhere.dictionary.path`) to use a `dictionary.json.gz` you downloaded or built yourself with `tools/build.py`. |
 
 Behind a firewall, set `translateAnywhere.dictionary.downloadUrl` to an internal HTTPS mirror of the same file. Set `translateAnywhere.dictionary.autoDownload` to `false` to never download.
@@ -132,7 +132,7 @@ Safeguards:
 - Original files are backed up byte-for-byte in the extension's global storage. The patch is applied atomically and refuses to overwrite files it did not write.
 - **Disable and Restore VS Code** restores the originals. The restore also runs automatically when the extension is uninstalled, after VS Code restarts.
 - After a VS Code update replaces the files, the integration is reapplied automatically (`translateAnywhere.integration.autoRepair`).
-- If VS Code is installed for all users under `Program Files`, Windows asks for administrator confirmation (UAC) for each patch operation. No persistent service or scheduled task is created.
+- If the VS Code installation folder is not writable by you, each patch operation asks for administrator confirmation once: UAC on Windows, the system password dialog on macOS, the polkit (`pkexec`) dialog on Linux. No persistent service or scheduled task is created, and the files the extension keeps are handed back to your user account.
 - Because checksums are updated, VS Code does not report a "corrupt installation". After **disabling**, the warning may appear once until VS Code is fully restarted.
 
 ## Settings
@@ -190,10 +190,12 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 
 ## Requirements and limitations
 
-- **Windows only** (x64 and ARM64) in this release. Desktop VS Code Stable 1.100 or newer; Insiders usually works too.
+- **Windows** (x64, ARM64), **macOS** (Apple Silicon, Intel) and **Linux** (x64, ARM64, ARMhf). Desktop VS Code Stable 1.100 or newer; Insiders usually works too.
+- **macOS:** Option works as Alt, so the default shortcuts are Option+Z and Option+W. Run VS Code from */Applications*: when it runs from *Downloads* or a mounted disk image, macOS starts it from a read-only copy (App Translocation) that cannot be integrated. Modifying the app bundle invalidates its code signature seal; VS Code still starts normally, and **Disable** restores the original files.
+- **Linux:** `.deb`/`.rpm` installs under `/usr/share/code` need a polkit agent for the administrator prompt (present on standard desktops). If none is available, the extension offers a terminal command to copy. **Snap** and **Flatpak** installations are read-only and cannot be integrated; use the `.deb`, `.rpm` or `.tar.gz` build instead.
 - Not available in VS Code for the Web or Codespaces browser sessions. In remote windows (SSH, WSL, containers) the extension runs on your local machine as a UI extension.
 - Requires write access to the VS Code installation folder. For system-wide installs this means administrator confirmation.
-- The bridge uses local port `17865`. If several Windows users run VS Code at the same time, only the first one gets translations.
+- The bridge uses local port `17865`. If several users of the same computer run VS Code at the same time, only the first one gets translations.
 - VS Code UI changes in future releases can break individual surfaces until the extension is updated.
 - The offline dictionaries cover English → Chinese and German → Chinese. Other language pairs always use AI.
 

@@ -10,7 +10,7 @@ const { SettingsPanel } = require('./panel');
 const { createBridge, PORT } = require('./bridge');
 const { applyPatch, restorePatch, withPatchLock } = require('./patcher');
 const ui = require('./ui');
-const { elevatedMaintenance } = require('./elevation');
+const { elevatedMaintenance, readOnlyInstallReason } = require('./elevation');
 const { Vocabulary } = require('./vocabulary');
 
 const SECTION = 'translateAnywhere';
@@ -671,20 +671,71 @@ async function activate(context) {
         ? applyPatch(vscode.env.appRoot, stateFolder, ui.toString(), { endpoint: `http://127.0.0.1:${PORT}`, token, version })
         : { changed: restorePatch(vscode.env.appRoot, stateFolder) };
     } catch (error) {
-      if (!['EACCES', 'EPERM'].includes(error.code) || process.platform !== 'win32') throw error;
-      const consent = await vscode.window.showWarningMessage(
-        L('The VS Code installation folder needs administrator rights. Confirm this one patch operation through Windows UAC? No persistent admin task is created; VS Code updates will ask again.',
-          'VS Code 安装目录需要管理员权限。是否通过 Windows UAC 确认本次界面补丁操作？不会创建常驻管理员任务；VS Code 更新后需要重新确认。',
-          'Der VS Code-Installationsordner erfordert Administratorrechte. Diesen einen Patch-Vorgang über die Windows-Benutzerkontensteuerung (UAC) bestätigen? Es wird keine dauerhafte Admin-Aufgabe angelegt; nach VS Code-Updates wird erneut gefragt.'),
-        { modal: true }, L('Continue with UAC', '管理员确认', 'Mit UAC fortfahren')
-      );
-      if (!consent) throw new Error(L('Administrator confirmation was cancelled; VS Code files were not changed.', '已取消管理员确认；安装文件未修改。',
-        'Administratorbestätigung abgebrochen; VS Code-Dateien wurden nicht geändert.'));
-      return elevatedMaintenance({
-        appRoot: vscode.env.appRoot, stateFolder, extensionRoot: context.extensionUri.fsPath,
-        codeExecutable: process.execPath, mode
-      });
+      if (!['EACCES', 'EPERM', 'EROFS'].includes(error.code)) throw error;
+      const readOnly = readOnlyInstallReason(vscode.env.appRoot);
+      if (readOnly || error.code === 'EROFS') throw new Error(readOnlyMessage(readOnly));
+      if (!['win32', 'darwin', 'linux'].includes(process.platform)) throw error;
+      const { message, button } = elevationText();
+      const consent = await vscode.window.showWarningMessage(message, { modal: true }, button);
+      if (!consent) throw new Error(L('Administrator confirmation was cancelled; VS Code files were not changed.', '?????????????????',
+        'Administratorbest?tigung abgebrochen; VS Code-Dateien wurden nicht ge?ndert.'));
+      try {
+        return await elevatedMaintenance({
+          appRoot: vscode.env.appRoot, stateFolder, extensionRoot: context.extensionUri.fsPath,
+          codeExecutable: process.execPath, mode,
+          prompt: L('Translate Anywhere needs to update VS Code\'s UI files.', 'Translate Anywhere ???? VS Code ??????',
+            'Translate Anywhere muss die UI-Dateien von VS Code aktualisieren.')
+        });
+      } catch (elevationError) {
+        if (elevationError.manualCommand) {
+          const copy = L('Copy Terminal Command', '??????', 'Terminalbefehl kopieren');
+          const choice = await vscode.window.showErrorMessage(L(
+            `Translate Anywhere: ${elevationError.message}. Run the copied command in a terminal (it asks for your sudo password), then reload the window.`,
+            `Translate Anywhere?${elevationError.message}??????????????????? sudo ???????????`,
+            `Translate Anywhere: ${elevationError.message}. F?hren Sie den kopierten Befehl in einem Terminal aus (er fragt nach Ihrem sudo-Passwort) und laden Sie dann das Fenster neu.`), copy);
+          if (choice === copy) await vscode.env.clipboard.writeText(elevationError.manualCommand);
+        }
+        throw elevationError;
+      }
     }
+  }
+  function elevationText() {
+    if (process.platform === 'darwin') {
+      return {
+        message: L('The VS Code application is not writable by your user account. Confirm this one patch operation with an administrator password? No background helper is installed; VS Code updates may ask again.',
+          'VS Code ????????????????????????????????????????????VS Code ????????????',
+          'Die VS Code-Anwendung ist f?r Ihr Benutzerkonto nicht beschreibbar. Diesen einen Patch-Vorgang mit einem Administratorpasswort best?tigen? Es wird kein Hintergrunddienst installiert; nach VS Code-Updates wird eventuell erneut gefragt.'),
+        button: L('Continue as Administrator', '?????', 'Als Administrator fortfahren')
+      };
+    }
+    if (process.platform === 'linux') {
+      return {
+        message: L('The VS Code installation folder is owned by root (typical for .deb/.rpm installs). Confirm this one patch operation through the system authentication dialog (polkit)? No background service is installed; VS Code updates will ask again.',
+          'VS Code ?????? root?.deb/.rpm ?????????????????????polkit?????????????????????VS Code ??????????',
+          'Der VS Code-Installationsordner geh?rt root (typisch f?r .deb/.rpm-Installationen). Diesen einen Patch-Vorgang ?ber den Systemauthentifizierungsdialog (polkit) best?tigen? Es wird kein Hintergrunddienst installiert; nach VS Code-Updates wird erneut gefragt.'),
+        button: L('Continue as Administrator', '?????', 'Als Administrator fortfahren')
+      };
+    }
+    return {
+      message: L('The VS Code installation folder needs administrator rights. Confirm this one patch operation through Windows UAC? No persistent admin task is created; VS Code updates will ask again.',
+        'VS Code ???????????????? Windows UAC ???????????????????????VS Code ??????????',
+        'Der VS Code-Installationsordner erfordert Administratorrechte. Diesen einen Patch-Vorgang ?ber die Windows-Benutzerkontensteuerung (UAC) best?tigen? Es wird keine dauerhafte Admin-Aufgabe angelegt; nach VS Code-Updates wird erneut gefragt.'),
+      button: L('Continue with UAC', '?????', 'Mit UAC fortfahren')
+    };
+  }
+  function readOnlyMessage(reason) {
+    if (reason === 'translocated') {
+      return L('VS Code is running from a temporary read-only location (macOS App Translocation). Move "Visual Studio Code.app" to the Applications folder, start it from there and retry.',
+        'VS Code ?? macOS ?????????App Translocation???? ?Visual Studio Code.app? ?????????????????????',
+        'VS Code l?uft von einem tempor?ren, schreibgesch?tzten Ort (macOS App Translocation). Verschieben Sie "Visual Studio Code.app" in den Ordner "Programme", starten Sie es von dort und versuchen Sie es erneut.');
+    }
+    if (reason === 'snap' || reason === 'flatpak') {
+      return L(`The ${reason === 'snap' ? 'Snap' : 'Flatpak'} package of VS Code is read-only and cannot be integrated. Install VS Code from the .deb/.rpm package or the .tar.gz archive from code.visualstudio.com instead.`,
+        `VS Code ? ${reason === 'snap' ? 'Snap' : 'Flatpak'} ?????????????? code.visualstudio.com ??? .deb/.rpm ???? .tar.gz ????`,
+        `Das ${reason === 'snap' ? 'Snap' : 'Flatpak'}-Paket von VS Code ist schreibgesch?tzt und kann nicht integriert werden. Installieren Sie VS Code stattdessen aus dem .deb/.rpm-Paket oder dem .tar.gz-Archiv von code.visualstudio.com.`);
+    }
+    return L('The VS Code installation is on a read-only file system and cannot be integrated.', 'VS Code ????????????????',
+      'Die VS Code-Installation liegt auf einem schreibgesch?tzten Dateisystem und kann nicht integriert werden.');
   }
   // The patched integrity check reads the current product.json checksums, so a window reload is enough.
   async function offerReload(message) {

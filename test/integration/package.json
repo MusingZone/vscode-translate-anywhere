@@ -1,0 +1,11 @@
+{
+  "name": "translate-anywhere-integration",
+  "private": true,
+  "description": "Cross-platform integration tests against a real VS Code build (run in CI on Windows, macOS and Linux).",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

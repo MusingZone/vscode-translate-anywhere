@@ -3,16 +3,37 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
+  workflow_dispatch:
 jobs:
   test:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: node --test test/core.test.js
-      - run: node tools/package.js --lite-only --target win32-x64
+      - run: npm install --no-package-lock --prefix test/integration
+      # Downloads the current VS Code Stable and patches/restores it for real (including a sudo run on macOS/Linux).
+      - name: Integration test (real VS Code)
+        if: runner.os != 'Linux'
+        run: node test/integration/run.js
+      - name: Integration test (real VS Code, virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node test/integration/run.js
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/package.js --lite-only
       - uses: actions/upload-artifact@v4
         with:
           name: vsix

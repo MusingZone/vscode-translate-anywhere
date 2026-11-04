@@ -7,7 +7,7 @@ Please open an [issue](https://github.com/MusingZone/vscode-translate-anywhere/i
 
 Requirements:
 
-- Windows with desktop VS Code 1.100 or newer.
+- Windows, macOS or Linux with desktop VS Code 1.100 or newer.
 - Node.js 22 or newer (the packaging tool `@vscode/vsce` needs it).
 - Python 3.10+ with Playwright and Google Chrome for the headless UI tests:
   ```powershell
@@ -114,4 +114,4 @@ Data derived from HanDeDict must stay under CC BY-SA 3.0 and keep `data/HanDeDic
 
 ## Releasing (maintainers)
 
-See [PUBLISHING.md](PUBLISHING.md). In short: bump `version` in `package.json`, add a CHANGELOG entry, then push a `v<version>` tag. The release workflow builds the four VSIXs, creates the GitHub release and publishes to the Marketplace.
+See [PUBLISHING.md](PUBLISHING.md). In short: bump `version` in `package.json`, add a CHANGELOG entry, then push a `v<version>` tag. The release workflow runs the Windows/macOS/Linux tests, builds the VSIXs (seven platform-specific lite packages and one universal offline package), creates the GitHub release and publishes to the Marketplace.

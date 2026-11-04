@@ -107,7 +107,7 @@
 | 方式 | 说明 |
 | --- | --- |
 | **自动下载**（默认） | 首次使用时自动下载一次，并用 SHA-256 校验。下载源优先 GitHub Releases，失败时依次尝试 jsDelivr 与 raw.githubusercontent 镜像。下载完成前，所有划词都使用 AI。 |
-| **离线安装包** | 从 [GitHub Releases](https://github.com/MusingZone/vscode-translate-anywhere/releases) 下载 `vscode-translate-anywhere-offline-<平台>-<版本>.vsix`，在 VS Code 中运行 **扩展：从 VSIX 安装…**。完全不需要联网。 |
+| **离线安装包** | 从 [GitHub Releases](https://github.com/MusingZone/vscode-translate-anywhere/releases) 下载 `vscode-translate-anywhere-offline-<版本>.vsix`（所有平台通用），在 VS Code 中运行 **扩展：从 VSIX 安装…**。完全不需要联网。 |
 | **本地文件** | 在侧边栏点击 **选择文件…**（或设置 `translateAnywhere.dictionary.path`），使用你自己下载或用 `tools/build.py` 生成的 `dictionary.json.gz`。 |
 
 如果网络受限，可将 `translateAnywhere.dictionary.downloadUrl` 设为内网 HTTPS 镜像（文件需相同）；若不希望自动下载，将 `translateAnywhere.dictionary.autoDownload` 设为 `false`。
@@ -135,7 +135,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 - 原始文件逐字节备份在扩展的全局存储目录中。修改是原子操作，并且拒绝覆盖不是本扩展写入的文件。
 - **禁用并恢复 VS Code 原文件** 会还原原始文件。卸载扩展后，VS Code 重启时也会自动还原。
 - VS Code 更新替换文件后，集成会自动重新应用（`translateAnywhere.integration.autoRepair`）。
-- 如果 VS Code 是安装在 `Program Files` 下的"所有用户"版本，每次修改都会弹出 Windows 管理员确认（UAC）。不会创建常驻服务或计划任务。
+- 如果当前用户对 VS Code 安装目录没有写权限，每次修改都会弹出一次管理员确认：Windows 为 UAC，macOS 为系统密码对话框，Linux 为 polkit（`pkexec`）对话框。不会创建常驻服务或计划任务，扩展保存的文件会归还给当前用户。
 - 由于同步更新了校验和，VS Code 不会提示"安装已损坏"。**禁用**后，在完全重启 VS Code 之前，该提示可能会出现一次。
 
 ## 设置项
@@ -193,10 +193,12 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 
 ## 系统要求与限制
 
-- 当前版本**仅支持 Windows**（x64 与 ARM64），需要桌面版 VS Code Stable 1.100 或更高版本；Insiders 通常也可用。
+- 支持 **Windows**（x64、ARM64）、**macOS**（Apple Silicon、Intel）和 **Linux**（x64、ARM64、ARMhf），需要桌面版 VS Code Stable 1.100 或更高版本；Insiders 通常也可用。
+- **macOS**：Option 键即 Alt，默认快捷键为 Option+Z / Option+W。请从"应用程序"文件夹运行 VS Code；从"下载"或磁盘映像直接运行时，macOS 会从只读副本启动（App Translocation），无法集成。修改应用包会使其代码签名封印失效，但 VS Code 仍可正常启动，**禁用**即可恢复原文件。
+- **Linux**：安装在 `/usr/share/code` 的 `.deb`/`.rpm` 版本需要 polkit 认证代理来弹出管理员确认（标准桌面环境均自带）；没有时扩展会提供可复制的终端命令。**Snap** 与 **Flatpak** 安装是只读的，无法集成，请改用 `.deb`、`.rpm` 或 `.tar.gz` 版本。
 - 不支持 VS Code 网页版和 Codespaces 浏览器会话。在远程窗口（SSH、WSL、容器）中，扩展作为 UI 扩展运行在本机。
 - 需要对 VS Code 安装目录有写入权限；"所有用户"安装需要管理员确认。
-- 本地桥使用端口 `17865`。如果同一台电脑上有多个 Windows 用户同时运行 VS Code，只有第一个用户能使用翻译。
+- 本地桥使用端口 `17865`。如果同一台电脑上有多个用户同时运行 VS Code，只有第一个用户能使用翻译。
 - VS Code 未来版本的界面改动可能导致个别页面暂时失效，需等待扩展更新。
 - 离线词典覆盖英 → 中与德 → 中，其他语言对始终使用 AI。
 
