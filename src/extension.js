@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Dictionary } = require('./dictionary');
-const { DEFAULT_MIRRORS, RELEASE_TAG, locateDictionary, downloadDictionary } = require('./dictionary-store');
+const { DEFAULT_MIRRORS, GERMAN_MIRRORS, RELEASE_TAG, locateDictionary, downloadDictionary } = require('./dictionary-store');
 const { PROVIDERS, buildPrompt, resolveProvider, translateWithProvider, listProviderModels } = require('./providers');
 const { SettingsPanel } = require('./panel');
 const { createBridge, PORT } = require('./bridge');
@@ -23,6 +23,9 @@ const LANGUAGES = {
   fr: 'French', de: 'German', es: 'Spanish', pt: 'Portuguese', it: 'Italian', ru: 'Russian', uk: 'Ukrainian',
   ar: 'Arabic', hi: 'Hindi', vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', tr: 'Turkish', pl: 'Polish', nl: 'Dutch'
 };
+// Interface languages with full string tables; anything else falls back to English.
+const UI_LANGUAGES = ['en', 'zh', 'de'];
+const resolveUiLanguage = code => UI_LANGUAGES.find(lang => String(code || '').toLowerCase().startsWith(lang)) || 'en';
 const SURFACES = ['markdownPreview', 'releaseNotes', 'chat', 'settings', 'extensionPages', 'welcome', 'workbenchUI'];
 const MAX_AI_CONCURRENCY = 8;
 
@@ -58,11 +61,11 @@ async function activate(context) {
   const output = vscode.window.createOutputChannel('Translate Anywhere');
   context.subscriptions.push(output);
   const config = () => vscode.workspace.getConfiguration(SECTION);
-  const zhUI = () => {
+  const uiLanguage = () => {
     const setting = config().get('uiLanguage', 'auto');
-    return (setting === 'auto' ? vscode.env.language : setting).toLowerCase().startsWith('zh');
+    return resolveUiLanguage(setting === 'auto' ? vscode.env.language : setting);
   };
-  const L = (en, zh) => zhUI() ? zh : en;
+  const L = (en, zh, de = en) => ({ en, zh, de })[uiLanguage()];
   const stateFolder = context.globalStorageUri.fsPath;
   fs.mkdirSync(stateFolder, { recursive: true });
   const errorText = error => error instanceof Error ? error.message : String(error);
@@ -85,7 +88,8 @@ async function activate(context) {
   };
   const AUTHORIZE_HINT = () => L(
     'First use needs your permission: run "Translate Anywhere: Authorize AI Model" from the Command Palette in this window and click Allow.',
-    '首次使用需授权：在当前窗口按 Ctrl+Shift+P 运行「Translate Anywhere: Authorize AI Model」并点击允许。'
+    '首次使用需授权：在当前窗口按 Ctrl+Shift+P 运行「Translate Anywhere: Authorize AI Model」并点击允许。',
+    'Beim ersten Mal ist Ihre Zustimmung nötig: Führen Sie in diesem Fenster über die Befehlspalette "Translate Anywhere: Authorize AI Model" aus und klicken Sie auf "Zulassen".'
   );
   const lightweightRank = model => {
     const name = `${model.id} ${model.family} ${model.name}`.toLowerCase();
@@ -104,7 +108,8 @@ async function activate(context) {
     const [lightest] = await sortedModels();
     if (!lightest) {
       throw new Error(L('No VS Code language model is available. Sign in to GitHub Copilot or configure a model provider first.',
-        '没有可用的 VS Code 语言模型。请先登录 Copilot 或配置模型提供程序。'));
+        '没有可用的 VS Code 语言模型。请先登录 Copilot 或配置模型提供程序。',
+        'Kein VS Code-Sprachmodell verfügbar. Melden Sie sich zuerst bei GitHub Copilot an oder konfigurieren Sie einen Modellanbieter.'));
     }
     return lightest;
   }
@@ -112,31 +117,33 @@ async function activate(context) {
   async function chooseModel() {
     const models = await sortedModels();
     if (!models.length) {
-      throw new Error(L('No VS Code language model is available. Configure a model provider first.', '没有可用的 VS Code 模型。请先配置模型提供程序。'));
+      throw new Error(L('No VS Code language model is available. Configure a model provider first.', '没有可用的 VS Code 模型。请先配置模型提供程序。',
+        'Kein VS Code-Sprachmodell verfügbar. Konfigurieren Sie zuerst einen Modellanbieter.'));
     }
     const current = config().get('ai.modelId', '');
     const timings = new Map();
     const picker = vscode.window.createQuickPick();
-    picker.title = L('Translate Anywhere: AI translation model', 'Translate Anywhere：选择 AI 翻译模型');
+    picker.title = L('Translate Anywhere: AI translation model', 'Translate Anywhere：选择 AI 翻译模型', 'Translate Anywhere: KI-Übersetzungsmodell');
     picker.placeholder = L('Lightweight models are listed first. Click the speed button to benchmark authorized models.',
-      '轻量模型排在前面。可点击右上角测速按钮实测已授权模型的翻译耗时。');
+      '轻量模型排在前面。可点击右上角测速按钮实测已授权模型的翻译耗时。',
+      'Leichte Modelle stehen oben. Klicken Sie auf die Tempo-Schaltfläche, um autorisierte Modelle zu messen.');
     picker.matchOnDescription = picker.matchOnDetail = true;
-    const measure = { iconPath: new vscode.ThemeIcon('dashboard'), tooltip: L('Measure translation speed', '测速') };
+    const measure = { iconPath: new vscode.ThemeIcon('dashboard'), tooltip: L('Measure translation speed', '测速', 'Übersetzungstempo messen') };
     picker.buttons = [measure];
-    const auto = { label: `$(sparkle) ${L('Auto (prefer a lightweight model)', '自动（优先轻量模型）')}`, model: null };
+    const auto = { label: `$(sparkle) ${L('Auto (prefer a lightweight model)', '自动（优先轻量模型）', 'Automatisch (leichtes Modell bevorzugen)')}`, model: null };
     const speed = model => {
       const timing = timings.get(model.id);
       if (timing === undefined) return '';
       if (typeof timing === 'number') return `${(timing / 1000).toFixed(1)}s · `;
-      return timing === 'unauthorized' ? L('not authorized yet · ', '未授权 · ') : L('failed · ', '失败 · ');
+      return timing === 'unauthorized' ? L('not authorized yet · ', '未授权 · ', 'noch nicht autorisiert · ') : L('failed · ', '失败 · ', 'fehlgeschlagen · ');
     };
     const render = () => {
       const rank = model => typeof timings.get(model.id) === 'number' ? timings.get(model.id) : Number.MAX_SAFE_INTEGER;
       const ordered = [...models].sort((a, b) => rank(a) - rank(b) || lightweightRank(a) - lightweightRank(b));
-      auto.description = current ? '' : L('current', '当前');
+      auto.description = current ? '' : L('current', '当前', 'aktuell');
       const items = [auto, ...ordered.map(model => ({
         label: model.name,
-        description: `${speed(model)}${model.vendor} · ${model.family}${model.id === current ? L(' · current', ' · 当前') : ''}`,
+        description: `${speed(model)}${model.vendor} · ${model.family}${model.id === current ? L(' · current', ' · 当前', ' · aktuell') : ''}`,
         detail: model.id, model
       }))];
       const active = picker.activeItems[0]?.model?.id ?? current;
@@ -197,23 +204,25 @@ async function activate(context) {
         vscode.LanguageModelChatMessage.User(JSON.stringify({ text }))
       ];
       const justification = L(`Translate Anywhere uses this model to translate text you select into ${language}.`,
-        `Translate Anywhere 需要使用该模型，把你划选的文本翻译为${language}。`);
+        `Translate Anywhere 需要使用该模型，把你划选的文本翻译为${language}。`,
+        `Translate Anywhere verwendet dieses Modell, um von Ihnen markierten Text zu übersetzen (Zielsprache: ${language}).`);
       const response = await model.sendRequest(messages, { justification }, cancellation.token);
       let translation = '';
       for await (const fragment of response.text) {
         translation += fragment;
         if (translation.length > 6000) {
           cancellation.cancel();
-          throw new Error(L('The model output exceeded 6000 characters.', '模型输出超过 6000 字限制。'));
+          throw new Error(L('The model output exceeded 6000 characters.', '模型输出超过 6000 字限制。', 'Die Modellausgabe hat 6000 Zeichen überschritten.'));
         }
         onDelta?.(fragment);
       }
-      if (cancellation.token.isCancellationRequested) throw new Error(L('AI translation timed out or was cancelled.', 'AI 翻译超时或已取消。'));
-      if (!translation.trim()) throw new Error(L('The model returned no translation.', '模型未返回译文。'));
+      if (cancellation.token.isCancellationRequested) throw new Error(L('AI translation timed out or was cancelled.', 'AI 翻译超时或已取消。',
+        'Die KI-Übersetzung hat das Zeitlimit überschritten oder wurde abgebrochen.'));
+      if (!translation.trim()) throw new Error(L('The model returned no translation.', '模型未返回译文。', 'Das Modell hat keine Übersetzung geliefert.'));
       return translation.trim();
     } catch (error) {
       if (error instanceof vscode.LanguageModelError && error.code === 'NoPermissions') {
-        throw new Error(`${L('This model is not authorized yet.', '尚未授权使用该模型。')} ${AUTHORIZE_HINT()}`);
+        throw new Error(`${L('This model is not authorized yet.', '尚未授权使用该模型。', 'Dieses Modell ist noch nicht autorisiert.')} ${AUTHORIZE_HINT()}`);
       }
       throw error;
     } finally {
@@ -241,7 +250,8 @@ async function activate(context) {
     if (aiCache.has(key)) return aiCache.get(key);
     if (aiInFlight >= MAX_AI_CONCURRENCY) {
       throw new Error(L(`Too many concurrent AI translations (limit ${MAX_AI_CONCURRENCY}); try again shortly.`,
-        `同时进行的 AI 翻译已达 ${MAX_AI_CONCURRENCY} 个上限，请稍后重试。`));
+        `同时进行的 AI 翻译已达 ${MAX_AI_CONCURRENCY} 个上限，请稍后重试。`,
+        `Zu viele gleichzeitige KI-Übersetzungen (Limit ${MAX_AI_CONCURRENCY}); bitte gleich erneut versuchen.`));
     }
     aiInFlight++;
     try {
@@ -263,7 +273,7 @@ async function activate(context) {
           language: LANGUAGES[targetLanguage()], onDelta,
           signal: signal ? AbortSignal.any([signal, timeout]) : timeout
         }).catch(error => {
-          if (timeout.aborted) throw new Error(L('AI translation timed out after 30 s.', 'AI 翻译超时（30 秒）。'));
+          if (timeout.aborted) throw new Error(L('AI translation timed out after 30 s.', 'AI 翻译超时（30 秒）。', 'Zeitüberschreitung der KI-Übersetzung nach 30 s.'));
           throw error;
         });
         label = `${provider.label} ${provider.model}`;
@@ -285,26 +295,30 @@ async function activate(context) {
       const apiKey = await context.secrets.get(secretKey(provider.id)) || '';
       const started = Date.now();
       const sample = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: L(`Testing ${provider.label} (${provider.model})…`, `正在测试 ${provider.label}（${provider.model}）…`) },
+        { location: vscode.ProgressLocation.Notification, title: L(`Testing ${provider.label} (${provider.model})…`, `正在测试 ${provider.label}（${provider.model}）…`,
+          `${provider.label} (${provider.model}) wird getestet…`) },
         () => translateWithProvider({
           provider, apiKey, text: 'Hello, world', language: LANGUAGES[targetLanguage()],
           signal: AbortSignal.timeout(30000)
         })
       );
       await vscode.window.showInformationMessage(L(`AI translation is ready: ${provider.label} ${provider.model} (${((Date.now() - started) / 1000).toFixed(1)}s) → ${sample}`,
-        `AI 翻译可用：${provider.label} ${provider.model}（${((Date.now() - started) / 1000).toFixed(1)} 秒）→ ${sample}`));
+        `AI 翻译可用：${provider.label} ${provider.model}（${((Date.now() - started) / 1000).toFixed(1)} 秒）→ ${sample}`,
+        `KI-Übersetzung ist bereit: ${provider.label} ${provider.model} (${((Date.now() - started) / 1000).toFixed(1)} s) → ${sample}`));
       return;
     }
     const model = await resolveModel();
     if (context.languageModelAccessInformation.canSendRequest(model) === true) {
-      await vscode.window.showInformationMessage(L(`Translate Anywhere is authorized to use ${model.name}.`, `Translate Anywhere 已获得模型授权：${model.name}`));
+      await vscode.window.showInformationMessage(L(`Translate Anywhere is authorized to use ${model.name}.`, `Translate Anywhere 已获得模型授权：${model.name}`,
+        `Translate Anywhere darf jetzt ${model.name} verwenden.`));
       return;
     }
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: L(`Requesting access to ${model.name}…`, `正在请求授权并测试 ${model.name}…`) },
+      { location: vscode.ProgressLocation.Notification, title: L(`Requesting access to ${model.name}…`, `正在请求授权并测试 ${model.name}…`,
+        `Zugriff auf ${model.name} wird angefordert…`) },
       () => runModel(model, 'hello', 60000)
     );
-    await vscode.window.showInformationMessage(L(`AI translation is ready: ${model.name}`, `AI 翻译已可用：${model.name}`));
+    await vscode.window.showInformationMessage(L(`AI translation is ready: ${model.name}`, `AI 翻译已可用：${model.name}`, `KI-Übersetzung ist bereit: ${model.name}`));
   }
   async function setApiKey(id = aiProvider()) {
     if (id === 'vscode') {
@@ -313,10 +327,12 @@ async function activate(context) {
     }
     const preset = PROVIDERS[id];
     const value = await vscode.window.showInputBox({
-      title: L(`API key for ${preset.label}`, `${preset.label} 的 API Key`),
+      title: L(`API key for ${preset.label}`, `${preset.label} 的 API Key`, `API-Schlüssel für ${preset.label}`),
       prompt: L('Stored in VS Code Secret Storage (the OS keychain), never in settings.json. Leave empty and press Enter to delete the saved key.',
-        '保存在 VS Code Secret Storage（系统钥匙串）中，不会写入 settings.json。留空并回车可删除已保存的 Key。'),
-      password: true, ignoreFocusOut: true, placeHolder: preset.keyUrl ? L(`Get a key: ${preset.keyUrl}`, `获取 Key：${preset.keyUrl}`) : ''
+        '保存在 VS Code Secret Storage（系统钥匙串）中，不会写入 settings.json。留空并回车可删除已保存的 Key。',
+        'Wird im VS Code Secret Storage (Schlüsselbund des Betriebssystems) gespeichert, nie in settings.json. Leer lassen und Enter drücken, um den gespeicherten Schlüssel zu löschen.'),
+      password: true, ignoreFocusOut: true, placeHolder: preset.keyUrl ? L(`Get a key: ${preset.keyUrl}`, `获取 Key：${preset.keyUrl}`,
+        `Schlüssel erhalten: ${preset.keyUrl}`) : ''
     });
     if (value === undefined) return false;
     if (value.trim()) await context.secrets.store(secretKey(id), value.trim());
@@ -328,10 +344,13 @@ async function activate(context) {
   async function pickProvider(includeVsCode = true) {
     const current = aiProvider();
     const items = [
-      ...(includeVsCode ? [{ id: 'vscode', label: L('VS Code language models (GitHub Copilot etc.)', 'VS Code 语言模型（GitHub Copilot 等）'), description: L('no API key needed', '无需 API Key') }] : []),
+      ...(includeVsCode ? [{ id: 'vscode', label: L('VS Code language models (GitHub Copilot etc.)', 'VS Code 语言模型（GitHub Copilot 等）',
+        'VS Code-Sprachmodelle (GitHub Copilot usw.)'), description: L('no API key needed', '无需 API Key',
+        'kein API-Schlüssel nötig') }] : []),
       ...Object.entries(PROVIDERS).map(([id, preset]) => ({ id, label: preset.label, description: preset.model ? `${preset.model}` : '' }))
-    ].map(item => ({ ...item, description: `${item.description || ''}${item.id === current ? L(' · current', ' · 当前') : ''}` }));
-    const picked = await vscode.window.showQuickPick(items, { title: L('Translate Anywhere: AI provider', 'Translate Anywhere：AI 服务商') });
+    ].map(item => ({ ...item, description: `${item.description || ''}${item.id === current ? L(' · current', ' · 当前', ' · aktuell') : ''}` }));
+    const picked = await vscode.window.showQuickPick(items, { title: L('Translate Anywhere: AI provider', 'Translate Anywhere：AI 服务商',
+      'Translate Anywhere: KI-Anbieter') });
     return picked?.id;
   }
   async function switchProvider(id) {
@@ -349,16 +368,20 @@ async function activate(context) {
     const preset = PROVIDERS[id];
     const current = config().get('ai.apiModel', '') || preset.model;
     const picker = vscode.window.createQuickPick();
-    picker.title = L(`Translate Anywhere: ${preset.label} model`, `Translate Anywhere：${preset.label} 模型`);
-    picker.placeholder = L('Pick a model or type any model name and press Enter', '选择模型，或直接输入模型名后回车');
+    picker.title = L(`Translate Anywhere: ${preset.label} model`, `Translate Anywhere：${preset.label} 模型`, `Translate Anywhere: ${preset.label}-Modell`);
+    picker.placeholder = L('Pick a model or type any model name and press Enter', '选择模型，或直接输入模型名后回车',
+      'Modell auswählen oder beliebigen Modellnamen eingeben und Enter drücken');
     picker.busy = true;
     const toItems = names => [...new Set([current, preset.model, ...names].filter(Boolean))]
-      .map(name => ({ label: name, description: [name === preset.model ? L('default', '默认') : '', name === current ? L('current', '当前') : ''].filter(Boolean).join(' · ') }));
+      .map(name => ({ label: name, description: [name === preset.model ? L('default', '默认',
+        'Standard') : '', name === current ? L('current', '当前',
+        'aktuell') : ''].filter(Boolean).join(' · ') }));
     picker.items = toItems([]);
     picker.show();
     // The model field may still be empty for a custom endpoint; listing does not need it.
     const showListError = error => {
-      picker.placeholder = L(`Could not list models (${errorText(error)}); type a model name`, `无法获取模型列表（${errorText(error)}）；请直接输入模型名`);
+      picker.placeholder = L(`Could not list models (${errorText(error)}); type a model name`, `无法获取模型列表（${errorText(error)}）；请直接输入模型名`,
+        `Modelle konnten nicht abgerufen werden (${errorText(error)}); bitte Modellnamen eingeben`);
     };
     Promise.resolve().then(async () => listProviderModels({
       provider: resolveProvider(id, { baseUrl: config().get('ai.baseUrl', ''), model: current || 'any' }),
@@ -400,12 +423,13 @@ async function activate(context) {
       if (!found) {
         if (!config().get('dictionary.autoDownload', true)) {
           setDictionaryState({ status: 'missing' });
-          throw new Error(L('The offline dictionary is not installed.', '离线词典尚未安装。'));
+          throw new Error(L('The offline dictionary is not installed.', '离线词典尚未安装。', 'Das Offline-Wörterbuch ist nicht installiert.'));
         }
-        if (Date.now() < downloadRetryAt) throw new Error(dictionaryState.error || L('Dictionary download failed.', '词典下载失败。'));
+        if (Date.now() < downloadRetryAt) throw new Error(dictionaryState.error || L('Dictionary download failed.', '词典下载失败。',
+          'Download des Wörterbuchs fehlgeschlagen.'));
         await fetchDictionary();
         found = findDictionary();
-        if (!found) throw new Error(L('The offline dictionary is not installed.', '离线词典尚未安装。'));
+        if (!found) throw new Error(L('The offline dictionary is not installed.', '离线词典尚未安装。', 'Das Offline-Wörterbuch ist nicht installiert.'));
       }
       setDictionaryState({ status: 'loading', kind: found.kind, file: found.file });
       const loaded = await Dictionary.load(found.file);
@@ -430,7 +454,8 @@ async function activate(context) {
   // Downloads in the background with status-bar progress; lookups fall back to AI until it is ready.
   function fetchDictionary({ manual = false } = {}) {
     downloadPromise ||= vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Window, title: L('Translate Anywhere: downloading dictionary', 'Translate Anywhere：正在下载词典') },
+      { location: vscode.ProgressLocation.Window, title: L('Translate Anywhere: downloading dictionary', 'Translate Anywhere：正在下载词典',
+        'Translate Anywhere: Wörterbuch wird heruntergeladen') },
       async progress => {
         const custom = config().get('dictionary.downloadUrl', '').trim();
         let last = -1;
@@ -455,12 +480,13 @@ async function activate(context) {
       setDictionaryState({ status: 'error', error: errorText(error).split('\n')[0] });
       if (!manual && downloadWarned) throw error;
       downloadWarned = true;
-      const retry = L('Retry', '重试');
-      const choose = L('Choose File…', '选择本地文件…');
-      const offline = L('Offline Package', '离线安装包');
+      const retry = L('Retry', '重试', 'Wiederholen');
+      const choose = L('Choose File…', '选择本地文件…', 'Datei auswählen…');
+      const offline = L('Offline Package', '离线安装包', 'Offline-Paket');
       vscode.window.showWarningMessage(
         L('Translate Anywhere could not download the offline dictionary (AI translation still works). Retry, pick a local dictionary file, or install the offline VSIX.',
-          'Translate Anywhere 无法下载离线词典（AI 翻译仍可用）。可重试、指定本地词典文件，或安装离线版 VSIX。'),
+          'Translate Anywhere 无法下载离线词典（AI 翻译仍可用）。可重试、指定本地词典文件，或安装离线版 VSIX。',
+          'Translate Anywhere konnte das Offline-Wörterbuch nicht herunterladen (die KI-Übersetzung funktioniert weiterhin). Erneut versuchen, eine lokale Wörterbuchdatei auswählen oder die Offline-VSIX installieren.'),
         retry, choose, offline).then(choice => {
         if (choice === retry) vscode.commands.executeCommand('translateAnywhere.downloadDictionary');
         if (choice === choose) vscode.commands.executeCommand('translateAnywhere.chooseDictionaryFile');
@@ -478,13 +504,97 @@ async function activate(context) {
     }
     return { found: false, word: text.trim(), unavailable: true };
   }
+  // German–Chinese dictionary (HanDeDict): loaded on the first German lookup, downloaded once if not bundled.
+  const germanInfo = JSON.parse(fs.readFileSync(context.asAbsolutePath('data/dictionary-de-source.json'), 'utf8'));
+  let germanDictionary;
+  let germanPromise;
+  let germanDownload;
+  let germanRetryAt = 0;
+  let germanState = { status: 'idle' };
+  const setGermanState = state => { germanState = state; panel?.refresh(); };
+  const findGerman = () => locateDictionary({
+    bundledFile: context.asAbsolutePath('data/dictionary-de.json.gz'),
+    storageFolder: stateFolder, sha256: germanInfo.dictionarySHA256, name: 'dictionary-de'
+  });
+  function fetchGerman() {
+    germanDownload ||= vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: L('Translate Anywhere: downloading German dictionary',
+        'Translate Anywhere：正在下载德汉词典', 'Translate Anywhere: Deutsch-Chinesisch-Wörterbuch wird heruntergeladen') },
+      async progress => {
+        let last = -1;
+        const result = await downloadDictionary({
+          storageFolder: stateFolder, sha256: germanInfo.dictionarySHA256, name: 'dictionary-de', mirrors: GERMAN_MIRRORS,
+          onProgress: ({ url, received, total }) => {
+            const percent = total ? Math.floor(received * 100 / total) : -1;
+            if (percent === last) return;
+            last = percent;
+            progress.report({ message: total ? `${percent}%` : `${(received / 1048576).toFixed(1)} MB` });
+            setGermanState({ status: 'downloading', percent, received, url });
+          }
+        });
+        output.appendLine(`German dictionary downloaded from ${result.url}`);
+        germanRetryAt = 0;
+        return result;
+      }
+    ).then(result => result, error => {
+      logError(error);
+      germanRetryAt = Date.now() + 10 * 60 * 1000;
+      setGermanState({ status: 'error', error: errorText(error).split('\n')[0] });
+      throw error;
+    }).finally(() => { germanDownload = undefined; });
+    return germanDownload;
+  }
+  const loadGerman = ({ manual = false } = {}) => {
+    germanPromise ||= (async () => {
+      let found = findGerman();
+      if (!found) {
+        if (!manual && (!config().get('dictionary.german', true) || Date.now() < germanRetryAt)) {
+          throw new Error(L('The German dictionary is not installed.', '德汉词典尚未安装。', 'Das Deutsch-Chinesisch-Wörterbuch ist nicht installiert.'));
+        }
+        await fetchGerman();
+        found = findGerman();
+        if (!found) throw new Error(L('The German dictionary is not installed.', '德汉词典尚未安装。', 'Das Deutsch-Chinesisch-Wörterbuch ist nicht installiert.'));
+      }
+      setGermanState({ status: 'loading', kind: found.kind });
+      germanDictionary = await Dictionary.load(found.file, 'de');
+      setGermanState({ status: 'ready', kind: found.kind, entries: germanInfo.entries });
+      output.appendLine(`German dictionary loaded (${found.kind}, ${germanInfo.entries} entries): ${found.file}`);
+      return germanDictionary;
+    })().catch(error => {
+      germanPromise = undefined;
+      if (germanState.status !== 'error') setGermanState({ status: 'idle' });
+      throw error;
+    });
+    return germanPromise;
+  };
+  // German context: HanDeDict first. A miss on a word without umlauts (an English term inside German text, or a
+  // misdetected context) falls back to the English dictionary, so English lookups behave exactly as before.
+  async function lookupAny(text, language) {
+    if (language !== 'de') return lookup(text);
+    const german = await lookupGerman(text);
+    if (german.found || german.unavailable || /[äöüß]/i.test(text)) return german;
+    const english = await lookup(text);
+    return english.found ? english : german;
+  }
+  async function lookupGerman(text) {
+    if (germanDictionary) return germanDictionary.lookup(text);
+    if (!germanDownload && config().get('dictionary.german', true)) {
+      // Load (or start the one-time download) without blocking: until then the UI falls back to AI.
+      const pending = loadGerman();
+      pending.catch(() => {});
+      if (findGerman()) {
+        try { return (await pending).lookup(text); } catch { /* reported via germanState */ }
+      }
+    }
+    return { found: false, word: text.trim(), unavailable: true, language: 'de' };
+  }
   // Everything the injected UI needs; it polls /status, so changes apply without a reload.
   const runtimeSettings = () => {
     const surfaces = config().get('surfaces', {}) || {};
     const shortcuts = config().get('shortcuts', {}) || {};
     return {
       targetLanguage: targetLanguage(),
-      uiLanguage: zhUI() ? 'zh' : 'en',
+      uiLanguage: uiLanguage(),
       fullPageMode: config().get('fullPage.mode', 'translationOnly'),
       autoAI: config().get('ai.autoTranslate', true),
       surfaces: Object.fromEntries(SURFACES.map(key => [key, surfaces[key] !== false])),
@@ -528,7 +638,7 @@ async function activate(context) {
   async function startBridgeOnce() {
     try {
       server = await createBridge({
-        token, dictionary: { lookup }, translate, vocabulary,
+        token, dictionary: { lookup: lookupAny }, translate, vocabulary,
         isEnabled: () => config().get('integration.enabled', false),
         getStatus: () => ({ version, settings: runtimeSettings() }),
         onError: logError
@@ -564,10 +674,12 @@ async function activate(context) {
       if (!['EACCES', 'EPERM'].includes(error.code) || process.platform !== 'win32') throw error;
       const consent = await vscode.window.showWarningMessage(
         L('The VS Code installation folder needs administrator rights. Confirm this one patch operation through Windows UAC? No persistent admin task is created; VS Code updates will ask again.',
-          'VS Code 安装目录需要管理员权限。是否通过 Windows UAC 确认本次界面补丁操作？不会创建常驻管理员任务；VS Code 更新后需要重新确认。'),
-        { modal: true }, L('Continue with UAC', '管理员确认')
+          'VS Code 安装目录需要管理员权限。是否通过 Windows UAC 确认本次界面补丁操作？不会创建常驻管理员任务；VS Code 更新后需要重新确认。',
+          'Der VS Code-Installationsordner erfordert Administratorrechte. Diesen einen Patch-Vorgang über die Windows-Benutzerkontensteuerung (UAC) bestätigen? Es wird keine dauerhafte Admin-Aufgabe angelegt; nach VS Code-Updates wird erneut gefragt.'),
+        { modal: true }, L('Continue with UAC', '管理员确认', 'Mit UAC fortfahren')
       );
-      if (!consent) throw new Error(L('Administrator confirmation was cancelled; VS Code files were not changed.', '已取消管理员确认；安装文件未修改。'));
+      if (!consent) throw new Error(L('Administrator confirmation was cancelled; VS Code files were not changed.', '已取消管理员确认；安装文件未修改。',
+        'Administratorbestätigung abgebrochen; VS Code-Dateien wurden nicht geändert.'));
       return elevatedMaintenance({
         appRoot: vscode.env.appRoot, stateFolder, extensionRoot: context.extensionUri.fsPath,
         codeExecutable: process.execPath, mode
@@ -576,7 +688,7 @@ async function activate(context) {
   }
   // The patched integrity check reads the current product.json checksums, so a window reload is enough.
   async function offerReload(message) {
-    const reload = L('Reload Window', '重载窗口');
+    const reload = L('Reload Window', '重载窗口', 'Fenster neu laden');
     if (await vscode.window.showInformationMessage(message, reload) === reload) {
       await vscode.commands.executeCommand('workbench.action.reloadWindow');
     }
@@ -589,19 +701,21 @@ async function activate(context) {
     panel?.refresh();
     if (result.changed) {
       await offerReload(L('Translate Anywhere is integrated with this VS Code version. Reload the window to start using it.',
-        'Translate Anywhere 已为当前 VS Code 版本完成集成，重载窗口后生效。'));
+        'Translate Anywhere 已为当前 VS Code 版本完成集成，重载窗口后生效。',
+        'Translate Anywhere ist in diese VS Code-Version integriert. Laden Sie das Fenster neu, um es zu verwenden.'));
     }
   }
   async function enable() {
     if (!config().get('integration.enabled', false)) {
       const consent = await vscode.window.showWarningMessage(
-        L('Enable the Translate Anywhere UI integration?', '启用 Translate Anywhere 界面集成？'),
+        L('Enable the Translate Anywhere UI integration?', '启用 Translate Anywhere 界面集成？', 'UI-Integration von Translate Anywhere aktivieren?'),
         {
           modal: true,
           detail: L('To show translations inside Chat, Markdown preview, Release Notes and Settings, this extension adds a small script to VS Code\'s own UI files and updates their checksums. Originals are backed up and restored by "Disable and Restore VS Code" or on uninstall. VS Code updates replace the files; the patch is then reapplied automatically.',
-            '为在 Chat、Markdown 预览、Release Notes、设置页中显示翻译，本扩展会向 VS Code 自身的界面文件加入一小段脚本并更新其校验值。原文件会备份，可通过“Disable and Restore VS Code”或卸载扩展时恢复。VS Code 更新会替换这些文件，之后会自动重新集成。')
+            '为在 Chat、Markdown 预览、Release Notes、设置页中显示翻译，本扩展会向 VS Code 自身的界面文件加入一小段脚本并更新其校验值。原文件会备份，可通过“Disable and Restore VS Code”或卸载扩展时恢复。VS Code 更新会替换这些文件，之后会自动重新集成。',
+            'Um Übersetzungen in Chat, Markdown-Vorschau, Release Notes und Einstellungen anzuzeigen, fügt diese Erweiterung den UI-Dateien von VS Code ein kleines Skript hinzu und aktualisiert deren Prüfsummen. Die Originale werden gesichert und durch "Disable and Restore VS Code" oder bei der Deinstallation wiederhergestellt. VS Code-Updates ersetzen die Dateien; der Patch wird dann automatisch erneut angewendet.')
         },
-        L('Allow and Enable', '允许并启用')
+        L('Allow and Enable', '允许并启用', 'Zulassen und aktivieren')
       );
       if (!consent) return;
       await config().update('integration.enabled', true, vscode.ConfigurationTarget.Global);
@@ -627,9 +741,10 @@ async function activate(context) {
       panel?.refresh();
       if (restored) {
         await offerReload(L('VS Code files restored. Restart VS Code to finish; until then a reload may show VS Code\'s one-time "installation appears to be corrupt" notice.',
-          '已恢复 VS Code 原文件。完全重启 VS Code 后彻底生效；在此之前重载窗口可能出现一次“安装已损坏”提示。'));
+          '已恢复 VS Code 原文件。完全重启 VS Code 后彻底生效；在此之前重载窗口可能出现一次“安装已损坏”提示。',
+          'VS Code-Dateien wiederhergestellt. Starten Sie VS Code neu, um den Vorgang abzuschließen; bis dahin kann ein Neuladen einmalig den VS Code-Hinweis zu einer "beschädigten Installation" anzeigen.'));
       } else {
-        await vscode.window.showInformationMessage(L('Translation disabled.', '已禁用翻译。'));
+        await vscode.window.showInformationMessage(L('Translation disabled.', '已禁用翻译。', 'Übersetzung deaktiviert.'));
       }
     })),
     vscode.commands.registerCommand('translateAnywhere.selectModel', guarded(async () => {
@@ -650,19 +765,27 @@ async function activate(context) {
       // A failure is already reported with recovery actions.
       try { await fetchDictionary({ manual: true }); } catch { return; }
       reloadDictionary();
-      await vscode.window.showInformationMessage(L('Offline dictionary installed.', '离线词典已安装。'));
+      await vscode.window.showInformationMessage(L('Offline dictionary installed.', '离线词典已安装。', 'Offline-Wörterbuch installiert.'));
+    })),
+    vscode.commands.registerCommand('translateAnywhere.downloadGermanDictionary', guarded(async () => {
+      germanDictionary = undefined;
+      germanPromise = undefined;
+      germanRetryAt = 0;
+      await loadGerman({ manual: true });
+      await vscode.window.showInformationMessage(L('German–Chinese dictionary installed.', '德汉词典已安装。', 'Deutsch-Chinesisch-Wörterbuch installiert.'));
     })),
     vscode.commands.registerCommand('translateAnywhere.chooseDictionaryFile', guarded(async () => {
       const [file] = await vscode.window.showOpenDialog({
-        canSelectMany: false, title: L('Choose a Translate Anywhere dictionary (.json.gz)', '选择 Translate Anywhere 词典文件（.json.gz）'),
-        filters: { [L('Dictionary', '词典')]: ['gz'] }
+        canSelectMany: false, title: L('Choose a Translate Anywhere dictionary (.json.gz)', '选择 Translate Anywhere 词典文件（.json.gz）',
+          'Translate Anywhere-Wörterbuch auswählen (.json.gz)'),
+        filters: { [L('Dictionary', '词典', 'Wörterbuch')]: ['gz'] }
       }) || [];
       if (!file) return;
       // Validate before saving the setting so a bad file never replaces a working dictionary.
       const loaded = await Dictionary.load(file.fsPath);
       let sample;
       for (const word in loaded.entries) { sample = loaded.entries[word]; break; }
-      if (!Array.isArray(sample)) throw new Error(L('Not a Translate Anywhere dictionary file.', '不是有效的词典文件。'));
+      if (!Array.isArray(sample)) throw new Error(L('Not a Translate Anywhere dictionary file.', '不是有效的词典文件。', 'Keine gültige Translate Anywhere-Wörterbuchdatei.'));
       await config().update('dictionary.path', file.fsPath, vscode.ConfigurationTarget.Global);
     })),
     vscode.commands.registerCommand('translateAnywhere.useDefaultDictionary', guarded(() =>
@@ -673,34 +796,36 @@ async function activate(context) {
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${context.extension.id}`)),
     vscode.commands.registerCommand('translateAnywhere.openVocabulary', guarded(async () => {
       const file = vscode.Uri.file(path.join(stateFolder, 'vocabulary.md'));
-      fs.writeFileSync(file.fsPath, vocabulary.toMarkdown(zhUI()), 'utf8');
+      fs.writeFileSync(file.fsPath, vocabulary.toMarkdown(uiLanguage()), 'utf8');
       await vscode.commands.executeCommand('markdown.showPreview', file);
     })),
     vscode.commands.registerCommand('translateAnywhere.exportVocabulary', guarded(async () => {
       const target = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file(path.join(require('node:os').homedir(), 'Documents', 'vocabulary.csv')),
-        filters: { CSV: ['csv'] }, title: L('Export vocabulary', '导出生词本')
+        filters: { CSV: ['csv'] }, title: L('Export vocabulary', '导出生词本', 'Vokabelliste exportieren')
       });
       if (!target) return;
       fs.writeFileSync(target.fsPath, vocabulary.toCsv(), 'utf8');
       await vscode.window.showInformationMessage(L(`Exported ${vocabulary.list().length} entries to ${target.fsPath}`,
-        `已导出 ${vocabulary.list().length} 条生词到 ${target.fsPath}`));
+        `已导出 ${vocabulary.list().length} 条生词到 ${target.fsPath}`,
+        `${vocabulary.list().length} Einträge nach ${target.fsPath} exportiert`));
     })),
     vscode.commands.registerCommand('translateAnywhere.removeVocabulary', guarded(async () => {
       const picked = await vscode.window.showQuickPick(
         vocabulary.list().map(entry => ({ label: entry.text, description: entry.translation.replace(/\s+/g, ' ').slice(0, 80) })),
-        { canPickMany: true, title: L('Select vocabulary entries to remove', '选择要从生词本删除的条目'), matchOnDescription: true }
+        { canPickMany: true, title: L('Select vocabulary entries to remove', '选择要从生词本删除的条目',
+          'Zu entfernende Einträge der Vokabelliste auswählen'), matchOnDescription: true }
       );
       if (!picked?.length) return;
       const removed = vocabulary.remove(picked.map(item => item.label));
-      await vscode.window.showInformationMessage(L(`Removed ${removed} entries.`, `已从生词本删除 ${removed} 条。`));
+      await vscode.window.showInformationMessage(L(`Removed ${removed} entries.`, `已从生词本删除 ${removed} 条。`, `${removed} Einträge entfernt.`));
     })),
     vscode.commands.registerCommand('translateAnywhere.status', () => {
       output.appendLine(JSON.stringify({
         version, appRoot: vscode.env.appRoot, patchStatus,
         enabled: config().get('integration.enabled', false),
         autoRepair: config().get('integration.autoRepair', true),
-        aiProvider: aiProvider(), dictionary: dictionaryState,
+        aiProvider: aiProvider(), dictionary: dictionaryState, germanDictionary: germanState,
         bridgeListening: !!server || sharedBridge, sharedBridge, modelId: config().get('ai.modelId', ''),
         settings: runtimeSettings()
       }, null, 2));
@@ -722,20 +847,21 @@ async function activate(context) {
       catch (error) { logError(error); }
     }
     return {
-      version, zh: zhUI(),
+      version, uiLanguage: uiLanguage(),
       integration: { enabled: config().get('integration.enabled', false), status: patchStatus },
       targetLanguage: targetLanguage(),
       languages: Object.keys(LANGUAGES).map((code, index) => ({ code, label: languageLabels[index] || code })),
       fullPageMode: config().get('fullPage.mode', 'translationOnly'),
       autoAI: config().get('ai.autoTranslate', true),
       provider: providerId,
-      providers: [{ id: 'vscode', label: L('VS Code language models (Copilot…)', 'VS Code 语言模型（Copilot 等）') },
+      providers: [{ id: 'vscode', label: L('VS Code language models (Copilot…)', 'VS Code 语言模型（Copilot 等）', 'VS Code-Sprachmodelle (Copilot…)') },
         ...Object.entries(PROVIDERS).map(([id, item]) => ({ id, label: item.label }))],
       vscodeModels, modelId: config().get('ai.modelId', ''),
       apiModel: config().get('ai.apiModel', ''), baseUrl: config().get('ai.baseUrl', ''),
       providerDefaults: preset ? { model: preset.model, baseUrl: preset.baseUrl, keyUrl: preset.keyUrl || '', keyOptional: !!preset.keyOptional } : null,
       hasKey: preset ? !!await context.secrets.get(secretKey(providerId)) : false,
       dictionary: { ...dictionaryState, path: config().get('dictionary.path', ''), owner: !!server },
+      germanDictionary: { ...germanState, enabled: config().get('dictionary.german', true) },
       surfaces: runtimeSettings().surfaces,
       shortcuts: runtimeSettings().shortcuts,
       vocabularyCount: vocabulary.list().length
@@ -794,10 +920,11 @@ async function activate(context) {
       if (config().get('integration.autoRepair', true)) await integrate();
     } else if (!context.globalState.get('welcomeShown')) {
       await context.globalState.update('welcomeShown', true);
-      const action = L('Enable…', '启用…');
+      const action = L('Enable…', '启用…', 'Aktivieren…');
       const choice = await vscode.window.showInformationMessage(
         L('Translate Anywhere: select text in Chat, Markdown preview, Release Notes or Settings and hover the red dot to translate. Enable the UI integration to start.',
-          'Translate Anywhere：在 Chat、Markdown 预览、Release Notes、设置页中划词并悬停红点即可翻译。启用界面集成后开始使用。'),
+          'Translate Anywhere：在 Chat、Markdown 预览、Release Notes、设置页中划词并悬停红点即可翻译。启用界面集成后开始使用。',
+          'Translate Anywhere: Markieren Sie Text in Chat, Markdown-Vorschau, Release Notes oder Einstellungen und zeigen Sie auf den roten Punkt, um ihn zu übersetzen. Aktivieren Sie zuerst die UI-Integration.'),
         action);
       if (choice === action) await guarded(enable)();
     }
@@ -806,7 +933,8 @@ async function activate(context) {
     logError(error);
     await vscode.window.showErrorMessage(L(
       `Translate Anywhere could not integrate automatically: ${errorText(error)}. Nothing was overwritten; run "Translate Anywhere: Enable / Repair Integration" to retry.`,
-      `Translate Anywhere 自动集成失败：${errorText(error)}。未强行覆盖；运行 Enable / Repair 检查权限或兼容性。`));
+      `Translate Anywhere 自动集成失败：${errorText(error)}。未强行覆盖；运行 Enable / Repair 检查权限或兼容性。`,
+      `Translate Anywhere konnte nicht automatisch integriert werden: ${errorText(error)}. Es wurde nichts überschrieben; führen Sie "Translate Anywhere: Enable / Repair Integration" aus, um es erneut zu versuchen.`));
   }
 }
 module.exports = { activate };

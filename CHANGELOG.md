@@ -2,6 +2,28 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - German
+
+### Added
+- **German → Chinese dictionary.** German words are looked up offline in a dictionary derived from [HanDeDict](https://handedict.zydeo.net/) (CC BY-SA 3.0, about 133,000 headwords).
+  - German is recognized from umlauts/ß or from the surrounding paragraph.
+  - Plurals, umlaut plurals, verb endings, participles, *zu*-infinitives, superlatives and *ss*/*ß* spellings are reduced to the dictionary form.
+  - The Marketplace build downloads it once (about 3 MB, SHA-256 verified, with mirrors) the first time you select a German word. The offline VSIX bundles it.
+  - German sentences and paragraphs still go to AI, with a prompt that names the source language explicitly.
+- **German interface** (`translateAnywhere.uiLanguage`: `de`): popup, sidebar, messages, settings and command titles.
+- New setting `translateAnywhere.dictionary.german` and command **Download German–Chinese Dictionary**. The sidebar shows the German dictionary status.
+- `CONTRIBUTING.md` with the development setup and a guide to adding an interface language.
+
+### Changed
+- The vocabulary Markdown export follows the interface language.
+- German support stays out of the way for everyone else:
+  - the interface language still follows VS Code's display language (English when it is not Chinese or German);
+  - the German dictionary is only consulted, and only downloaded, when German is detected;
+  - a word missed in a German context that has no umlauts falls back to the English dictionary.
+
+### Fixed
+- **Clicking anywhere closes the popup**, including clicks in another page. For example, a popup opened in Chat now closes when you click in a Markdown preview, and the reverse also works. Switching to another application still leaves it open.
+
 ## [0.3.0] - First Marketplace release
 
 ### Added

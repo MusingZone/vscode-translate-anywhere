@@ -13,6 +13,7 @@ const STRINGS = {
     baseUrl: 'API base URL', testAI: 'Test AI', noModels: 'No VS Code language model available. Sign in to GitHub Copilot or pick another provider.',
     dictionary: 'Offline dictionary', dictReady: 'Ready · {0} entries · {1}', dictLoading: 'Loading…', dictDownloading: 'Downloading… {0}',
     dictMissing: 'Not installed. Lookups fall back to AI.', dictError: 'Error: {0}', dictIdle: 'Loads on first lookup',
+    germanDictionary: 'German → Chinese (HanDeDict)', germanIdle: 'Downloads automatically (about 3 MB) on the first German word', germanOff: 'Off',
     dictShared: 'Served by another VS Code window', bundled: 'bundled', downloaded: 'downloaded', custom: 'custom file',
     download: 'Download', choose: 'Choose file…', useDefault: 'Use default',
     surfaces: 'Where to translate', markdownPreview: 'Markdown preview', releaseNotes: 'Release Notes', chat: 'Chat',
@@ -33,6 +34,7 @@ const STRINGS = {
     noModels: '没有可用的 VS Code 语言模型。请登录 GitHub Copilot 或选择其他服务商。',
     dictionary: '离线词典', dictReady: '可用 · {0} 词条 · {1}', dictLoading: '加载中…', dictDownloading: '下载中… {0}',
     dictMissing: '未安装，查词将回退到 AI。', dictError: '错误：{0}', dictIdle: '首次查词时加载',
+    germanDictionary: '德译中（HanDeDict）', germanIdle: '首次选中德语单词时自动下载（约 3 MB）', germanOff: '已关闭',
     dictShared: '由另一个 VS Code 窗口提供', bundled: '内置', downloaded: '已下载', custom: '自定义文件',
     download: '下载', choose: '选择文件…', useDefault: '恢复默认',
     surfaces: '翻译范围', markdownPreview: 'Markdown 预览', releaseNotes: 'Release Notes', chat: 'Chat 对话',
@@ -42,6 +44,29 @@ const STRINGS = {
     shortcutHint: '点击输入框后直接按下组合键；退格键清空。',
     vocabulary: '生词本', entries: '{0} 条', open: '打开', export: '导出', remove: '删除…',
     allSettings: '全部设置', log: '查看日志'
+  },
+  de: {
+    integration: 'Integration', active: 'Aktiv', off: 'Nicht aktiviert', enable: 'Aktivieren / Reparieren', disable: 'Deaktivieren & wiederherstellen',
+    translation: 'Übersetzung', target: 'Zielsprache', pageMode: 'Anzeige der Seitenübersetzung', translationOnly: 'Nur Übersetzung',
+    bilingual: 'Zweisprachig (Original + Übersetzung)', autoAI: 'KI automatisch für Ausdrücke und Sätze verwenden',
+    ai: 'KI-Engine', provider: 'Anbieter', model: 'Modell', autoModel: 'Automatisch (leichtes Modell bevorzugen)', speed: 'Tempo messen',
+    testing: 'Wird gemessen…', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen', apiKey: 'API-Schlüssel',
+    keySaved: 'Im Schlüsselbund des Betriebssystems gespeichert', keyMissing: 'Nicht festgelegt', keyOptional: 'Optional',
+    setKey: 'Schlüssel festlegen', getKey: 'Schlüssel erhalten', fetch: 'Liste abrufen', fetching: 'Wird geladen…',
+    baseUrl: 'API-Basis-URL', testAI: 'KI testen',
+    noModels: 'Kein VS Code-Sprachmodell verfügbar. Melden Sie sich bei GitHub Copilot an oder wählen Sie einen anderen Anbieter.',
+    dictionary: 'Offline-Wörterbuch', dictReady: 'Bereit · {0} Einträge · {1}', dictLoading: 'Wird geladen…', dictDownloading: 'Wird heruntergeladen… {0}',
+    dictMissing: 'Nicht installiert. Nachschlagen erfolgt per KI.', dictError: 'Fehler: {0}', dictIdle: 'Wird beim ersten Nachschlagen geladen',
+    germanDictionary: 'Deutsch → Chinesisch (HanDeDict)', germanIdle: 'Wird beim ersten deutschen Wort automatisch heruntergeladen (ca. 3 MB)', germanOff: 'Aus',
+    dictShared: 'Wird von einem anderen VS Code-Fenster bereitgestellt', bundled: 'mitgeliefert', downloaded: 'heruntergeladen', custom: 'eigene Datei',
+    download: 'Herunterladen', choose: 'Datei auswählen…', useDefault: 'Standard verwenden',
+    surfaces: 'Wo übersetzt wird', markdownPreview: 'Markdown-Vorschau', releaseNotes: 'Release Notes', chat: 'Chat',
+    settings: 'Einstellungen & Tastenkombinationen', extensionPages: 'Erweiterungsseiten', welcome: 'Willkommensseite & Anleitungen',
+    workbenchUI: 'Benachrichtigungen, Dialoge & Hover',
+    shortcuts: 'Tastenkombinationen', paragraph: 'Absatz unter der Maus übersetzen', fullPage: 'Ganze Seite übersetzen',
+    shortcutHint: 'In ein Feld klicken und die Tastenkombination drücken. Rücktaste löscht sie.',
+    vocabulary: 'Vokabelliste', entries: '{0} Einträge', open: 'Öffnen', export: 'Exportieren', remove: 'Entfernen…',
+    allSettings: 'Alle Einstellungen', log: 'Protokoll anzeigen'
   }
 };
 
@@ -73,10 +98,10 @@ class SettingsPanel {
       this.pending = undefined;
       if (!this.view) return;
       const state = await this.api.state();
-      const language = state.zh ? 'zh' : 'en';
+      const language = STRINGS[state.uiLanguage] ? state.uiLanguage : 'en';
       if (language !== this.language) {
         this.language = language;
-        this.view.webview.html = this.html(STRINGS[language]);
+        this.view.webview.html = this.html({ ...STRINGS.en, ...STRINGS[language] });
       }
       this.post({ type: 'state', state });
     }, 50);
@@ -132,6 +157,7 @@ class SettingsPanel {
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--vscode-disabledForeground, #888); flex: none; }
   .dot.on { background: var(--vscode-testing-iconPassed, #73c991); }
   .muted { opacity: .75; font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
+  h4.sub { margin: 12px 0 4px; font-size: 12px; font-weight: 600; }
   .error { color: var(--vscode-errorForeground); }
   a { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -181,6 +207,9 @@ class SettingsPanel {
   <div class="buttons"><button id="dictDownload" data-command="translateAnywhere.downloadDictionary">${s.download}</button>
     <button data-command="translateAnywhere.chooseDictionaryFile">${s.choose}</button>
     <button id="dictDefault" data-command="translateAnywhere.useDefaultDictionary">${s.useDefault}</button></div>
+  <h4 class="sub">${s.germanDictionary}</h4>
+  <div id="deText"></div>
+  <div class="buttons"><button id="deDownload" data-command="translateAnywhere.downloadGermanDictionary">${s.download}</button></div>
 </section>
 <section>
   <h3>${s.surfaces}</h3>
@@ -253,6 +282,15 @@ function render() {
   $('dictPath').textContent = dict.path || '';
   $('dictDefault').hidden = !dict.path;
   $('dictDownload').hidden = dict.status === 'ready' || dict.status === 'downloading' || !!dict.path;
+  const de = s.germanDictionary || { status: 'idle' };
+  $('deText').classList.toggle('error', de.status === 'error');
+  $('deText').textContent =
+    de.status === 'ready' ? fmt(S.dictReady, Number(de.entries).toLocaleString(), S[de.kind] || '') :
+    de.status === 'loading' ? S.dictLoading :
+    de.status === 'downloading' ? fmt(S.dictDownloading, de.percent >= 0 ? de.percent + '%' : (de.received / 1048576).toFixed(1) + ' MB') :
+    de.status === 'error' ? fmt(S.dictError, de.error) :
+    de.enabled === false ? S.germanOff : dict.owner ? S.germanIdle : S.dictShared;
+  $('deDownload').hidden = de.status === 'ready' || de.status === 'downloading' || de.status === 'loading';
   for (const box of document.querySelectorAll('[data-key^="surfaces."]')) box.checked = s.surfaces[box.dataset.key.slice(9)];
   $('scParagraph').value = s.shortcuts.paragraph;
   $('scFullPage').value = s.shortcuts.fullPage;

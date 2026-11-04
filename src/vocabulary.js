@@ -53,14 +53,18 @@ class Vocabulary {
     return entries.length - kept.length;
   }
 
-  toMarkdown(zh = false) {
+  toMarkdown(language = 'en') {
     const cell = value => String(value || '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
     const entries = this.list();
     const rows = entries.map(entry =>
       `| ${cell(entry.text)} | ${cell(entry.phonetic && `/${entry.phonetic}/`)} | ${cell(entry.translation)} | ${cell((entry.addedAt || '').slice(0, 10))} |`);
-    const text = zh
-      ? { title: '生词本', header: '| 单词 / 短语 | 音标 | 释义 | 收藏日期 |', empty: '还没有收藏。划词后在弹窗中点击 ☆ 收藏。' }
-      : { title: 'Vocabulary', header: '| Word / phrase | Phonetic | Translation | Added |', empty: 'Nothing saved yet. Select text and click ☆ in the translation popup.' };
+    const TEXT = {
+      en: { title: 'Vocabulary', header: '| Word / phrase | Phonetic | Translation | Added |', empty: 'Nothing saved yet. Select text and click ☆ in the translation popup.' },
+      zh: { title: '生词本', header: '| 单词 / 短语 | 音标 | 释义 | 收藏日期 |', empty: '还没有收藏。划词后在弹窗中点击 ☆ 收藏。' },
+      de: { title: 'Vokabelliste', header: '| Wort / Ausdruck | Lautschrift | Übersetzung | Hinzugefügt |', empty: 'Noch nichts gespeichert. Text markieren und im Übersetzungsfenster auf ☆ klicken.' }
+    };
+    // `true` is the pre-0.4 way of asking for Chinese.
+    const text = TEXT[language === true ? 'zh' : language] || TEXT.en;
     return [
       `# ${text.title} (${entries.length})`, '',
       entries.length ? `${text.header}\n| --- | --- | --- | --- |\n` + rows.join('\n') : text.empty,

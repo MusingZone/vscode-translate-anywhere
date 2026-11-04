@@ -44,5 +44,7 @@
   "config.dictionary.autoDownload": "首次使用时自动下载离线英汉词典（ECDICT，约 15 MB）。优先从 GitHub 下载，失败时自动切换 jsDelivr 镜像，并通过 SHA-256 校验。若安装的是离线版 VSIX 或已设置 **词典: 路径**，则无需下载。",
   "config.dictionary.path": "本地词典文件的绝对路径（`.json.gz`，格式与发布的 `dictionary.json.gz` 相同）。优先于内置和下载的词典。留空使用默认词典。",
   "config.dictionary.downloadUrl": "下载词典时优先尝试的额外 HTTPS 地址，例如内部镜像。文件必须与发布的 SHA-256 一致。",
-  "config.dictionary.downloadUrl.error": "请输入 https:// 地址，或留空。"
+  "config.dictionary.downloadUrl.error": "请输入 https:// 地址，或留空。",
+  "command.downloadGermanDictionary": "下载德汉词典",
+  "config.dictionary.german": "选中德语单词时使用离线德汉词典（[HanDeDict](https://handedict.zydeo.net/)，CC BY-SA 3.0）查询。首次选中德语单词时自动下载一次（约 3 MB）；下载完成前以及短语/句子使用 AI 翻译。"
 }

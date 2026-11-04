@@ -44,5 +44,7 @@
   "config.dictionary.autoDownload": "Download the offline English-Chinese dictionary (ECDICT, about 15 MB) on first use. It is fetched from GitHub with jsDelivr mirrors as fallbacks and verified with SHA-256. Not needed if you installed the offline VSIX or set **Dictionary: Path**.",
   "config.dictionary.path": "Absolute path of a local dictionary file (`.json.gz`, the same format as the published `dictionary.json.gz`). Overrides the bundled and downloaded dictionaries. Empty = default.",
   "config.dictionary.downloadUrl": "Extra HTTPS URL tried first when downloading the dictionary, e.g. an internal mirror. The file must match the published SHA-256.",
-  "config.dictionary.downloadUrl.error": "Enter an https:// URL, or leave empty."
+  "config.dictionary.downloadUrl.error": "Enter an https:// URL, or leave empty.",
+  "command.downloadGermanDictionary": "Download German–Chinese Dictionary",
+  "config.dictionary.german": "Look up selected German words in the offline German–Chinese dictionary ([HanDeDict](https://handedict.zydeo.net/), CC BY-SA 3.0). It is downloaded once (about 3 MB) the first time you select a German word; until then, and for phrases, AI translation is used."
 }

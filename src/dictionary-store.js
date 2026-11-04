@@ -5,40 +5,42 @@ const crypto = require('node:crypto');
 
 // The Marketplace build ships without the 15 MB dictionary; it is fetched once from the first mirror that works.
 const RELEASE_TAG = 'dictionary-v1';
+const GERMAN_RELEASE_TAG = 'dictionary-de-v1';
 const REPO = 'MusingZone/vscode-translate-anywhere';
-const FILE = 'dictionary.json.gz';
-const DEFAULT_MIRRORS = [
-  `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${FILE}`,
-  `https://cdn.jsdelivr.net/gh/${REPO}@${RELEASE_TAG}/data/${FILE}`,
-  `https://fastly.jsdelivr.net/gh/${REPO}@${RELEASE_TAG}/data/${FILE}`,
-  `https://raw.githubusercontent.com/${REPO}/${RELEASE_TAG}/data/${FILE}`
+const mirrorsFor = (tag, file) => [
+  `https://github.com/${REPO}/releases/download/${tag}/${file}`,
+  `https://cdn.jsdelivr.net/gh/${REPO}@${tag}/data/${file}`,
+  `https://fastly.jsdelivr.net/gh/${REPO}@${tag}/data/${file}`,
+  `https://raw.githubusercontent.com/${REPO}/${tag}/data/${file}`
 ];
+const DEFAULT_MIRRORS = mirrorsFor(RELEASE_TAG, 'dictionary.json.gz');
+const GERMAN_MIRRORS = mirrorsFor(GERMAN_RELEASE_TAG, 'dictionary-de.json.gz');
 
 /**
  * Where the dictionary should be read from, in priority order:
  * a user-chosen file, the copy bundled in an offline VSIX, then a previous download.
  * @returns {{file: string, kind: 'custom'|'bundled'|'downloaded'} | null}
  */
-function locateDictionary({ customPath, bundledFile, storageFolder, sha256 }) {
+function locateDictionary({ customPath, bundledFile, storageFolder, sha256, name = 'dictionary' }) {
   if (customPath) {
     if (!fs.existsSync(customPath)) throw new Error(`Dictionary file not found: ${customPath}`);
     return { file: customPath, kind: 'custom' };
   }
   if (bundledFile && fs.existsSync(bundledFile)) return { file: bundledFile, kind: 'bundled' };
-  const downloaded = downloadedFile(storageFolder, sha256);
+  const downloaded = downloadedFile(storageFolder, sha256, name);
   if (fs.existsSync(downloaded)) return { file: downloaded, kind: 'downloaded' };
   return null;
 }
 
-const downloadedFile = (storageFolder, sha256) => path.join(storageFolder, 'dictionary', `dictionary-${sha256.slice(0, 12)}.json.gz`);
+const downloadedFile = (storageFolder, sha256, name = 'dictionary') => path.join(storageFolder, 'dictionary', `${name}-${sha256.slice(0, 12)}.json.gz`);
 
 /**
  * Downloads the dictionary, trying each mirror in turn, and verifies its SHA-256 before moving it into place.
  * @param {{storageFolder: string, sha256: string, mirrors?: string[], onProgress?: (info: {url: string, received: number, total: number}) => void,
  *          signal?: AbortSignal, fetchImpl?: typeof fetch, timeoutMs?: number}} options
  */
-async function downloadDictionary({ storageFolder, sha256, mirrors = DEFAULT_MIRRORS, onProgress, signal, fetchImpl = fetch, timeoutMs = 120000 }) {
-  const target = downloadedFile(storageFolder, sha256);
+async function downloadDictionary({ storageFolder, sha256, name = 'dictionary', mirrors = DEFAULT_MIRRORS, onProgress, signal, fetchImpl = fetch, timeoutMs = 120000 }) {
+  const target = downloadedFile(storageFolder, sha256, name);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   const errors = [];
   for (const url of mirrors.filter(Boolean)) {
@@ -75,4 +77,4 @@ async function downloadDictionary({ storageFolder, sha256, mirrors = DEFAULT_MIR
   throw new Error(`Dictionary download failed from every mirror:\n${errors.join('\n')}`);
 }
 
-module.exports = { DEFAULT_MIRRORS, RELEASE_TAG, locateDictionary, downloadDictionary, downloadedFile };
+module.exports = { DEFAULT_MIRRORS, GERMAN_MIRRORS, RELEASE_TAG, GERMAN_RELEASE_TAG, locateDictionary, downloadDictionary, downloadedFile };

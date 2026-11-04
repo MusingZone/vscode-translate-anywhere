@@ -4,6 +4,7 @@ Runs in invisible headless Chrome; no VS Code window is opened.
 Usage: py -3.13 tools/ui-dom-test.py
 """
 import json
+import time
 import subprocess
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -18,6 +19,7 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8"></head><body style="f
 <p id="p2">This sentence tests selection translation in the Markdown preview.</p>
 <ul><li id="li1">Outer item text<ul><li id="li2">Nested item text</li></ul></li></ul>
 <p id="zh">这是一段中文，不需要翻译。</p>
+<p id="de1">Die Einstellungen werden in der Datei gespeichert und sind für alle Fenster gültig.</p>
 <pre id="code">npm run build --watch</pre>
 <div style="height:3000px"></div>
 <p id="far">Far away paragraph that loads lazily.</p>
@@ -297,10 +299,42 @@ def webview_test(browser, handle, ui):
     return out
 
 
+def cross_page_test(browser, handle, ui, select):
+    """Two pages (e.g. Chat and a Markdown preview webview) each run their own runtime; a press in one page
+    closes the popup open in the other, while losing focus without a VS Code click (alt-tab) keeps it."""
+    pages = []
+    for _ in range(2):
+        page = browser.new_page(viewport={"width": 800, "height": 600})
+        page.route(ORIGIN + "/**", handle)
+        page.goto(ORIGIN + "/page")
+        page.add_script_tag(content=f"({ui})({json.dumps({'endpoint': ORIGIN, 'token': 't'})});")
+        page.wait_for_timeout(300)
+        pages.append(page)
+    a, b = pages
+
+    def open_panel():
+        select(a, "p1", "performance")
+        a.locator(".imt-dot").hover()
+        a.wait_for_function("!document.querySelector('.imt-panel').hidden", timeout=2000)
+
+    open_panel()
+    a.evaluate("window.dispatchEvent(new Event('blur'))")  # alt-tab: no press anywhere in VS Code
+    a.wait_for_timeout(700)
+    assert not a.evaluate("document.querySelector('.imt-panel').hidden"), "closed on plain blur"
+    a.evaluate("window.dispatchEvent(new Event('focus'))")
+    b.mouse.click(400, 500)  # press in the other page, which takes focus from page a
+    a.evaluate("window.dispatchEvent(new Event('blur'))")
+    a.wait_for_function("document.querySelector('.imt-panel').hidden", timeout=2000)
+    for page in pages:
+        page.close()
+    return "ok"
+
+
 def main():
     ui = (ROOT / "src" / "ui.js").read_text(encoding="utf-8")
     ui = ui[:ui.rindex("if (typeof module")]  # production injects immersiveUI.toString() only
-    calls, vocab = [], set()
+    calls, vocab, langs = [], set(), []
+    pointer = {"time": 0, "source": ""}
     status = {"uiLanguage": "zh-cn", "fullPageMode": "translationOnly"}
 
     def handle(route):
@@ -312,12 +346,22 @@ def main():
         calls.append((path, body.get("mode"), body.get("text")))
         if path == "/status":
             data = {"service": "immersive-translate-vscode", "enabled": True, "version": "test", "settings": status}
+        elif path == "/lookup" and body.get("lang") == "de":
+            langs.append((body["text"], "de"))
+            found = body["text"] == "Einstellungen"
+            data = {"found": found, "word": "einstellung", "phonetic": "", "language": "de",
+                    "translation": "n. 设置 shèzhì\nadj. 态度 tàidu" if found else "", "source": "HanDeDict (offline)"}
         elif path == "/lookup":
+            langs.append((body["text"], "en"))
             found = body["text"].lower() == "performance"
             data = {"found": found, "word": body["text"], "phonetic": "pə'fɔːməns" if found else "",
                     "translation": "n. 性能" if found else "离线词典未收录", "source": "ECDICT · 离线词典"}
         elif path == "/ai":
             data = {"translation": f"译({body['mode']}):{body['text'][:12]}", "source": "AI · mock"}
+        elif path == "/pointer":
+            if body.get("action") == "down" and body.get("source"):
+                pointer.update(time=int(time.time() * 1000), source=body["source"])
+            data = dict(pointer)
         elif path == "/vocab":
             if body["action"] == "toggle":
                 vocab.symmetric_difference_update({body["text"]})
@@ -380,6 +424,15 @@ def main():
         page.locator(".imt-dot").hover()
         page.wait_for_function("document.querySelector('.imt-panel p').textContent.startsWith('译(selection)')")
         results["sentence_auto_ai"] = page.locator(".imt-panel p").inner_text()
+        page.keyboard.press("Escape")
+        page.evaluate("getSelection().removeAllRanges()")
+        # 3b. A word inside a German paragraph is looked up in the German–Chinese dictionary.
+        select(page, "de1", "Einstellungen")
+        page.locator(".imt-dot").hover()
+        page.wait_for_function("document.querySelector('.imt-panel p').textContent.includes('设置')")
+        assert ("Einstellungen", "de") in langs and ("performance", "en") in langs, langs
+        assert page.evaluate("document.querySelector('.imt-panel p').textContent").count("\n") == 1, "one line per part of speech"
+        results["german_lookup"] = "ok"
         page.keyboard.press("Escape")
         page.evaluate("getSelection().removeAllRanges()")
         # 4. Alt+Z toggles the paragraph under the mouse immediately (no hold), bilingual.
@@ -485,6 +538,7 @@ def main():
         results["chat"] = chat_test(browser, handle, ui)
         results["settings"] = settings_test(browser, handle, ui, status)
         results["webviews"] = webview_test(browser, handle, ui)
+        results["cross_page_dismiss"] = cross_page_test(browser, handle, ui, select)
         browser.close()
     print(json.dumps(results))
     print("UI DOM TEST PASSED")

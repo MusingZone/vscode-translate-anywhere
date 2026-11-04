@@ -1,6 +1,6 @@
 """Headless check of the sidebar webview (src/panel.js): renders under its CSP, reflects state and posts the right messages.
 
-Usage: py -3.13 tools/panel-test.py [--screenshot OUT.png] [--zh]
+Usage: py -3.13 tools/panel-test.py [--screenshot OUT.png] [--zh | --de]
 """
 import json
 import subprocess
@@ -46,19 +46,19 @@ document.addEventListener('DOMContentLoaded', () => {
 """ % json.dumps(THEME)
 
 
-def state(provider="vscode", zh=False):
+def state(provider="vscode", lang="en"):
     from_providers = subprocess.run([node(), "-e", "const p=require(process.argv[1]).PROVIDERS;process.stdout.write(JSON.stringify(p))",
                                      str(ROOT / "src" / "providers.js")], capture_output=True, text=True, encoding="utf-8", check=True)
     presets = json.loads(from_providers.stdout)
     preset = presets.get(provider)
     return {
-        "version": "0.3.0", "zh": zh,
+        "version": "0.3.0", "uiLanguage": lang,
         "integration": {"enabled": True, "status": "Active (VS Code 1.144.1)"},
         "targetLanguage": "zh-CN",
         "languages": [{"code": "zh-CN", "label": "简体中文"}, {"code": "zh-TW", "label": "繁體中文"}, {"code": "ja", "label": "日本語"}, {"code": "en", "label": "English"}],
         "fullPageMode": "translationOnly", "autoAI": True,
         "provider": provider,
-        "providers": [{"id": "vscode", "label": "VS Code 语言模型（Copilot 等）" if zh else "VS Code language models (Copilot…)"}]
+        "providers": [{"id": "vscode", "label": {"zh": "VS Code 语言模型（Copilot 等）", "de": "VS Code-Sprachmodelle (Copilot…)"}.get(lang, "VS Code language models (Copilot…)")}]
         + [{"id": k, "label": v["label"]} for k, v in presets.items()],
         "vscodeModels": [
             {"id": "gpt-5-mini", "name": "GPT-5 mini", "detail": "copilot · gpt-5-mini"},
@@ -91,7 +91,7 @@ def html(lang):
 def main():
     args = sys.argv[1:]
     shot = args[args.index("--screenshot") + 1] if "--screenshot" in args else None
-    lang = "zh" if "--zh" in args else "en"
+    lang = "zh" if "--zh" in args else "de" if "--de" in args else "en"
     page_html = html(lang)
     errors = []
     with sync_playwright() as p:
@@ -106,7 +106,7 @@ def main():
         post = lambda message: page.evaluate("m => window.postMessage(m, '*')", message)
         posted = lambda: page.evaluate("window.__posted.splice(0)")
 
-        post({"type": "state", "state": state("vscode", lang == "zh")})
+        post({"type": "state", "state": state("vscode", lang)})
         page.wait_for_function("document.getElementById('version').textContent === 'v0.3.0'")
         assert page.is_visible("#vscodeAI") and not page.is_visible("#httpAI")
         assert page.eval_on_selector("#modelId", "s => s.options.length") == 3
@@ -118,7 +118,7 @@ def main():
 
         page.select_option("#provider", "deepseek")
         assert posted() == [{"type": "update", "key": "ai.provider", "value": "deepseek"}]
-        post({"type": "state", "state": state("deepseek", lang == "zh")})
+        post({"type": "state", "state": state("deepseek", lang)})
         page.wait_for_function("!document.getElementById('httpAI').hidden")
         assert not page.is_visible("#vscodeAI")
         assert page.get_attribute("#apiModel", "placeholder") == "deepseek-chat"
@@ -155,7 +155,7 @@ def main():
         page.select_option("#fullPageMode", "bilingual")
         assert posted() == [{"type": "update", "key": "fullPage.mode", "value": "bilingual"}]
 
-        s = state("deepseek", lang == "zh")
+        s = state("deepseek", lang)
         s["dictionary"] = {"status": "downloading", "percent": 42, "received": 0, "path": "", "owner": True}
         post({"type": "state", "state": s})
         page.wait_for_function("document.getElementById('dictText').textContent.includes('42%')")

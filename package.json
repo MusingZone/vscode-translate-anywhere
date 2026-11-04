@@ -2,7 +2,7 @@
   "name": "vscode-translate-anywhere",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "MusingZone",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -122,6 +122,11 @@
         "title": "%command.downloadDictionary%"
       },
       {
+        "command": "translateAnywhere.downloadGermanDictionary",
+        "category": "Translate Anywhere",
+        "title": "%command.downloadGermanDictionary%"
+      },
+      {
         "command": "translateAnywhere.chooseDictionaryFile",
         "category": "Translate Anywhere",
         "title": "%command.chooseDictionaryFile%"
@@ -200,12 +205,14 @@
           "enum": [
             "auto",
             "en",
-            "zh-CN"
+            "zh-CN",
+            "de"
           ],
           "enumItemLabels": [
             "Auto (follow VS Code)",
             "English",
-            "简体中文"
+            "简体中文",
+            "Deutsch"
           ],
           "markdownDescription": "%config.uiLanguage%"
         },
@@ -379,6 +386,13 @@
           "pattern": "^$|^https://",
           "patternErrorMessage": "%config.dictionary.downloadUrl.error%",
           "markdownDescription": "%config.dictionary.downloadUrl%"
+        },
+        "translateAnywhere.dictionary.german": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 14,
+          "markdownDescription": "%config.dictionary.german%"
         },
         "translateAnywhere.integration.enabled": {
           "type": "boolean",

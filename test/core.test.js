@@ -285,10 +285,59 @@ test('vocabulary toggles case-insensitively, removes, and exports markdown/csv',
     assert.equal(vocab.has('performance'), false);
     assert.equal(vocab.remove(['SAY "HI", A|B']), 1);
     assert.match(vocab.toMarkdown(true), /还没有收藏/);
+    assert.match(vocab.toMarkdown('zh'), /还没有收藏/);
+    assert.match(vocab.toMarkdown('de'), /# Vokabelliste \(0\)[\s\S]*Noch nichts gespeichert/);
     assert.match(vocab.toMarkdown(), /Nothing saved yet/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('every interface language has a complete string table', () => {
+  const root = path.join(__dirname, '..');
+  const nls = name => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
+  const english = Object.keys(nls('package.nls.json')).sort();
+  for (const file of ['package.nls.zh-cn.json', 'package.nls.de.json']) assert.deepEqual(Object.keys(nls(file)).sort(), english, file);
+
+  const Module = require('node:module');
+  const load = Module._load;
+  Module._load = (request, ...rest) => request === 'vscode' ? {} : load(request, ...rest);
+  let panelStrings;
+  try { panelStrings = require('../src/panel').STRINGS; } finally { Module._load = load; }
+  // The injected UI keeps its strings inside the serialized function, so read them from the source.
+  const source = ui.toString();
+  const start = source.indexOf('const STRINGS = {') + 'const STRINGS = '.length;
+  const uiStrings = new Function(`return ${source.slice(start, source.indexOf('\n  };', start) + 4)}`)();
+  for (const [name, table] of [['panel', panelStrings], ['ui', uiStrings]]) {
+    assert.deepEqual(Object.keys(table).sort(), ['de', 'en', 'zh'], name);
+    for (const lang of ['zh', 'de']) assert.deepEqual(Object.keys(table[lang]).sort(), Object.keys(table.en).sort(), `${name}.${lang}`);
+  }
+
+  // Every message in the extension host passes German as the third L() argument.
+  const host = fs.readFileSync(path.join(root, 'src', 'extension.js'), 'utf8');
+  const skipLiteral = (src, i) => {
+    const quote = src[i];
+    for (i++; src[i] !== quote; i++) {
+      if (src[i] === '\\') i++;
+      else if (quote === '`' && src.startsWith('${', i)) {
+        for (let depth = 0; ; i++) { if (src[i] === '{') depth++; else if (src[i] === '}' && --depth === 0) break; }
+      }
+    }
+    return i;
+  };
+  const argCount = (src, from) => {
+    for (let i = from, depth = 0, args = 1; i < src.length; i++) {
+      const c = src[i];
+      if (c === "'" || c === '"' || c === '`') i = skipLiteral(src, i);
+      else if ('([{'.includes(c)) depth++;
+      else if (')]}'.includes(c)) { if (depth === 0) return args; depth--; }
+      else if (c === ',' && depth === 0) args++;
+    }
+    return 0;
+  };
+  const calls = [...host.matchAll(/(?<![.\w])L\(/g)].filter(m => !host.slice(m.index - 6, m.index).includes('const '));
+  assert.ok(calls.length > 60);
+  for (const call of calls) assert.equal(argCount(host, call.index + 2), 3, host.slice(call.index, call.index + 80));
 });
 
 test('bridge vocabulary route and AI mode passthrough', async () => {
@@ -314,6 +363,15 @@ test('bridge vocabulary route and AI mode passthrough', async () => {
     await (await post('/ai', { text: 'sel' })).text();
     assert.equal(modes[0], 'paragraph');
     assert.notEqual(modes[1], 'paragraph');
+    // Cross-page dismiss: presses are shared between pages without needing selected text.
+    assert.equal((await (await post('/pointer', { action: 'get' })).json()).time, 0);
+    const before = Date.now();
+    const down = await (await post('/pointer', { action: 'down', source: 'chat' })).json();
+    assert.equal(down.source, 'chat');
+    assert.ok(down.time >= before);
+    assert.deepEqual(await (await post('/pointer', { action: 'get' })).json(), down);
+    await post('/pointer', { action: 'down', source: '' });
+    assert.equal((await (await post('/pointer', { action: 'get' })).json()).source, 'chat');
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
@@ -452,5 +510,67 @@ test('dictionary download falls back across mirrors, verifies SHA-256 and is loc
   } finally {
     await close();
     fs.rmSync(storage, { recursive: true, force: true });
+  }
+});
+test('German dictionary reduces inflected forms and the bridge routes lang=de lookups', async () => {
+  const { germanCandidates } = require('../src/dictionary');
+  const entries = {
+    haus: ['', 'n. 房子 fángzi'], buch: ['', 'n. 书 shū'], arbeiten: ['', 'v. 工作 gōngzuò'], straße: ['', 'n. 街道 jiēdào'],
+    einstellung: ['', 'n. 设置 shèzhì'], machen: ['', 'v. 做 zuò'], anrufen: ['', 'v. 打电话 dǎdiànhuà'], schnell: ['', 'adj. 快 kuài'],
+    freuen: ['', 'v. 高兴 gāoxìng']
+  };
+  const german = new Dictionary(null, entries, 'de');
+  const hit = word => german.lookup(word).word;
+  assert.equal(hit('Häuser'), 'haus');
+  assert.equal(hit('Bücher'), 'buch');
+  assert.equal(hit('arbeitet'), 'arbeiten');
+  assert.equal(hit('Strasse'), 'straße');
+  assert.equal(hit('Einstellungen'), 'einstellung');
+  assert.equal(hit('gemacht'), 'machen');
+  assert.equal(hit('anzurufen'), 'anrufen');
+  assert.equal(hit('schnellsten'), 'schnell');
+  assert.equal(hit('sich freuen'), 'freuen');
+  assert.equal(hit('„Haus“'), 'haus');
+  assert.equal(german.lookup('Haus').source, 'HanDeDict (offline)');
+  assert.equal(german.lookup('xyzzy').found, false);
+  assert.equal(germanCandidates('haus')[0], 'haus', 'the exact form is tried first');
+  // The English dictionary keeps its own rules.
+  assert.equal(new Dictionary(null, { house: ['haʊs', 'n. 房子'] }).lookup('houses').word, 'house');
+
+  const calls = [];
+  const server = await createBridge({
+    port: 0, token: 't', isEnabled: () => true, onError: () => {},
+    dictionary: { lookup: (text, language) => { calls.push(language); return { found: false, word: text }; } },
+    translate: async () => ({ translation: '' })
+  });
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/lookup`;
+    const headers = { Origin: 'vscode-file://vscode-app', 'X-Immersive-Token': 't', 'Content-Type': 'application/json' };
+    for (const body of [{ text: 'Haus', lang: 'de' }, { text: 'house' }, { text: 'x', lang: 'fr' }]) {
+      assert.equal((await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })).status, 200);
+    }
+    assert.deepEqual(calls, ['de', 'en', 'en']);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('German dictionary data, mirrors and packaging stay consistent', () => {
+  const { GERMAN_MIRRORS, GERMAN_RELEASE_TAG } = require('../src/dictionary-store');
+  const root = path.join(__dirname, '..');
+  const info = JSON.parse(fs.readFileSync(path.join(root, 'data', 'dictionary-de-source.json'), 'utf8'));
+  assert.match(info.dictionarySHA256, /^[0-9a-f]{64}$/);
+  assert.equal(info.license, 'CC BY-SA 3.0');
+  assert.ok(fs.existsSync(path.join(root, 'data', 'HanDeDict-LICENSE.txt')));
+  assert.ok(GERMAN_MIRRORS.every(url => url.includes(GERMAN_RELEASE_TAG) && url.endsWith('/dictionary-de.json.gz')));
+  assert.notEqual(downloadedFile('s', info.dictionarySHA256, 'dictionary-de'), downloadedFile('s', info.dictionarySHA256));
+  assert.ok(fs.readFileSync(path.join(root, '.vscodeignore'), 'utf8').split(/\r?\n/).includes('data/dictionary-de.json.gz'),
+    'the Marketplace build downloads the German dictionary instead of bundling it');
+  const file = path.join(root, 'data', 'dictionary-de.json.gz');
+  if (fs.existsSync(file)) {
+    assert.equal(crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'), info.dictionarySHA256);
+    const real = new Dictionary(file, null, 'de');
+    assert.match(real.lookup('Wörterbücher').translation, /词典/);
+    assert.match(real.lookup('Übersetzung').translation, /翻译/);
   }
 });

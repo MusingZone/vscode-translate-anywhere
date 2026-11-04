@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds the release VSIXs into dist/:
+// Builds the release VSIXs into dist/ (dictionaries: English–Chinese ECDICT, German–Chinese HanDeDict):
 //   vscode-translate-anywhere-<target>-<version>.vsix          lite: dictionary downloaded on first use (Marketplace build)
 //   vscode-translate-anywhere-offline-<target>-<version>.vsix  offline: dictionary bundled (GitHub Releases)
 // Usage: node tools/package.js [--lite-only|--offline-only] [--target win32-x64] [-- extra vsce args]
@@ -16,15 +16,17 @@ const own = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
 const targets = own.includes('--target') ? [own[own.indexOf('--target') + 1]] : ['win32-x64', 'win32-arm64'];
 const variants = own.includes('--lite-only') ? ['lite'] : own.includes('--offline-only') ? ['offline'] : ['lite', 'offline'];
 const { name, version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const DICTIONARY_RULE = 'data/dictionary.json.gz';
+const DICTIONARY_RULES = ['data/dictionary.json.gz', 'data/dictionary-de.json.gz'];
 
 const ignore = fs.readFileSync(path.join(root, '.vscodeignore'), 'utf8');
-if (!ignore.split(/\r?\n/).includes(DICTIONARY_RULE)) throw new Error(`.vscodeignore must contain "${DICTIONARY_RULE}" (lite build).`);
-if (variants.includes('offline') && !fs.existsSync(path.join(root, DICTIONARY_RULE))) {
-  throw new Error(`${DICTIONARY_RULE} is missing; run "py -3 tools/build.py" first.`);
+for (const rule of DICTIONARY_RULES) {
+  if (!ignore.split(/\r?\n/).includes(rule)) throw new Error(`.vscodeignore must contain "${rule}" (lite build).`);
+  if (variants.includes('offline') && !fs.existsSync(path.join(root, rule))) {
+    throw new Error(`${rule} is missing; run "py -3 tools/build.py" / "py -3 tools/build-de.py" first.`);
+  }
 }
 const offlineIgnore = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ta-pack-')), '.vscodeignore');
-fs.writeFileSync(offlineIgnore, ignore.split(/\r?\n/).filter(line => line !== DICTIONARY_RULE).join('\n'));
+fs.writeFileSync(offlineIgnore, ignore.split(/\r?\n/).filter(line => !DICTIONARY_RULES.includes(line)).join('\n'));
 
 // Prefer a local @vscode/vsce, then npx.
 const local = path.join(root, 'node_modules', '@vscode', 'vsce', 'vsce');

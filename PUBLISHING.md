@@ -19,14 +19,16 @@ Official reference: <https://code.visualstudio.com/api/working-with-extensions/p
 | `tools/maintenance.js` | ✅ | ✅ | Patcher used at runtime (also run elevated) |
 | `data/dictionary.json.gz` | ✅ | offline build only | ECDICT-based dictionary (≈ 15 MB) |
 | `data/dictionary-source.json` | ✅ | ✅ | Source URL, licence and SHA-256 of the dictionary |
+| `data/dictionary-de.json.gz` | ✅ | offline build only | German–Chinese dictionary from HanDeDict (≈ 3 MB, CC BY-SA 3.0) |
+| `data/dictionary-de-source.json`, `data/*-LICENSE.txt` | ✅ | ✅ | German dictionary provenance and SHA-256; dictionary licences |
 | `images/` | ✅ | ✅ | Extension icon and Activity Bar icon |
 | `docs/images/` | ✅ | ❌ | README screenshots and GIF (vsce rewrites the links to GitHub) |
-| `package.json`, `package.nls*.json` | ✅ | ✅ | Manifest and English / Chinese UI strings |
+| `package.json`, `package.nls*.json` | ✅ | ✅ | Manifest and English / Chinese / German UI strings |
 | `README*.md`, `CHANGELOG.md`, `LICENSE.txt`, `SECURITY.md`, `THIRD-PARTY-NOTICES.md` | ✅ | ✅ | Documentation |
-| `PUBLISHING.md` | ✅ | ❌ | This guide |
+| `PUBLISHING.md`, `CONTRIBUTING.md` | ✅ | ❌ | This guide; contributor guide |
 | `test/`, `tools/*.py`, `tools/package.js` | ✅ | ❌ | Tests, image generation, packaging |
 | `.github/workflows/` | ✅ | ❌ | CI (`ci.yml`) and tag releases (`release.yml`) |
-| `dist/`, `tools/vendor/`, `node_modules/`, `JOURNAL.md` | ❌ | ❌ | Build output, raw ECDICT CSV, dependencies, private notes (all in `.gitignore`) |
+| `dist/`, `tools/vendor/`, `node_modules/`, `JOURNAL.md` | ❌ | ❌ | Build output, raw ECDICT / HanDeDict sources, dependencies, private notes (all in `.gitignore`) |
 
 ## 2. Push the source to GitHub
 
@@ -74,6 +76,8 @@ curl.exe -sIL https://cdn.jsdelivr.net/gh/MusingZone/vscode-translate-anywhere@d
 
 > **Never move or delete the `dictionary-v1` tag.** Published extensions depend on it.
 >
+> **German–Chinese dictionary.** The same procedure applies with the tag `dictionary-de-v1` (`GERMAN_RELEASE_TAG` in `src/dictionary-store.js`), the file `data/dictionary-de.json.gz` and the release title “German–Chinese Dictionary v1”. Build it with `python tools/build-de.py` (it needs `tools/vendor/handedict.u8.gz` from the URL in `data/dictionary-de-source.json`, and `data/dictionary.json.gz`) and keep `data/HanDeDict-LICENSE.txt` with it.
+>
 > If you rebuild the dictionary:
 > 1. Run `python tools/build.py`. It needs `tools/vendor/ecdict.csv`, which you can download from the URL in `data/dictionary-source.json`.
 > 2. Update the SHA-256 value in `data/dictionary-source.json`.
@@ -105,10 +109,10 @@ curl.exe -sIL https://cdn.jsdelivr.net/gh/MusingZone/vscode-translate-anywhere@d
 ## 5. Pre-flight checklist (every release)
 
 - [ ] `version` in `package.json` is bumped (SemVer), and `CHANGELOG.md` has a matching section.
-- [ ] Unit tests pass: `npm test` (14 tests: patcher, bridge, providers, dictionary download, vocabulary).
+- [ ] Unit tests pass: `npm test` (17 tests: patcher, bridge, providers, dictionary download, German lookup, vocabulary, string-table parity).
 - [ ] UI tests pass (optional, need Playwright and Chrome):
   - `python tools/ui-dom-test.py`, which tests the injected runtime;
-  - `python tools/panel-test.py` and `python tools/panel-test.py --zh`, which test the sidebar under its CSP.
+  - `python tools/panel-test.py` with no flag, `--zh` and `--de`, which test the sidebar under its CSP.
 - [ ] Screenshots are refreshed if the UI changed: `python tools/screenshots.py` writes `docs/images/en` and `docs/images/zh-CN`.
 - [ ] Manual check on the latest VS Code Stable:
   1. Enable the integration and reload.
@@ -129,8 +133,8 @@ This creates four files in `dist/`:
 |---|---|---|
 | `vscode-translate-anywhere-win32-x64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionary) |
 | `vscode-translate-anywhere-win32-arm64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite) |
-| `vscode-translate-anywhere-offline-win32-x64-<ver>.vsix` | ≈ 15 MB | GitHub Release only (dictionary bundled) |
-| `vscode-translate-anywhere-offline-win32-arm64-<ver>.vsix` | ≈ 15 MB | GitHub Release only |
+| `vscode-translate-anywhere-offline-win32-x64-<ver>.vsix` | ≈ 18 MB | GitHub Release only (both dictionaries bundled) |
+| `vscode-translate-anywhere-offline-win32-arm64-<ver>.vsix` | ≈ 18 MB | GitHub Release only |
 
 Options are `--target win32-x64`, `--lite-only` and `--offline-only`. Arguments after `--` are passed to vsce.
 

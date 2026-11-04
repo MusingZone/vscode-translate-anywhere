@@ -4,7 +4,7 @@
 
 在 VS Code 的 **Chat 对话**、**Markdown 预览**、**Release Notes**、**设置页**、**扩展详情页**等内置页面中划选文字，选区旁会出现一个小红点，鼠标悬停即可秒出翻译。
 
-- 单词：查离线词典。
+- 单词：查离线词典（英 → 中、德 → 中）。
 - 短语、句子、段落：由你选择的 AI 模型翻译。可以通过 VS Code 使用 GitHub Copilot，也可以填写自己的 API Key，使用 OpenAI、Claude、Gemini、DeepSeek、通义千问等服务商。
 
 代码编辑器中**不会**启用翻译，写代码时完全不打扰。
@@ -17,13 +17,14 @@
 
 | 功能 | 用法 |
 | --- | --- |
-| **划词悬停翻译** | 划选文字后把鼠标移到红点上。单词查离线词典（英 → 中）；更长的内容或其他目标语言自动使用 AI。 |
+| **划词悬停翻译** | 划选文字后把鼠标移到红点上。单词查离线词典（英 → 中、德 → 中）；更长的内容或其他目标语言自动使用 AI。 |
+| **德译中** | 根据变音字母或所在句子自动识别德语单词，查询离线德汉词典（HanDeDict），可识别复数、动词变位和过去分词等变形（如 *Häuser*、*arbeitet*、*gemacht*）。德语句子和段落交给 AI 翻译。 |
 | **段落翻译** | 鼠标停在段落上按 **Alt+Z**，再按一次移除译文。 |
 | **全文翻译** | 按 **Alt+W** 翻译当前所在的 Chat 对话、预览或页面，再按一次恢复原文。可选"仅译文"（默认）或"原文译文对照"。 |
 | **多家 AI 服务商** | VS Code 语言模型（GitHub Copilot，无需 Key）、OpenAI、Anthropic Claude、Google Gemini、DeepSeek、通义千问、Kimi、智谱 GLM、硅基流动、OpenRouter、Groq、Mistral、Ollama，或任何 OpenAI 兼容接口。 |
 | **设置侧边栏** | 活动栏中一个面板集中管理：服务商与模型下拉列表、API Key、词典、翻译范围、快捷键、生词本。 |
 | **生词本** | 点击弹窗中的 ☆ 收藏单词，可打开、导出 CSV 或删除。 |
-| **多语言** | 20 种目标语言；界面支持英文和简体中文。 |
+| **多语言** | 20 种目标语言；界面支持英文、简体中文和德语。 |
 
 | 词典释义 | AI 翻译 |
 | --- | --- |
@@ -111,6 +112,14 @@
 
 如果网络受限，可将 `translateAnywhere.dictionary.downloadUrl` 设为内网 HTTPS 镜像（文件需相同）；若不希望自动下载，将 `translateAnywhere.dictionary.autoDownload` 设为 `false`。
 
+### 德译中
+
+德汉词典由 `tools/build-de.py` 从 [HanDeDict](https://handedict.zydeo.net/)（CC BY-SA 3.0）生成：约 13.3 万个德语词条，压缩后约 3 MB。每个词条按词性列出最多六个带拼音的中文释义。
+
+- 选区包含 ä、ö、ü、ß，或所在段落主要是德语时，按德语查词。
+- 查词前会还原常见变形：复数与变音（*Bücher* → *Buch*）、动词词尾（*arbeitet* → *arbeiten*）、过去分词（*gemacht* → *machen*）、带 *zu* 的不定式（*anzurufen* → *anrufen*）、最高级，以及 *ss* → *ß*。
+- 商店版在你第一次划选德语单词时，从同样的镜像自动下载一次；离线安装包已内置。也可以在侧边栏“德译中”下点击 **下载** 提前获取；不需要时将 `translateAnywhere.dictionary.german` 设为 `false`。
+
 ## 工作原理（请务必阅读）
 
 VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markdown 预览中读取选区、绘制弹窗的 API。为实现这些功能，本扩展会**向 VS Code 自身的界面文件注入一小段脚本**：
@@ -134,7 +143,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 | 设置 | 默认值 | 说明 |
 | --- | --- | --- |
 | `translateAnywhere.targetLanguage` | `zh-CN` | 目标语言。 |
-| `translateAnywhere.uiLanguage` | `auto` | 弹窗与消息语言：`auto`、`en`、`zh-CN`。 |
+| `translateAnywhere.uiLanguage` | `auto` | 弹窗、侧边栏与消息语言：`auto`、`en`、`zh-CN`、`de`。 |
 | `translateAnywhere.surfaces` | 全部开启 | 各类页面的开关。 |
 | `translateAnywhere.shortcuts.paragraph` | `Alt+Z` | 段落翻译快捷键，留空表示禁用。 |
 | `translateAnywhere.shortcuts.fullPage` | `Alt+W` | 全文翻译快捷键，留空表示禁用。 |
@@ -147,6 +156,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 | `translateAnywhere.dictionary.autoDownload` | `true` | 首次使用时自动下载词典。 |
 | `translateAnywhere.dictionary.path` | （空） | 使用本地词典文件。 |
 | `translateAnywhere.dictionary.downloadUrl` | （空） | 优先尝试的额外 HTTPS 下载镜像。 |
+| `translateAnywhere.dictionary.german` | `true` | 用德汉词典查询德语单词（首次使用时下载）。 |
 | `translateAnywhere.integration.enabled` | `false` | 是否同意上文所述的界面集成。 |
 | `translateAnywhere.integration.autoRepair` | `true` | VS Code 更新后自动重新应用。 |
 
@@ -165,7 +175,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 | --- | --- |
 | 启用 / 修复界面集成 · 禁用并恢复 VS Code 原文件 | 应用、修复或移除界面集成。 |
 | 选择 AI 服务商 · 选择 AI 模型 · 设置 API Key · 授权 AI 模型 | 配置 AI 引擎。 |
-| 下载词典 · 使用本地词典文件… · 使用默认词典 | 管理离线词典。 |
+| 下载词典 · 下载德汉词典 · 使用本地词典文件… · 使用默认词典 | 管理离线词典。 |
 | 打开生词本 · 导出生词本为 CSV · 删除生词本条目 | 管理收藏的单词。 |
 | 打开设置 · 显示状态 · 显示日志 | 设置与诊断。 |
 
@@ -188,7 +198,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 - 需要对 VS Code 安装目录有写入权限；"所有用户"安装需要管理员确认。
 - 本地桥使用端口 `17865`。如果同一台电脑上有多个 Windows 用户同时运行 VS Code，只有第一个用户能使用翻译。
 - VS Code 未来版本的界面改动可能导致个别页面暂时失效，需等待扩展更新。
-- 离线词典只覆盖英 → 中，其他语言对始终使用 AI。
+- 离线词典覆盖英 → 中与德 → 中，其他语言对始终使用 AI。
 
 ## 卸载
 
@@ -196,15 +206,17 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 
 ## 参与贡献
 
-欢迎在 [github.com/MusingZone/vscode-translate-anywhere](https://github.com/MusingZone/vscode-translate-anywhere) 提交 Issue 和 Pull Request。
+欢迎在 [github.com/MusingZone/vscode-translate-anywhere](https://github.com/MusingZone/vscode-translate-anywhere) 提交 Issue 和 Pull Request。开发环境搭建、如何新增界面语言等请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)（英文）。
 
 - 运行测试：`npm test`（单元测试），`python tools/ui-dom-test.py` 和 `python tools/panel-test.py`（无头 Chrome，需要 `pip install playwright`）。
 - 打包：`npm run package`。
 
 ## 致谢
 
-- 离线词典：[ECDICT](https://github.com/skywind3000/ECDICT)（skywind3000，MIT 许可证），详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+- 英汉词典：[ECDICT](https://github.com/skywind3000/ECDICT)（skywind3000，MIT 许可证）。
+- 德汉词典：基于 [HanDeDict](https://handedict.zydeo.net/)（CC BY-SA 3.0）。
+- 详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
 ## 许可证
 
-[MIT](LICENSE.txt)
+扩展代码：[MIT](LICENSE.txt)。德汉词典数据（`data/dictionary-de.json.gz`）采用 [CC BY-SA 3.0](data/HanDeDict-LICENSE.txt) 许可。

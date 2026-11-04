@@ -1,0 +1,10 @@
+{
+  "source": "https://handedict.zydeo.net/",
+  "downloadURL": "https://handedict.zydeo.net/api/export/download/handedict.u8.gz",
+  "license": "CC BY-SA 3.0",
+  "sourceDate": "2026-11-04T02:30:01Z",
+  "sourceEntries": 160143,
+  "entries": 133460,
+  "sourceSHA256": "9d7c32562056a3a84cf6c51d8193314fe4c1620a6b3c47a27f46bbc7d7b2b285",
+  "dictionarySHA256": "cdc23b71cd6884fd46c08461349a2c3429e5dbee23ff8f3523af0d92766d9672"
+}

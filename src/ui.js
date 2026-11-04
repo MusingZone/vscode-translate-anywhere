@@ -13,6 +13,8 @@ function immersiveUI(config) {
     surfaces: {}, shortcuts: { paragraph: 'Alt+Z', fullPage: 'Alt+W' }
   };
   let settings = DEFAULTS;
+  // Identifies this page (workbench or one webview) in the bridge's shared "last mouse press" record.
+  const pageId = Math.random().toString(36).slice(2);
   let staleWarned = false;
   const toasters = [];
   const statusListeners = [];
@@ -43,9 +45,27 @@ function immersiveUI(config) {
       fullOn: '全文翻译（{0}）：已开启，再按 {1} 恢复原文', fullOff: '全文翻译：已关闭，已恢复原文',
       modeOnly: '仅译文', modeBilingual: '双语对照',
       stale: 'Translate Anywhere 已更新，请运行“Developer: Reload Window”重载窗口以使用新版本。'
+    },
+    de: {
+      dotTitle: 'Zum Übersetzen darauf zeigen', panelLabel: 'Übersetzung', starAdd: 'Zur Vokabelliste hinzufügen',
+      starRemove: 'In der Vokabelliste. Klicken zum Entfernen', close: 'Schließen (Esc)', aiButton: 'KI-Übersetzung', aiRetry: 'Neu übersetzen',
+      aiTitle: 'Die Auswahl mit Ihrem KI-Modell übersetzen',
+      looking: 'Offline-Wörterbuch wird durchsucht…', aiRunning: 'Wird mit KI übersetzt…', aiTimeout: 'Zeitüberschreitung der KI-Übersetzung',
+      aiFailed: 'KI-Übersetzung fehlgeschlagen: {0}', lookupFailed: 'Nachschlagen fehlgeschlagen: {0}. Führen Sie "Translate Anywhere: Show Status" aus.',
+      notFound: 'Nicht im Offline-Wörterbuch. Klicken Sie auf "KI-Übersetzung".',
+      saved: '★ Zur Vokabelliste hinzugefügt: {0}', removed: 'Aus der Vokabelliste entfernt: {0}', vocabFailed: 'Vokabelliste konnte nicht aktualisiert werden: {0}',
+      noParagraph: 'Kein übersetzbarer Absatz unter der Maus', noNeed: 'Dieser Absatz ist bereits in der Zielsprache',
+      translating: 'Wird übersetzt…', paraFailed: '(Übersetzung fehlgeschlagen: {0})',
+      fullOn: 'Seitenübersetzung an ({0}). Erneut {1} drücken, um das Original wiederherzustellen.', fullOff: 'Seitenübersetzung aus. Original wiederhergestellt.',
+      modeOnly: 'nur Übersetzung', modeBilingual: 'zweisprachig',
+      stale: 'Translate Anywhere wurde aktualisiert. Führen Sie "Developer: Reload Window" aus, um die neue Version zu laden.'
     }
   };
-  const t = (key, ...args) => (String(settings.uiLanguage).toLowerCase().startsWith('zh') ? STRINGS.zh : STRINGS.en)[key]
+  const uiStrings = () => {
+    const lang = String(settings.uiLanguage).toLowerCase();
+    return STRINGS[['zh', 'de'].find(code => lang.startsWith(code)) || 'en'];
+  };
+  const t = (key, ...args) => (uiStrings()[key] ?? STRINGS.en[key])
     .replace(/\{(\d)\}/g, (_all, index) => String(args[index] ?? ''));
   // "Ctrl+Shift+Y" style shortcuts, matched on physical key codes so keyboard layouts do not matter.
   function parseShortcut(text) {
@@ -71,6 +91,8 @@ function immersiveUI(config) {
       event.altKey === shortcut.alt && event.shiftKey === shortcut.shift && event.metaKey === shortcut.meta;
   };
   // Heuristic: is the text already written in the target language (so there is nothing to translate)?
+  const GERMAN_WORDS = new Set(('der die das und ist nicht mit ein eine einen einem dem den des zu von für auf sich im es sie wir ' +
+    'ich auch werden wird wurde oder aber wenn bei nach aus wie noch nur über durch kann können sind hat haben').split(' '));
   function inTarget(text) {
     const letters = text.match(/\p{L}/gu);
     if (!letters) return true;
@@ -84,7 +106,27 @@ function immersiveUI(config) {
     if (lang === 'ru' || lang === 'uk') return share(/\p{Script=Cyrillic}/gu) >= 0.5;
     if (lang === 'ar') return share(/\p{Script=Arabic}/gu) >= 0.5;
     if (lang === 'en') return /^[\x00-\x7f]*$/.test(text);
+    if (lang === 'de') {
+      // German shares the Latin script with English, so look at the share of common German function words.
+      const words = text.toLowerCase().match(/\p{L}+/gu) || [];
+      return words.length >= 4 && words.filter(word => GERMAN_WORDS.has(word)).length / words.length >= 0.15;
+    }
     return false;
+  }
+  // Is the selection German? Umlauts/ß settle it; otherwise look at the function words around the selection.
+  function looksGerman(text, selection) {
+    if (/[äöüß]/i.test(text)) return true;
+    let context = text;
+    try {
+      const node = selection?.rangeCount ? selection.getRangeAt(0).commonAncestorContainer : null;
+      const element = node?.nodeType === 1 ? node : node?.parentElement;
+      const block = element?.closest('p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6, div') || element;
+      if (block?.textContent) context = block.textContent.slice(0, 1000);
+    } catch { /* keep the selection itself as context */ }
+    const words = context.toLowerCase().match(/\p{L}+/gu) || [];
+    if (words.length < 4) return false;
+    const ratio = words.filter(word => GERMAN_WORDS.has(word)).length / words.length;
+    return ratio >= 0.12 || (ratio >= 0.06 && /[äöüß]/i.test(context));
   }
   function applyStatus(data) {
     disabled = !data.enabled;
@@ -436,11 +478,13 @@ function immersiveUI(config) {
           .then(data => { if (selected === starFor) setStar(!!data.saved); })
           .catch(() => {});
       }
-      // Prefetch only the local dictionary, never the AI model. The bundled dictionary is English → Chinese.
-      const key = selected.toLowerCase();
+      // Prefetch only the local dictionaries, never the AI model: English → Chinese (ECDICT) and German → Chinese (HanDeDict).
+      const german = looksGerman(selected, selection);
+      const key = (german ? 'de:' : 'en:') + selected.toLowerCase();
       const dictionary = /^zh/i.test(settings.targetLanguage) && selected.length <= 64;
       lookupPromise = !dictionary ? Promise.resolve({ found: false })
-        : cache.has(key) ? Promise.resolve(cache.get(key)) : request('/lookup', selected).then(data => {
+        : cache.has(key) ? Promise.resolve(cache.get(key))
+        : request('/lookup', german ? { text: selected, lang: 'de' } : selected).then(data => {
           if (cache.size >= 500) cache.delete(cache.keys().next().value);
           cache.set(key, data);
           return data;
@@ -521,6 +565,32 @@ function immersiveUI(config) {
     doc.addEventListener('pointerdown', event => {
       if (!panel.contains(event.target) && event.target !== dot) hide();
     });
+    // Popups live per page (Chat/workbench vs. each webview iframe), so a click in another page is never seen
+    // here. Every press is reported to the bridge; while this page is blurred with a popup open, it checks
+    // whether the focus left because of a press elsewhere (alt-tab to another app keeps the popup open).
+    win.addEventListener('pointerdown', () => {
+      if (!disabled) request('/pointer', { action: 'down', source: pageId }).catch(() => {});
+    }, { passive: true, capture: true });
+    // Not document.hasFocus(): it stays true for the workbench while a child webview iframe has focus.
+    let watchTimer = 0;
+    let blurred = false;
+    const stopWatch = () => { blurred = false; clearTimeout(watchTimer); watchTimer = 0; };
+    win.addEventListener('blur', () => {
+      blurred = true;
+      if (panel.hidden || watchTimer) return;
+      const blurAt = Date.now() - 400;
+      const poll = async () => {
+        watchTimer = 0;
+        if (panel.hidden || !blurred) return;
+        try {
+          const last = await request('/pointer', { action: 'get' });
+          if (last.time >= blurAt && last.source !== pageId) return hide();
+        } catch { /* bridge unavailable: keep the popup */ }
+        if (!panel.hidden && blurred) watchTimer = setTimeout(poll, 250);
+      };
+      watchTimer = setTimeout(poll, 60);
+    });
+    win.addEventListener('focus', stopWatch);
     win.addEventListener('scroll', event => {
       // An open panel stays until Esc / × / an outside click; Chat auto-scrolls while answers stream.
       if (panel.hidden && !panel.contains(event.target)) hide();
@@ -717,7 +787,7 @@ function immersiveUI(config) {
               break;
             } catch (error) {
               // The extension caps concurrent model calls; back off briefly instead of failing the paragraph.
-              if (controller.signal.aborted || attempt >= 3 || !/concurren|上限/i.test(error.message)) throw error;
+              if (controller.signal.aborted || attempt >= 3 || !/concurren|上限|gleichzeitig/i.test(error.message)) throw error;
               await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
             }
           }
