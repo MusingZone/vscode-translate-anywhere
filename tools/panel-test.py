@@ -61,14 +61,15 @@ def state(provider="vscode", lang="en"):
         "providers": [{"id": "vscode", "label": {"zh": "VS Code 语言模型（Copilot 等）", "de": "VS Code-Sprachmodelle (Copilot…)"}.get(lang, "VS Code language models (Copilot…)")}]
         + [{"id": k, "label": v["label"]} for k, v in presets.items()],
         "vscodeModels": [
-            {"id": "gpt-5-mini", "name": "GPT-5 mini", "detail": "copilot · gpt-5-mini"},
-            {"id": "claude-haiku-4.5", "name": "Claude Haiku 4.5", "detail": "copilot · claude-haiku-4.5"},
+            {"id": "gpt-5-mini", "name": "GPT-5 mini", "detail": "copilot · gpt-5-mini", "timing": None},
+            {"id": "claude-haiku-4.5", "name": "Claude Haiku 4.5", "detail": "copilot · claude-haiku-4.5", "timing": None},
         ],
-        "modelId": "", "apiModel": "", "baseUrl": "",
+        "modelId": "", "apiModel": "", "baseUrl": "", "benchmark": None,
         "providerDefaults": None if not preset else {"model": preset.get("model", ""), "baseUrl": preset.get("baseUrl", ""),
                                                       "keyUrl": preset.get("keyUrl", ""), "keyOptional": bool(preset.get("keyOptional"))},
         "hasKey": provider == "deepseek",
         "dictionary": {"status": "ready", "entries": 770238, "kind": "downloaded", "path": "", "owner": True},
+        "germanDictionary": {"status": "idle", "enabled": True},
         "surfaces": {"markdownPreview": True, "releaseNotes": True, "chat": True, "settings": True, "extensionPages": True, "welcome": True, "workbenchUI": True},
         "shortcuts": {"paragraph": "Alt+Z", "fullPage": "Alt+W"},
         "vocabularyCount": 12,
@@ -112,9 +113,46 @@ def main():
         assert page.eval_on_selector("#modelId", "s => s.options.length") == 3
         assert page.eval_on_selector("#scParagraph", "i => i.value") == "Alt+Z"
         assert "770" in page.inner_text("#dictText")
+        assert page.is_visible("#deBox") == (lang == "de"), "German dictionary block shows only for a German UI"
+        assert not page.is_visible("#speedInfo")
         if shot:
             page.screenshot(path=shot, full_page=True)
         posted()
+
+        # Speed test: progress on the button, then the fastest model first with a one-click switch.
+        page.click("#speedBtn")
+        assert posted() == [{"type": "benchmark"}]
+        s = state("vscode", lang)
+        s["benchmark"] = {"done": 1, "total": 2}
+        post({"type": "state", "state": s})
+        page.wait_for_function("document.getElementById('speedBtn').textContent.includes('1/2')")
+        assert page.is_disabled("#speedBtn") and page.is_visible("#speedInfo")
+        s = state("vscode", lang)
+        s["vscodeModels"] = [dict(s["vscodeModels"][1], timing=820), dict(s["vscodeModels"][0], timing="unauthorized")]
+        post({"type": "state", "state": s})
+        page.wait_for_function("!document.getElementById('speedBtn').disabled")
+        assert page.eval_on_selector("#modelId", "s => s.options[1].textContent").startswith("0.8s · Claude Haiku 4.5")
+        assert "Claude Haiku 4.5" in page.inner_text("#speedInfo") and page.eval_on_selector_all("#speedInfo div", "d => d.length") == 2
+        page.click("#speedInfo [data-use]")
+        assert posted() == [{"type": "update", "key": "ai.modelId", "value": "claude-haiku-4.5"}]
+
+        # Errors from commands appear in a dismissible banner at the top.
+        post({"type": "error", "message": "Something failed"})
+        page.wait_for_function("!document.getElementById('banner').hidden")
+        page.click("#bannerClose")
+        assert not page.is_visible("#banner")
+
+        # Collapsing a section is remembered in the webview state.
+        page.click("details[data-sec='surfaces'] > summary")
+        assert page.evaluate("document.querySelector(\"details[data-sec='surfaces']\").open") is False
+        page.click("details[data-sec='surfaces'] > summary")
+        posted()
+
+        # The German block also appears once a German word has been looked up.
+        s = state("vscode", lang)
+        s["germanDictionary"] = {"status": "ready", "entries": 133000, "kind": "downloaded", "enabled": True}
+        post({"type": "state", "state": s})
+        page.wait_for_function("!document.getElementById('deBox').hidden")
 
         page.select_option("#provider", "deepseek")
         assert posted() == [{"type": "update", "key": "ai.provider", "value": "deepseek"}]
@@ -148,6 +186,8 @@ def main():
         assert posted() == [{"type": "update", "key": "shortcuts.paragraph", "value": "Ctrl+Shift+Y"}]
         page.keyboard.press("Backspace")
         assert posted() == [{"type": "update", "key": "shortcuts.paragraph", "value": ""}]
+        page.keyboard.press("Alt+Backquote")
+        assert posted() == [{"type": "update", "key": "shortcuts.paragraph", "value": "Alt+`"}]
 
         page.uncheck("[data-key='surfaces.chat']")
         assert posted() == [{"type": "update", "key": "surfaces.chat", "value": False}]

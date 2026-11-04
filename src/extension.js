@@ -88,7 +88,7 @@ async function activate(context) {
   };
   const AUTHORIZE_HINT = () => L(
     'First use needs your permission: run "Translate Anywhere: Authorize AI Model" from the Command Palette in this window and click Allow.',
-    '首次使用需授权：在当前窗口按 Ctrl+Shift+P 运行「Translate Anywhere: Authorize AI Model」并点击允许。',
+    '首次使用需授权：在命令面板中运行「Translate Anywhere: Authorize AI Model」并点击允许。',
     'Beim ersten Mal ist Ihre Zustimmung nötig: Führen Sie in diesem Fenster über die Befehlspalette "Translate Anywhere: Authorize AI Model" aus und klicken Sie auf "Zulassen".'
   );
   const lightweightRank = model => {
@@ -99,6 +99,27 @@ async function activate(context) {
   };
   const sortedModels = async () => (await vscode.lm.selectChatModels({}))
     .sort((a, b) => lightweightRank(a) - lightweightRank(b));
+  // Speed-test results for this session (milliseconds, 'unauthorized' or 'failed'), shared by the sidebar and the model picker.
+  const modelTimings = new Map();
+  const speedRank = model => typeof modelTimings.get(model.id) === 'number' ? modelTimings.get(model.id) : Number.MAX_SAFE_INTEGER;
+  // Only measures models this extension may already use, so no consent dialog pops up per provider.
+  async function measureModels(models, onProgress, token) {
+    let done = 0;
+    await Promise.all(models.map(async model => {
+      if (context.languageModelAccessInformation.canSendRequest(model) !== true) {
+        modelTimings.set(model.id, 'unauthorized');
+      } else {
+        const started = Date.now();
+        try {
+          await runModel(model, 'resilience', 15000, undefined, undefined, token);
+          modelTimings.set(model.id, Date.now() - started);
+        } catch {
+          if (!token?.isCancellationRequested) modelTimings.set(model.id, 'failed');
+        }
+      }
+      onProgress(++done, models.length);
+    }));
+  }
   async function resolveModel() {
     const modelId = config().get('ai.modelId', '');
     if (modelId) {
@@ -121,7 +142,6 @@ async function activate(context) {
         'Kein VS Code-Sprachmodell verfügbar. Konfigurieren Sie zuerst einen Modellanbieter.'));
     }
     const current = config().get('ai.modelId', '');
-    const timings = new Map();
     const picker = vscode.window.createQuickPick();
     picker.title = L('Translate Anywhere: AI translation model', 'Translate Anywhere：选择 AI 翻译模型', 'Translate Anywhere: KI-Übersetzungsmodell');
     picker.placeholder = L('Lightweight models are listed first. Click the speed button to benchmark authorized models.',
@@ -132,14 +152,13 @@ async function activate(context) {
     picker.buttons = [measure];
     const auto = { label: `$(sparkle) ${L('Auto (prefer a lightweight model)', '自动（优先轻量模型）', 'Automatisch (leichtes Modell bevorzugen)')}`, model: null };
     const speed = model => {
-      const timing = timings.get(model.id);
+      const timing = modelTimings.get(model.id);
       if (timing === undefined) return '';
       if (typeof timing === 'number') return `${(timing / 1000).toFixed(1)}s · `;
       return timing === 'unauthorized' ? L('not authorized yet · ', '未授权 · ', 'noch nicht autorisiert · ') : L('failed · ', '失败 · ', 'fehlgeschlagen · ');
     };
     const render = () => {
-      const rank = model => typeof timings.get(model.id) === 'number' ? timings.get(model.id) : Number.MAX_SAFE_INTEGER;
-      const ordered = [...models].sort((a, b) => rank(a) - rank(b) || lightweightRank(a) - lightweightRank(b));
+      const ordered = [...models].sort((a, b) => speedRank(a) - speedRank(b) || lightweightRank(a) - lightweightRank(b));
       auto.description = current ? '' : L('current', '当前', 'aktuell');
       const items = [auto, ...ordered.map(model => ({
         label: model.name,
@@ -157,23 +176,10 @@ async function activate(context) {
       picker.onDidTriggerButton(async () => {
         picker.busy = true;
         picker.buttons = [];
-        // Only models this extension may already use, so no consent dialog pops up per provider.
-        await Promise.all(models.map(async model => {
-          if (context.languageModelAccessInformation.canSendRequest(model) !== true) {
-            timings.set(model.id, 'unauthorized');
-            return;
-          }
-          const started = Date.now();
-          try {
-            await runModel(model, 'resilience', 15000, undefined, undefined, cancel.token);
-            timings.set(model.id, Date.now() - started);
-          } catch (error) {
-            timings.set(model.id, errorText(error));
-          }
-          if (!cancel.token.isCancellationRequested) render();
-        }));
+        await measureModels(models, () => { if (!cancel.token.isCancellationRequested) render(); }, cancel.token);
         picker.busy = false;
         picker.buttons = [measure];
+        panel?.refresh();
       });
       picker.onDidAccept(async () => {
         const item = picker.selectedItems[0];
@@ -203,9 +209,11 @@ async function activate(context) {
         vscode.LanguageModelChatMessage.User(buildPrompt(mode, language)),
         vscode.LanguageModelChatMessage.User(JSON.stringify({ text }))
       ];
+      const native = (context.extension.packageJSON.contributes.configuration.properties[`${SECTION}.targetLanguage`]
+        .enumItemLabels[Object.keys(LANGUAGES).indexOf(targetLanguage())] || language).replace(/ \(.*\)$/, '');
       const justification = L(`Translate Anywhere uses this model to translate text you select into ${language}.`,
-        `Translate Anywhere 需要使用该模型，把你划选的文本翻译为${language}。`,
-        `Translate Anywhere verwendet dieses Modell, um von Ihnen markierten Text zu übersetzen (Zielsprache: ${language}).`);
+        `Translate Anywhere 需要使用该模型，把你划选的文本翻译为${native}。`,
+        `Translate Anywhere verwendet dieses Modell, um von Ihnen markierten Text zu übersetzen (Zielsprache: ${native}).`);
       const response = await model.sendRequest(messages, { justification }, cancellation.token);
       let translation = '';
       for await (const fragment of response.text) {
@@ -390,14 +398,16 @@ async function activate(context) {
       .then(names => { picker.items = toItems(names); }, showListError)
       .finally(() => { picker.busy = false; });
     return new Promise(resolve => {
+      let accepted = false;
       picker.onDidAccept(async () => {
         const name = (picker.selectedItems[0]?.label || picker.value).trim();
         if (!name) return;
+        accepted = true;
         picker.hide();
         await config().update('ai.apiModel', name === preset.model ? undefined : name, vscode.ConfigurationTarget.Global);
         resolve(name);
       });
-      picker.onDidHide(() => { picker.dispose(); resolve(undefined); });
+      picker.onDidHide(() => { picker.dispose(); if (!accepted) resolve(undefined); });
     });
   }
   // Dictionary: a user-chosen file, the copy bundled in the offline VSIX, or a one-time download.
@@ -577,8 +587,9 @@ async function activate(context) {
     return english.found ? english : german;
   }
   async function lookupGerman(text) {
-    if (germanDictionary) return germanDictionary.lookup(text);
-    if (!germanDownload && config().get('dictionary.german', true)) {
+    const enabled = config().get('dictionary.german', true);
+    if (enabled && germanDictionary) return germanDictionary.lookup(text);
+    if (enabled && !germanDownload) {
       // Load (or start the one-time download) without blocking: until then the UI falls back to AI.
       const pending = loadGerman();
       pending.catch(() => {});
@@ -677,22 +688,22 @@ async function activate(context) {
       if (!['win32', 'darwin', 'linux'].includes(process.platform)) throw error;
       const { message, button } = elevationText();
       const consent = await vscode.window.showWarningMessage(message, { modal: true }, button);
-      if (!consent) throw new Error(L('Administrator confirmation was cancelled; VS Code files were not changed.', '?????????????????',
-        'Administratorbest?tigung abgebrochen; VS Code-Dateien wurden nicht ge?ndert.'));
+      if (!consent) throw new Error(L('Administrator confirmation was cancelled; VS Code files were not changed.', '已取消管理员确认，未修改 VS Code 文件。',
+        'Administratorbestätigung abgebrochen; VS Code-Dateien wurden nicht geändert.'));
       try {
         return await elevatedMaintenance({
           appRoot: vscode.env.appRoot, stateFolder, extensionRoot: context.extensionUri.fsPath,
           codeExecutable: process.execPath, mode,
-          prompt: L('Translate Anywhere needs to update VS Code\'s UI files.', 'Translate Anywhere ???? VS Code ??????',
+          prompt: L('Translate Anywhere needs to update VS Code\'s UI files.', 'Translate Anywhere 需要更新 VS Code 的界面文件。',
             'Translate Anywhere muss die UI-Dateien von VS Code aktualisieren.')
         });
       } catch (elevationError) {
         if (elevationError.manualCommand) {
-          const copy = L('Copy Terminal Command', '??????', 'Terminalbefehl kopieren');
+          const copy = L('Copy Terminal Command', '复制终端命令', 'Terminalbefehl kopieren');
           const choice = await vscode.window.showErrorMessage(L(
             `Translate Anywhere: ${elevationError.message}. Run the copied command in a terminal (it asks for your sudo password), then reload the window.`,
-            `Translate Anywhere?${elevationError.message}??????????????????? sudo ???????????`,
-            `Translate Anywhere: ${elevationError.message}. F?hren Sie den kopierten Befehl in einem Terminal aus (er fragt nach Ihrem sudo-Passwort) und laden Sie dann das Fenster neu.`), copy);
+            `Translate Anywhere：${elevationError.message}。请在终端中运行已复制的命令（会要求输入 sudo 密码），然后重载窗口。`,
+            `Translate Anywhere: ${elevationError.message}. Führen Sie den kopierten Befehl in einem Terminal aus (er fragt nach Ihrem sudo-Passwort) und laden Sie dann das Fenster neu.`), copy);
           if (choice === copy) await vscode.env.clipboard.writeText(elevationError.manualCommand);
         }
         throw elevationError;
@@ -703,39 +714,39 @@ async function activate(context) {
     if (process.platform === 'darwin') {
       return {
         message: L('The VS Code application is not writable by your user account. Confirm this one patch operation with an administrator password? No background helper is installed; VS Code updates may ask again.',
-          'VS Code ????????????????????????????????????????????VS Code ????????????',
-          'Die VS Code-Anwendung ist f?r Ihr Benutzerkonto nicht beschreibbar. Diesen einen Patch-Vorgang mit einem Administratorpasswort best?tigen? Es wird kein Hintergrunddienst installiert; nach VS Code-Updates wird eventuell erneut gefragt.'),
-        button: L('Continue as Administrator', '?????', 'Als Administrator fortfahren')
+          'VS Code 应用对当前用户账户不可写。是否用管理员密码确认这一次修改？不会安装任何后台程序；VS Code 更新后可能需要再次确认。',
+          'Die VS Code-Anwendung ist für Ihr Benutzerkonto nicht beschreibbar. Diesen einen Patch-Vorgang mit einem Administratorpasswort bestätigen? Es wird kein Hintergrunddienst installiert; nach VS Code-Updates wird eventuell erneut gefragt.'),
+        button: L('Continue as Administrator', '以管理员身份继续', 'Als Administrator fortfahren')
       };
     }
     if (process.platform === 'linux') {
       return {
         message: L('The VS Code installation folder is owned by root (typical for .deb/.rpm installs). Confirm this one patch operation through the system authentication dialog (polkit)? No background service is installed; VS Code updates will ask again.',
-          'VS Code ?????? root?.deb/.rpm ?????????????????????polkit?????????????????????VS Code ??????????',
-          'Der VS Code-Installationsordner geh?rt root (typisch f?r .deb/.rpm-Installationen). Diesen einen Patch-Vorgang ?ber den Systemauthentifizierungsdialog (polkit) best?tigen? Es wird kein Hintergrunddienst installiert; nach VS Code-Updates wird erneut gefragt.'),
-        button: L('Continue as Administrator', '?????', 'Als Administrator fortfahren')
+          'VS Code 安装目录属于 root（.deb/.rpm 安装通常如此）。是否通过系统认证对话框（polkit）确认这一次修改？不会安装任何后台服务；VS Code 更新后需要再次确认。',
+          'Der VS Code-Installationsordner gehört root (typisch für .deb/.rpm-Installationen). Diesen einen Patch-Vorgang über den Systemauthentifizierungsdialog (polkit) bestätigen? Es wird kein Hintergrunddienst installiert; nach VS Code-Updates wird erneut gefragt.'),
+        button: L('Continue as Administrator', '以管理员身份继续', 'Als Administrator fortfahren')
       };
     }
     return {
       message: L('The VS Code installation folder needs administrator rights. Confirm this one patch operation through Windows UAC? No persistent admin task is created; VS Code updates will ask again.',
-        'VS Code ???????????????? Windows UAC ???????????????????????VS Code ??????????',
-        'Der VS Code-Installationsordner erfordert Administratorrechte. Diesen einen Patch-Vorgang ?ber die Windows-Benutzerkontensteuerung (UAC) best?tigen? Es wird keine dauerhafte Admin-Aufgabe angelegt; nach VS Code-Updates wird erneut gefragt.'),
-      button: L('Continue with UAC', '?????', 'Mit UAC fortfahren')
+        'VS Code 安装目录需要管理员权限。是否通过 Windows UAC 确认这一次修改？不会创建常驻的管理员任务；VS Code 更新后需要再次确认。',
+        'Der VS Code-Installationsordner erfordert Administratorrechte. Diesen einen Patch-Vorgang über die Windows-Benutzerkontensteuerung (UAC) bestätigen? Es wird keine dauerhafte Admin-Aufgabe angelegt; nach VS Code-Updates wird erneut gefragt.'),
+      button: L('Continue with UAC', '通过 UAC 继续', 'Mit UAC fortfahren')
     };
   }
   function readOnlyMessage(reason) {
     if (reason === 'translocated') {
       return L('VS Code is running from a temporary read-only location (macOS App Translocation). Move "Visual Studio Code.app" to the Applications folder, start it from there and retry.',
-        'VS Code ?? macOS ?????????App Translocation???? ?Visual Studio Code.app? ?????????????????????',
-        'VS Code l?uft von einem tempor?ren, schreibgesch?tzten Ort (macOS App Translocation). Verschieben Sie "Visual Studio Code.app" in den Ordner "Programme", starten Sie es von dort und versuchen Sie es erneut.');
+        'VS Code 正从 macOS 的临时只读位置运行（App Translocation）。请把“Visual Studio Code.app”移到“应用程序”文件夹，从那里启动后重试。',
+        'VS Code läuft von einem temporären, schreibgeschützten Ort (macOS App Translocation). Verschieben Sie "Visual Studio Code.app" in den Ordner "Programme", starten Sie es von dort und versuchen Sie es erneut.');
     }
     if (reason === 'snap' || reason === 'flatpak') {
       return L(`The ${reason === 'snap' ? 'Snap' : 'Flatpak'} package of VS Code is read-only and cannot be integrated. Install VS Code from the .deb/.rpm package or the .tar.gz archive from code.visualstudio.com instead.`,
-        `VS Code ? ${reason === 'snap' ? 'Snap' : 'Flatpak'} ?????????????? code.visualstudio.com ??? .deb/.rpm ???? .tar.gz ????`,
-        `Das ${reason === 'snap' ? 'Snap' : 'Flatpak'}-Paket von VS Code ist schreibgesch?tzt und kann nicht integriert werden. Installieren Sie VS Code stattdessen aus dem .deb/.rpm-Paket oder dem .tar.gz-Archiv von code.visualstudio.com.`);
+        `VS Code 的 ${reason === 'snap' ? 'Snap' : 'Flatpak'} 包是只读的，无法集成。请改用 code.visualstudio.com 提供的 .deb/.rpm 包或 .tar.gz 压缩包安装 VS Code。`,
+        `Das ${reason === 'snap' ? 'Snap' : 'Flatpak'}-Paket von VS Code ist schreibgeschützt und kann nicht integriert werden. Installieren Sie VS Code stattdessen aus dem .deb/.rpm-Paket oder dem .tar.gz-Archiv von code.visualstudio.com.`);
     }
-    return L('The VS Code installation is on a read-only file system and cannot be integrated.', 'VS Code ????????????????',
-      'Die VS Code-Installation liegt auf einem schreibgesch?tzten Dateisystem und kann nicht integriert werden.');
+    return L('The VS Code installation is on a read-only file system and cannot be integrated.', 'VS Code 安装位于只读文件系统上，无法集成。',
+      'Die VS Code-Installation liegt auf einem schreibgeschützten Dateisystem und kann nicht integriert werden.');
   }
   // The patched integrity check reads the current product.json checksums, so a window reload is enough.
   async function offerReload(message) {
@@ -894,8 +905,10 @@ async function activate(context) {
     const preset = PROVIDERS[providerId];
     let vscodeModels = [];
     if (providerId === 'vscode') {
-      try { vscodeModels = (await sortedModels()).map(model => ({ id: model.id, name: model.name, detail: `${model.vendor} · ${model.family}` })); }
-      catch (error) { logError(error); }
+      try {
+        vscodeModels = (await sortedModels()).sort((a, b) => speedRank(a) - speedRank(b))
+          .map(model => ({ id: model.id, name: model.name, detail: `${model.vendor} · ${model.family}`, timing: modelTimings.get(model.id) ?? null }));
+      } catch (error) { logError(error); }
     }
     return {
       version, uiLanguage: uiLanguage(),
@@ -907,7 +920,7 @@ async function activate(context) {
       provider: providerId,
       providers: [{ id: 'vscode', label: L('VS Code language models (Copilot…)', 'VS Code 语言模型（Copilot 等）', 'VS Code-Sprachmodelle (Copilot…)') },
         ...Object.entries(PROVIDERS).map(([id, item]) => ({ id, label: item.label }))],
-      vscodeModels, modelId: config().get('ai.modelId', ''),
+      vscodeModels, modelId: config().get('ai.modelId', ''), benchmark,
       apiModel: config().get('ai.apiModel', ''), baseUrl: config().get('ai.baseUrl', ''),
       providerDefaults: preset ? { model: preset.model, baseUrl: preset.baseUrl, keyUrl: preset.keyUrl || '', keyOptional: !!preset.keyOptional } : null,
       hasKey: preset ? !!await context.secrets.get(secretKey(providerId)) : false,
@@ -918,16 +931,19 @@ async function activate(context) {
       vocabularyCount: vocabulary.list().length
     };
   }
-  // Model speed test for VS Code models (opt-in from the sidebar, like the ⏱ button in the model picker).
+  // Sidebar speed test: progress and results reach the panel through its state, so they survive the view being hidden.
+  let benchmark = null;
   async function benchmarkModels() {
-    const timings = {};
-    await Promise.all((await sortedModels()).map(async model => {
-      if (context.languageModelAccessInformation.canSendRequest(model) !== true) { timings[model.id] = 'unauthorized'; return; }
-      const started = Date.now();
-      try { await runModel(model, 'resilience', 15000); timings[model.id] = Date.now() - started; }
-      catch { timings[model.id] = 'failed'; }
-    }));
-    return timings;
+    if (benchmark) return;
+    const models = await sortedModels();
+    benchmark = { done: 0, total: models.length };
+    panel.refresh();
+    try {
+      await measureModels(models, done => { benchmark.done = done; panel.refresh(); });
+    } finally {
+      benchmark = null;
+      panel.refresh();
+    }
   }
   const PANEL_KEYS = /^(targetLanguage|fullPage\.mode|ai\.(autoTranslate|provider|modelId|apiModel|baseUrl)|surfaces\.\w+|shortcuts\.(paragraph|fullPage))$/;
   panel = new SettingsPanel(context, {

@@ -342,6 +342,10 @@ test('every interface language has a complete string table', () => {
   const calls = [...host.matchAll(/(?<![.\w])L\(/g)].filter(m => !host.slice(m.index - 6, m.index).includes('const '));
   assert.ok(calls.length > 60);
   for (const call of calls) assert.equal(argCount(host, call.index + 2), 3, host.slice(call.index, call.index + 80));
+  // Guards against a lossy re-encoding that once turned Chinese text and umlauts into '?'.
+  for (const [file, text] of [['extension.js', host], ['panel.js', fs.readFileSync(path.join(root, 'src', 'panel.js'), 'utf8')]]) {
+    assert.doesNotMatch(text, /\?{3,}|[a-zäöü]\?[a-zäöü]/, `${file} contains '?' where text was lost`);
+  }
 });
 
 test('bridge vocabulary route and AI mode passthrough', async () => {

@@ -191,7 +191,7 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 
 ## Uninstalling
 
-Uninstalling restores VS Code's original files after the next full restart. To restore immediately, click **Disable & Restore** in the sidebar (or run **Disable and Restore VS Code**) before uninstalling. Reinstalling or updating VS Code also removes the integration.
+Uninstalling restores VS Code's original files after the next full restart. To restore immediately, click **Disable & Restore** in the sidebar (or run **Disable and Restore VS Code**) before uninstalling. If enabling needed administrator confirmation, always do this first: the automatic restore after uninstalling runs without administrator rights. Reinstalling or updating VS Code also removes the integration.
 
 ## Contributing
 

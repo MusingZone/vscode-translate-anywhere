@@ -2,6 +2,22 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] - Sidebar polish
+
+### Changed
+- **Test speed** shows its progress on the button, then names the fastest model with a one-click **Use it** link. The model list is sorted by measured speed, with the time in front of each name. Models you have not authorized yet are skipped instead of prompting.
+- Sidebar sections can be collapsed, and the sidebar remembers which ones you closed. Errors now appear in a dismissible banner at the top.
+- The sidebar only shows dictionaries that are relevant to you.
+- Better discoverability in Marketplace search.
+
+### Fixed
+- Administrator confirmation and read-only installation messages showed `?` instead of Chinese and German text.
+- **Select AI Model** for an API provider now continues to the authorization check after you pick a model.
+- Shortcuts with the `` ` `` key (for example `` Alt+` ``) are accepted in Settings and in the sidebar recorder.
+- Turning off the German dictionary setting takes effect without reloading the window.
+- Settings no longer share a sort position, so their order is stable.
+- Smaller wording fixes in Chinese messages and settings.
+
 ## [0.5.0] - macOS and Linux
 
 ### Added

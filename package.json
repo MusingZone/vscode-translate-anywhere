@@ -2,7 +2,7 @@
   "name": "vscode-translate-anywhere",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "MusingZone",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -26,7 +26,11 @@
     "markdown",
     "release notes",
     "bilingual",
-    "vocabulary"
+    "vocabulary",
+    "翻译",
+    "划词翻译",
+    "中英翻译",
+    "英汉词典"
   ],
   "categories": [
     "Education",
@@ -267,7 +271,7 @@
           "default": "Alt+Z",
           "scope": "application",
           "order": 4,
-          "pattern": "^$|^(([Cc]trl|[Aa]lt|[Ss]hift|[Mm]eta)\\+)*([A-Za-z0-9]|[Ff]([1-9]|1[0-9]|2[0-4])|[Ss]pace)$",
+          "pattern": "^$|^(([Cc]trl|[Aa]lt|[Ss]hift|[Mm]eta)\\+)*([A-Za-z0-9`]|[Ff]([1-9]|1[0-9]|2[0-4])|[Ss]pace)$",
           "patternErrorMessage": "%config.shortcuts.error%",
           "markdownDescription": "%config.shortcuts.paragraph%"
         },
@@ -276,7 +280,7 @@
           "default": "Alt+W",
           "scope": "application",
           "order": 5,
-          "pattern": "^$|^(([Cc]trl|[Aa]lt|[Ss]hift|[Mm]eta)\\+)*([A-Za-z0-9]|[Ff]([1-9]|1[0-9]|2[0-4])|[Ss]pace)$",
+          "pattern": "^$|^(([Cc]trl|[Aa]lt|[Ss]hift|[Mm]eta)\\+)*([A-Za-z0-9`]|[Ff]([1-9]|1[0-9]|2[0-4])|[Ss]pace)$",
           "patternErrorMessage": "%config.shortcuts.error%",
           "markdownDescription": "%config.shortcuts.fullPage%"
         },
@@ -306,7 +310,7 @@
           "type": "string",
           "default": "vscode",
           "scope": "application",
-          "order": 7,
+          "order": 8,
           "enum": [
             "vscode",
             "openai",
@@ -345,21 +349,21 @@
           "type": "string",
           "default": "",
           "scope": "application",
-          "order": 8,
+          "order": 9,
           "markdownDescription": "%config.ai.modelId%"
         },
         "translateAnywhere.ai.apiModel": {
           "type": "string",
           "default": "",
           "scope": "application",
-          "order": 9,
+          "order": 10,
           "markdownDescription": "%config.ai.apiModel%"
         },
         "translateAnywhere.ai.baseUrl": {
           "type": "string",
           "default": "",
           "scope": "application",
-          "order": 10,
+          "order": 11,
           "pattern": "^$|^https?://",
           "patternErrorMessage": "%config.ai.baseUrl.error%",
           "markdownDescription": "%config.ai.baseUrl%"
@@ -368,21 +372,21 @@
           "type": "boolean",
           "default": true,
           "scope": "application",
-          "order": 11,
+          "order": 12,
           "markdownDescription": "%config.dictionary.autoDownload%"
         },
         "translateAnywhere.dictionary.path": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "order": 12,
+          "order": 13,
           "markdownDescription": "%config.dictionary.path%"
         },
         "translateAnywhere.dictionary.downloadUrl": {
           "type": "string",
           "default": "",
           "scope": "application",
-          "order": 13,
+          "order": 14,
           "pattern": "^$|^https://",
           "patternErrorMessage": "%config.dictionary.downloadUrl.error%",
           "markdownDescription": "%config.dictionary.downloadUrl%"
@@ -391,7 +395,7 @@
           "type": "boolean",
           "default": true,
           "scope": "application",
-          "order": 14,
+          "order": 15,
           "markdownDescription": "%config.dictionary.german%"
         },
         "translateAnywhere.integration.enabled": {

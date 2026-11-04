@@ -8,7 +8,10 @@ const STRINGS = {
     translation: 'Translation', target: 'Target language', pageMode: 'Full-page translation display', translationOnly: 'Translation only',
     bilingual: 'Bilingual (original + translation)', autoAI: 'Use AI automatically for phrases and sentences',
     ai: 'AI engine', provider: 'Provider', model: 'Model', autoModel: 'Auto (prefer a lightweight model)', speed: 'Test speed',
-    testing: 'Testing…', unauthorized: 'not authorized', failed: 'failed', apiKey: 'API key', keySaved: 'Saved in the OS keychain',
+    testing: 'Testing {0}/{1}…', unauthorized: 'not authorized', failed: 'failed',
+    speedTitle: 'Time how long each available model takes to translate a word', speedRunning: 'Each model translates one word. This takes up to 15 seconds.',
+    fastest: 'Fastest: {0} · {1}', useIt: 'Use it', speedNone: 'No model answered within 15 seconds.',
+    speedUnauthorized: '{0} not authorized yet, so not measured. Select one and click Test AI to allow it.', close: 'Close', apiKey: 'API key', keySaved: 'Saved in the OS keychain',
     keyMissing: 'Not set', keyOptional: 'Optional', setKey: 'Set key', getKey: 'Get a key', fetch: 'Fetch list', fetching: 'Loading…',
     baseUrl: 'API base URL', testAI: 'Test AI', noModels: 'No VS Code language model available. Sign in to GitHub Copilot or pick another provider.',
     dictionary: 'Offline dictionary', dictReady: 'Ready · {0} entries · {1}', dictLoading: 'Loading…', dictDownloading: 'Downloading… {0}',
@@ -28,8 +31,11 @@ const STRINGS = {
     integration: '界面集成', active: '已启用', off: '未启用', enable: '启用 / 修复', disable: '禁用并恢复',
     translation: '翻译', target: '目标语言', pageMode: '全文翻译显示方式', translationOnly: '仅译文', bilingual: '原文译文对照',
     autoAI: '短语、句子自动使用 AI 翻译',
-    ai: 'AI 引擎', provider: '服务商', model: '模型', autoModel: '自动（优先轻量模型）', speed: '测速', testing: '测速中…',
-    unauthorized: '未授权', failed: '失败', apiKey: 'API Key', keySaved: '已保存在系统钥匙串', keyMissing: '未设置', keyOptional: '可选',
+    ai: 'AI 引擎', provider: '服务商', model: '模型', autoModel: '自动（优先轻量模型）', speed: '测速', testing: '测速中 {0}/{1}…',
+    unauthorized: '未授权', failed: '失败',
+    speedTitle: '测量每个可用模型翻译一个单词所需的时间', speedRunning: '每个模型翻译一个单词，最多约 15 秒。',
+    fastest: '最快：{0} · {1}', useIt: '改用此模型', speedNone: '没有模型在 15 秒内返回结果。',
+    speedUnauthorized: '{0} 个模型尚未授权，未参与测速。选中后点击“测试 AI”即可授权。', close: '关闭', apiKey: 'API Key', keySaved: '已保存在系统钥匙串', keyMissing: '未设置', keyOptional: '可选',
     setKey: '设置 Key', getKey: '获取 Key', fetch: '获取列表', fetching: '加载中…', baseUrl: 'API 地址', testAI: '测试 AI',
     noModels: '没有可用的 VS Code 语言模型。请登录 GitHub Copilot 或选择其他服务商。',
     dictionary: '离线词典', dictReady: '可用 · {0} 词条 · {1}', dictLoading: '加载中…', dictDownloading: '下载中… {0}',
@@ -50,7 +56,11 @@ const STRINGS = {
     translation: 'Übersetzung', target: 'Zielsprache', pageMode: 'Anzeige der Seitenübersetzung', translationOnly: 'Nur Übersetzung',
     bilingual: 'Zweisprachig (Original + Übersetzung)', autoAI: 'KI automatisch für Ausdrücke und Sätze verwenden',
     ai: 'KI-Engine', provider: 'Anbieter', model: 'Modell', autoModel: 'Automatisch (leichtes Modell bevorzugen)', speed: 'Tempo messen',
-    testing: 'Wird gemessen…', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen', apiKey: 'API-Schlüssel',
+    testing: 'Wird gemessen {0}/{1}…', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen',
+    speedTitle: 'Misst, wie lange jedes verfügbare Modell für die Übersetzung eines Wortes braucht',
+    speedRunning: 'Jedes Modell übersetzt ein Wort. Das dauert höchstens etwa 15 Sekunden.',
+    fastest: 'Am schnellsten: {0} · {1}', useIt: 'Verwenden', speedNone: 'Kein Modell hat innerhalb von 15 Sekunden geantwortet.',
+    speedUnauthorized: '{0} noch nicht autorisiert und daher nicht gemessen. Eines auswählen und auf „KI testen“ klicken, um es zuzulassen.', close: 'Schließen', apiKey: 'API-Schlüssel',
     keySaved: 'Im Schlüsselbund des Betriebssystems gespeichert', keyMissing: 'Nicht festgelegt', keyOptional: 'Optional',
     setKey: 'Schlüssel festlegen', getKey: 'Schlüssel erhalten', fetch: 'Liste abrufen', fetching: 'Wird geladen…',
     baseUrl: 'API-Basis-URL', testAI: 'KI testen',
@@ -123,7 +133,7 @@ class SettingsPanel {
         try { this.post({ type: 'models', models: await this.api.listModels() }); }
         catch (error) { this.post({ type: 'models', error: error instanceof Error ? error.message : String(error) }); }
         return undefined;
-      case 'benchmark': this.post({ type: 'benchmark', timings: await this.api.benchmark() }); return undefined;
+      case 'benchmark': try { await this.api.benchmark(); } finally { this.refresh(); } return undefined;
       default: return undefined;
     }
   }
@@ -136,8 +146,20 @@ class SettingsPanel {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style nonce="${nonce}">
   body { padding: 4px 14px 16px; color: var(--vscode-foreground); font: var(--vscode-font-size) var(--vscode-font-family); }
-  section { margin: 0 0 14px; }
-  h3 { margin: 12px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; opacity: .8; }
+  details.sec { padding-bottom: 8px; }
+  details.sec + details.sec { border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-widget-border, transparent)); }
+  summary { display: flex; align-items: center; gap: 6px; margin: 0 -4px; padding: 10px 4px 6px; list-style: none; cursor: pointer; user-select: none;
+    font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; opacity: .8; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: ''; flex: none; border: 4px solid transparent; border-left: 5px solid currentColor; border-right: 0; transition: transform .1s; }
+  details[open] > summary::before { transform: rotate(90deg); }
+  summary:hover { opacity: 1; }
+  summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+  .banner { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0; padding: 6px 8px; border-radius: 2px; overflow-wrap: anywhere;
+    color: var(--vscode-inputValidation-errorForeground, inherit); background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    border: 1px solid var(--vscode-inputValidation-errorBorder, #be1100); }
+  .banner span { flex: 1; }
+  button.icon { padding: 0 4px; color: inherit; background: transparent; line-height: 1.2; }
   label.row { display: block; margin: 6px 0 2px; opacity: .9; }
   select, input[type=text], input[type=password] { box-sizing: border-box; width: 100%; padding: 3px 6px; color: var(--vscode-input-foreground);
     background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-widget-border, transparent)); border-radius: 2px; font: inherit; }
@@ -166,26 +188,28 @@ class SettingsPanel {
   .grow { flex: 1; }
   .end { margin: 0 0 0 auto; }
 </style></head><body>
-<section>
-  <h3>${s.integration}</h3>
+<div class="banner" id="banner" role="alert" hidden><span id="bannerText"></span><button class="icon" id="bannerClose" title="${s.close}" aria-label="${s.close}">×</button></div>
+<details class="sec" data-sec="integration" open>
+  <summary>${s.integration}</summary>
   <div class="status"><span class="dot" id="intDot"></span><span id="intText"></span></div>
   <div class="muted" id="intDetail"></div>
-  <div class="buttons"><button class="primary" data-command="translateAnywhere.enable">${s.enable}</button>
+  <div class="buttons"><button id="enableBtn" class="primary" data-command="translateAnywhere.enable">${s.enable}</button>
     <button id="disableBtn" data-command="translateAnywhere.disable">${s.disable}</button></div>
-</section>
-<section>
-  <h3>${s.translation}</h3>
+</details>
+<details class="sec" data-sec="translation" open>
+  <summary>${s.translation}</summary>
   <label class="row" for="targetLanguage">${s.target}</label><select id="targetLanguage" data-key="targetLanguage"></select>
   <label class="row" for="fullPageMode">${s.pageMode}</label>
   <select id="fullPageMode" data-key="fullPage.mode"><option value="translationOnly">${s.translationOnly}</option><option value="bilingual">${s.bilingual}</option></select>
   <label class="check"><input type="checkbox" id="autoAI" data-key="ai.autoTranslate">${s.autoAI}</label>
-</section>
-<section>
-  <h3>${s.ai}</h3>
+</details>
+<details class="sec" data-sec="ai" open>
+  <summary>${s.ai}</summary>
   <label class="row" for="provider">${s.provider}</label><select id="provider" data-key="ai.provider"></select>
   <div id="vscodeAI">
     <label class="row" for="modelId">${s.model}</label>
-    <div class="inline"><select id="modelId" data-key="ai.modelId"></select><button id="speedBtn">${s.speed}</button></div>
+    <div class="inline"><select id="modelId" data-key="ai.modelId"></select><button id="speedBtn" title="${s.speedTitle}">${s.speed}</button></div>
+    <div class="muted" id="speedInfo" aria-live="polite" hidden></div>
     <div class="muted" id="noModels" hidden>${s.noModels}</div>
   </div>
   <div id="httpAI" hidden>
@@ -199,53 +223,85 @@ class SettingsPanel {
   </div>
   <div class="muted error" id="aiError" hidden></div>
   <div class="buttons"><button data-command="translateAnywhere.authorizeAI">${s.testAI}</button></div>
-</section>
-<section>
-  <h3>${s.dictionary}</h3>
+</details>
+<details class="sec" data-sec="dictionary" open>
+  <summary>${s.dictionary}</summary>
   <div id="dictText"></div>
   <div class="muted" id="dictPath"></div>
   <div class="buttons"><button id="dictDownload" data-command="translateAnywhere.downloadDictionary">${s.download}</button>
     <button data-command="translateAnywhere.chooseDictionaryFile">${s.choose}</button>
     <button id="dictDefault" data-command="translateAnywhere.useDefaultDictionary">${s.useDefault}</button></div>
-  <h4 class="sub">${s.germanDictionary}</h4>
-  <div id="deText"></div>
-  <div class="buttons"><button id="deDownload" data-command="translateAnywhere.downloadGermanDictionary">${s.download}</button></div>
-</section>
-<section>
-  <h3>${s.surfaces}</h3>
+  <div id="deBox" hidden>
+    <h4 class="sub">${s.germanDictionary}</h4>
+    <div id="deText"></div>
+    <div class="buttons"><button id="deDownload" data-command="translateAnywhere.downloadGermanDictionary">${s.download}</button></div>
+  </div>
+</details>
+<details class="sec" data-sec="surfaces" open>
+  <summary>${s.surfaces}</summary>
   ${['chat', 'markdownPreview', 'releaseNotes', 'settings', 'extensionPages', 'welcome', 'workbenchUI'].map(key =>
     `<label class="check"><input type="checkbox" data-key="surfaces.${key}">${s[key]}</label>`).join('')}
-</section>
-<section>
-  <h3>${s.shortcuts}</h3>
+</details>
+<details class="sec" data-sec="shortcuts" open>
+  <summary>${s.shortcuts}</summary>
   <label class="row" for="scParagraph">${s.paragraph}</label><input type="text" id="scParagraph" data-shortcut="shortcuts.paragraph" readonly>
   <label class="row" for="scFullPage">${s.fullPage}</label><input type="text" id="scFullPage" data-shortcut="shortcuts.fullPage" readonly>
   <div class="muted">${s.shortcutHint}</div>
-</section>
-<section>
-  <h3>${s.vocabulary}</h3>
+</details>
+<details class="sec" data-sec="vocabulary" open>
+  <summary>${s.vocabulary}</summary>
   <div id="vocabCount"></div>
   <div class="buttons"><button data-command="translateAnywhere.openVocabulary">${s.open}</button>
     <button data-command="translateAnywhere.exportVocabulary">${s.export}</button>
     <button data-command="translateAnywhere.removeVocabulary">${s.remove}</button></div>
-</section>
+</details>
 <footer><a data-command="translateAnywhere.openSettings">${s.allSettings}</a><a data-command="translateAnywhere.showLog">${s.log}</a><span class="muted end" id="version"></span></footer>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const S = ${JSON.stringify(s)};
 const $ = id => document.getElementById(id);
 const fmt = (text, ...args) => text.replace(/\\{(\\d)\\}/g, (_, i) => args[i]);
-let state, timings = {};
+let state;
 const option = (value, label) => { const o = document.createElement('option'); o.value = value; o.textContent = label; return o; };
 function fill(select, items, value) {
   select.replaceChildren(...items.map(([v, l]) => option(v, l)));
   select.value = value;
+}
+const seconds = ms => (ms / 1000).toFixed(1) + 's';
+// Speed-test progress, then the fastest model with a one-click switch and why some models were skipped.
+function renderSpeed(s) {
+  const run = s.benchmark;
+  $('speedBtn').disabled = !!run || !s.vscodeModels.length;
+  $('speedBtn').textContent = run ? fmt(S.testing, run.done, run.total) : S.speed;
+  const info = $('speedInfo');
+  const lines = [];
+  if (run) lines.push([S.speedRunning]);
+  else if (s.vscodeModels.some(m => m.timing !== null)) {
+    const fastest = s.vscodeModels.find(m => typeof m.timing === 'number');
+    if (!fastest) lines.push([S.speedNone]);
+    else lines.push([fmt(S.fastest, fastest.name, seconds(fastest.timing)), fastest.id === s.modelId ? null : fastest.id]);
+    const skipped = s.vscodeModels.filter(m => m.timing === 'unauthorized').length;
+    if (skipped) lines.push([fmt(S.speedUnauthorized, skipped)]);
+  }
+  info.replaceChildren(...lines.map(([text, useId]) => {
+    const line = document.createElement('div');
+    line.textContent = text;
+    if (useId) {
+      const link = document.createElement('a');
+      link.textContent = S.useIt;
+      link.dataset.use = useId;
+      line.append(' · ', link);
+    }
+    return line;
+  }));
+  info.hidden = !lines.length;
 }
 function render() {
   const s = state;
   $('intDot').classList.toggle('on', s.integration.enabled);
   $('intText').textContent = s.integration.enabled ? S.active : S.off;
   $('intDetail').textContent = s.integration.enabled ? s.integration.status : '';
+  $('enableBtn').classList.toggle('primary', !s.integration.enabled);
   $('disableBtn').hidden = !s.integration.enabled;
   fill($('targetLanguage'), s.languages.map(l => [l.code, l.label]), s.targetLanguage);
   $('fullPageMode').value = s.fullPageMode;
@@ -255,9 +311,14 @@ function render() {
   $('vscodeAI').hidden = !vs;
   $('httpAI').hidden = vs;
   if (vs) {
-    const speed = id => { const t = timings[id]; return t === undefined ? '' : typeof t === 'number' ? ' · ' + (t / 1000).toFixed(1) + 's' : ' · ' + (S[t] || t); };
-    fill($('modelId'), [['', S.autoModel], ...s.vscodeModels.map(m => [m.id, m.name + ' (' + m.detail + ')' + speed(m.id)])], s.modelId);
+    // The extension sends the models fastest first once measured; a measured time leads so it stays visible in a narrow sidebar.
+    const label = m => {
+      const name = m.name + ' (' + m.detail + ')';
+      return typeof m.timing === 'number' ? seconds(m.timing) + ' · ' + name : m.timing ? name + ' · ' + (S[m.timing] || m.timing) : name;
+    };
+    fill($('modelId'), [['', S.autoModel], ...s.vscodeModels.map(m => [m.id, label(m)])], s.modelId);
     $('noModels').hidden = s.vscodeModels.length > 0;
+    renderSpeed(s);
   } else {
     const d = s.providerDefaults;
     $('keyState').textContent = s.hasKey ? '✓ ' + S.keySaved : d.keyOptional ? S.keyOptional : S.keyMissing;
@@ -291,6 +352,8 @@ function render() {
     de.status === 'error' ? fmt(S.dictError, de.error) :
     de.enabled === false ? S.germanOff : dict.owner ? S.germanIdle : S.dictShared;
   $('deDownload').hidden = de.status === 'ready' || de.status === 'downloading' || de.status === 'loading';
+  // German support stays implicit: the block appears for a German UI or once a German word has been looked up.
+  $('deBox').hidden = s.uiLanguage !== 'de' && !['ready', 'loading', 'downloading', 'error'].includes(de.status);
   for (const box of document.querySelectorAll('[data-key^="surfaces."]')) box.checked = s.surfaces[box.dataset.key.slice(9)];
   $('scParagraph').value = s.shortcuts.paragraph;
   $('scFullPage').value = s.shortcuts.fullPage;
@@ -305,11 +368,22 @@ document.addEventListener('change', event => {
 document.addEventListener('click', event => {
   const el = event.target.closest('[data-command]');
   if (el) vscode.postMessage({ type: 'command', command: el.dataset.command });
+  const use = event.target.closest('[data-use]');
+  if (use) vscode.postMessage({ type: 'update', key: 'ai.modelId', value: use.dataset.use });
 });
+// Collapsed sections are remembered across reloads of the view.
+const collapsed = new Set((vscode.getState() || {}).collapsed || []);
+for (const section of document.querySelectorAll('details[data-sec]')) {
+  if (collapsed.has(section.dataset.sec)) section.open = false;
+  section.addEventListener('toggle', () => {
+    collapsed[section.open ? 'delete' : 'add'](section.dataset.sec);
+    vscode.setState({ ...(vscode.getState() || {}), collapsed: [...collapsed] });
+  });
+}
+$('bannerClose').addEventListener('click', () => { $('banner').hidden = true; });
 $('keyLink').addEventListener('click', () => vscode.postMessage({ type: 'external', url: $('keyLink').dataset.url }));
 $('speedBtn').addEventListener('click', () => {
   $('speedBtn').disabled = true;
-  $('speedBtn').textContent = S.testing;
   vscode.postMessage({ type: 'benchmark' });
 });
 $('fetchBtn').addEventListener('click', () => {
@@ -326,7 +400,8 @@ for (const input of document.querySelectorAll('[data-shortcut]')) {
     if (['Backspace', 'Delete'].includes(event.key) && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) value = '';
     else {
       const code = event.code;
-      const key = /^Key[A-Z]$/.test(code) ? code.slice(3) : /^Digit\\d$/.test(code) ? code.slice(5) : /^F\\d{1,2}$/.test(code) ? code : code === 'Space' ? 'Space' : '';
+      const key = /^Key[A-Z]$/.test(code) ? code.slice(3) : /^Digit\\d$/.test(code) ? code.slice(5) : /^F\\d{1,2}$/.test(code) ? code :
+        code === 'Space' ? 'Space' : code === 'Backquote' ? '\`' : '';
       if (!key) return;
       value = [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.metaKey && 'Meta', key].filter(Boolean).join('+');
     }
@@ -336,19 +411,13 @@ for (const input of document.querySelectorAll('[data-shortcut]')) {
 }
 window.addEventListener('message', ({ data }) => {
   if (data.type === 'state') { state = data.state; render(); $('aiError').hidden = true; }
-  if (data.type === 'error') { $('aiError').textContent = data.message; $('aiError').hidden = false; }
+  if (data.type === 'error') { $('bannerText').textContent = data.message; $('banner').hidden = false; }
   if (data.type === 'models') {
     $('fetchBtn').disabled = false;
     $('fetchBtn').textContent = S.fetch;
     if (data.error) { $('aiError').textContent = data.error; $('aiError').hidden = false; return; }
     $('modelList').replaceChildren(...data.models.map(m => option(m, m)));
     $('apiModel').focus();
-  }
-  if (data.type === 'benchmark') {
-    timings = data.timings;
-    $('speedBtn').disabled = false;
-    $('speedBtn').textContent = S.speed;
-    if (state) render();
   }
 });
 vscode.postMessage({ type: 'ready' });

@@ -6,7 +6,7 @@ Official reference: <https://code.visualstudio.com/api/working-with-extensions/p
 
 ## 0. Prerequisites
 
-- **Node.js 20 LTS or newer** (includes npm and npx).
+- **Node.js 22 LTS or newer** (includes npm and npx).
 - **Git**, and a GitHub account or organization named `MusingZone`.
 - A **Microsoft account** for the Marketplace and Azure DevOps.
 - Optional, for the screenshot and UI tests: Python 3.10+ with `pip install playwright pillow` and Google Chrome.
@@ -109,7 +109,7 @@ curl.exe -sIL https://cdn.jsdelivr.net/gh/MusingZone/vscode-translate-anywhere@d
 ## 5. Pre-flight checklist (every release)
 
 - [ ] `version` in `package.json` is bumped (SemVer), and `CHANGELOG.md` has a matching section.
-- [ ] Unit tests pass: `npm test` (17 tests: patcher, bridge, providers, dictionary download, German lookup, vocabulary, string-table parity).
+- [ ] Unit tests pass: `npm test` (20 tests: patcher, bridge, providers, dictionary download, German lookup, vocabulary, string-table parity).
 - [ ] UI tests pass (optional, need Playwright and Chrome):
   - `python tools/ui-dom-test.py`, which tests the injected runtime;
   - `python tools/panel-test.py` with no flag, `--zh` and `--de`, which test the sidebar under its CSP.
@@ -131,13 +131,13 @@ This creates eight files in `dist/`:
 
 | File | Size | Use |
 |---|---|---|
-| `vscode-translate-anywhere-win32-x64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionaries) |
-| `vscode-translate-anywhere-win32-arm64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionaries) |
-| `vscode-translate-anywhere-darwin-x64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionaries) |
-| `vscode-translate-anywhere-darwin-arm64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionaries) |
-| `vscode-translate-anywhere-linux-x64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionaries) |
-| `vscode-translate-anywhere-linux-arm64-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionaries) |
-| `vscode-translate-anywhere-linux-armhf-<ver>.vsix` | ≈ 80 KB | **Marketplace** (lite, downloads the dictionaries) |
+| `vscode-translate-anywhere-win32-x64-<ver>.vsix` | ≈ 100 KB | **Marketplace** (lite, downloads the dictionaries) |
+| `vscode-translate-anywhere-win32-arm64-<ver>.vsix` | ≈ 100 KB | **Marketplace** (lite, downloads the dictionaries) |
+| `vscode-translate-anywhere-darwin-x64-<ver>.vsix` | ≈ 100 KB | **Marketplace** (lite, downloads the dictionaries) |
+| `vscode-translate-anywhere-darwin-arm64-<ver>.vsix` | ≈ 100 KB | **Marketplace** (lite, downloads the dictionaries) |
+| `vscode-translate-anywhere-linux-x64-<ver>.vsix` | ≈ 100 KB | **Marketplace** (lite, downloads the dictionaries) |
+| `vscode-translate-anywhere-linux-arm64-<ver>.vsix` | ≈ 100 KB | **Marketplace** (lite, downloads the dictionaries) |
+| `vscode-translate-anywhere-linux-armhf-<ver>.vsix` | ≈ 100 KB | **Marketplace** (lite, downloads the dictionaries) |
 | `vscode-translate-anywhere-offline-<ver>.vsix` | ≈ 18 MB | GitHub Release only (universal, both dictionaries bundled) |
 
 Options are `--target win32-x64`, `--lite-only` and `--offline-only`. Arguments after `--` are passed to vsce.
@@ -149,7 +149,7 @@ Test locally with `code --install-extension dist\vscode-translate-anywhere-win32
 **Marketplace, from the command line (recommended).** Publish the exact lite files you tested:
 
 ```powershell
-npx @vscode/vsce publish --packagePath dist/vscode-translate-anywhere-win32-x64-0.5.0.vsix dist/vscode-translate-anywhere-win32-arm64-0.5.0.vsix dist/vscode-translate-anywhere-darwin-x64-0.5.0.vsix dist/vscode-translate-anywhere-darwin-arm64-0.5.0.vsix dist/vscode-translate-anywhere-linux-x64-0.5.0.vsix dist/vscode-translate-anywhere-linux-arm64-0.5.0.vsix dist/vscode-translate-anywhere-linux-armhf-0.5.0.vsix
+npx @vscode/vsce publish --packagePath dist/vscode-translate-anywhere-win32-x64-<ver>.vsix dist/vscode-translate-anywhere-win32-arm64-<ver>.vsix dist/vscode-translate-anywhere-darwin-x64-<ver>.vsix dist/vscode-translate-anywhere-darwin-arm64-<ver>.vsix dist/vscode-translate-anywhere-linux-x64-<ver>.vsix dist/vscode-translate-anywhere-linux-arm64-<ver>.vsix dist/vscode-translate-anywhere-linux-armhf-<ver>.vsix
 ```
 
 **Marketplace, by web upload.** At <https://marketplace.visualstudio.com/manage>, choose **MusingZone → New extension → Visual Studio Code** and upload each lite `.vsix`.
@@ -162,8 +162,8 @@ After upload:
 **GitHub Release for the code version.**
 
 ```powershell
-git tag v0.5.0
-git push origin v0.5.0
+git tag v<ver>
+git push origin v<ver>
 ```
 
 The `Release` workflow (`.github/workflows/release.yml`) does three things:
@@ -177,7 +177,7 @@ Without a Trusted Publishing policy, the publish step fails. In that case, publi
 
 1. Create an account at <https://open-vsx.org> and an access token.
 2. Run `npx ovsx create-namespace MusingZone -p <token>` once.
-3. Publish with `npx ovsx publish --packagePath dist/vscode-translate-anywhere-win32-x64-0.5.0.vsix dist/vscode-translate-anywhere-win32-arm64-0.5.0.vsix dist/vscode-translate-anywhere-darwin-x64-0.5.0.vsix dist/vscode-translate-anywhere-darwin-arm64-0.5.0.vsix dist/vscode-translate-anywhere-linux-x64-0.5.0.vsix dist/vscode-translate-anywhere-linux-arm64-0.5.0.vsix dist/vscode-translate-anywhere-linux-armhf-0.5.0.vsix -p <token>`.
+3. Publish with `npx ovsx publish --packagePath dist/vscode-translate-anywhere-win32-x64-<ver>.vsix dist/vscode-translate-anywhere-win32-arm64-<ver>.vsix dist/vscode-translate-anywhere-darwin-x64-<ver>.vsix dist/vscode-translate-anywhere-darwin-arm64-<ver>.vsix dist/vscode-translate-anywhere-linux-x64-<ver>.vsix dist/vscode-translate-anywhere-linux-arm64-<ver>.vsix dist/vscode-translate-anywhere-linux-armhf-<ver>.vsix -p <token>`.
 
 The patcher locates the installation through `vscode.env.appRoot`. Test on each editor before announcing support.
 
@@ -192,7 +192,7 @@ Installed users update automatically. After a VS Code update, the extension re-a
 
 ### Pre-releases
 
-Use odd minor versions for pre-releases (for example 0.5.x) and publish them with `vsce publish --pre-release --packagePath …`.
+To publish a pre-release, run `vsce publish --pre-release --packagePath …` manually. The release workflow always publishes stable versions.
 
 ## 8. Marketplace policy notes for this extension
 
