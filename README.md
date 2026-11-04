@@ -2,11 +2,11 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Select text in VS Code's **Chat**, **Markdown preview**, **Release Notes**, **Settings**, **extension pages** and other built-in pages. A small red dot appears next to the selection; hover it for an instant translation. Single words come from an offline dictionary (English → Chinese and German → Chinese); phrases, sentences and paragraphs are translated by the AI model you choose: GitHub Copilot through VS Code, or OpenAI, Claude, Gemini, DeepSeek, Qwen and other providers with your own API key.
+Select text in VS Code's **Chat**, **Markdown preview**, **Release Notes**, **Settings**, **extension pages** and other built-in pages. A small red dot appears next to the selection; hover it for an instant translation. Single words come from an offline dictionary (English → Chinese); phrases, sentences and paragraphs are translated by the AI model you choose: GitHub Copilot through VS Code, or OpenAI, Claude, Gemini, DeepSeek, Qwen and other providers with your own API key.
 
 Text editors are never touched. The extension does nothing while you edit code.
 
-![Select, hover, Alt+Z and Alt+W](docs/images/en/demo.gif)
+<picture><img src="docs/images/en/demo.gif" alt="Select, hover, Alt+Z and Alt+W" width="100%"></picture>
 
 > Inspired by the reading experience of browser "immersive translation" extensions. Not affiliated with or endorsed by any of them. The screenshots are rendered from the extension's real UI on demo pages.
 
@@ -14,20 +14,19 @@ Text editors are never touched. The extension does nothing while you edit code.
 
 | Feature | How |
 | --- | --- |
-| **Select & hover translation** | Select text, then hover the red dot. Words use the offline dictionaries (English → Chinese, German → Chinese). Anything longer, or other target languages, uses AI automatically. |
-| **German → Chinese** | German words are recognized from umlauts or the surrounding sentence and looked up in an offline German–Chinese dictionary (HanDeDict), including plural, conjugated and participle forms (*Häuser*, *arbeitet*, *gemacht*). German sentences and paragraphs go to AI. |
+| **Select & hover translation** | Select text, then hover the red dot. Words use the offline dictionary (English → Chinese). Anything longer, or other target languages, uses AI automatically. |
 | **Paragraph translation** | Hover a paragraph and press **Alt+Z**. Press again to remove the translation. |
 | **Full-page translation** | Press **Alt+W** to translate the Chat conversation, preview or page you are working in. Press again to restore. "Translation only" (default) or "bilingual" display. |
 | **Many AI providers** | VS Code language models (GitHub Copilot, no key needed), OpenAI, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Kimi, GLM, SiliconFlow, OpenRouter, Groq, Mistral, Ollama, or any OpenAI-compatible endpoint. |
 | **Settings sidebar** | Everything in one panel in the Activity Bar: provider and model lists, API keys, dictionary, surfaces, shortcuts and vocabulary. |
 | **Vocabulary book** | Click ☆ in the popup to save a word. Open, export to CSV or remove entries. |
-| **Your language** | 20 target languages; UI in English, Simplified Chinese or German. |
+| **Your language** | 20 target languages; the UI follows your VS Code display language. |
 
 | Dictionary | AI translation |
 | --- | --- |
-| ![Dictionary popup](docs/images/en/dictionary.png) | ![AI popup](docs/images/en/ai-translation.png) |
+| <picture><img src="docs/images/en/dictionary.png" alt="Dictionary popup" width="400"></picture> | <picture><img src="docs/images/en/ai-translation.png" alt="AI popup" width="400"></picture> |
 | **Chat** | **Full page (Alt+W)** |
-| ![Chat](docs/images/en/chat.png) | ![Full page](docs/images/en/full-page.png) |
+| <picture><img src="docs/images/en/chat.png" alt="Chat" width="400"></picture> | <picture><img src="docs/images/en/full-page.png" alt="Full page" width="400"></picture> |
 
 ### Supported surfaces
 
@@ -49,9 +48,9 @@ Each surface can be switched off in the sidebar or with `translateAnywhere.surfa
 4. Select some text in Chat or a Markdown preview, then hover the red dot.
 5. Pick an AI provider in the sidebar. With **VS Code language models** (the default), the first AI translation asks for permission to use a model. If you dismissed that prompt, click **Test AI** in the sidebar.
 
-<img src="docs/images/en/sidebar.png" alt="Settings sidebar" width="300" align="right">
-
 ## Settings sidebar
+
+<picture><img src="docs/images/en/sidebar.png" alt="Settings sidebar" width="300" align="right"></picture>
 
 Click the **文A** icon in the Activity Bar. The sidebar shows:
 
@@ -109,14 +108,6 @@ The English → Chinese dictionary is [ECDICT](https://github.com/skywind3000/EC
 
 Behind a firewall, set `translateAnywhere.dictionary.downloadUrl` to an internal HTTPS mirror of the same file. Set `translateAnywhere.dictionary.autoDownload` to `false` to never download.
 
-### German → Chinese
-
-The German–Chinese dictionary is built from [HanDeDict](https://handedict.zydeo.net/) (CC BY-SA 3.0) by `tools/build-de.py`: about 133,000 German headwords, 3 MB compressed. Each entry lists up to six Chinese words with pinyin per part of speech.
-
-- A selection is treated as German when it contains ä, ö, ü or ß, or when the surrounding paragraph is mostly German.
-- Inflected forms are reduced before lookup: plurals and umlauts (*Bücher* → *Buch*), verb endings (*arbeitet* → *arbeiten*), participles (*gemacht* → *machen*), *zu*-infinitives (*anzurufen* → *anrufen*), superlatives and *ss* → *ß*.
-- The Marketplace build downloads it once from the same mirrors the first time you select a German word; the offline VSIX bundles it. Use **Download** under *German → Chinese* in the sidebar to fetch it in advance, or set `translateAnywhere.dictionary.german` to `false` to turn it off.
-
 ## How it works (please read)
 
 VS Code does not give extensions an API to read selections or draw popups inside Chat, Release Notes, Settings or the built-in Markdown preview. To make this possible, the extension **adds a small script to VS Code's own UI files**:
@@ -140,7 +131,7 @@ Safeguards:
 | Setting | Default | Description |
 | --- | --- | --- |
 | `translateAnywhere.targetLanguage` | `zh-CN` | Language to translate into. |
-| `translateAnywhere.uiLanguage` | `auto` | Popup, sidebar and message language: `auto`, `en`, `zh-CN`, `de`. |
+| `translateAnywhere.uiLanguage` | `auto` | Popup, sidebar and message language. `auto` follows VS Code. |
 | `translateAnywhere.surfaces` | all on | Enable or disable each supported surface. |
 | `translateAnywhere.shortcuts.paragraph` | `Alt+Z` | Paragraph shortcut. Empty disables it. |
 | `translateAnywhere.shortcuts.fullPage` | `Alt+W` | Full-page shortcut. Empty disables it. |
@@ -153,7 +144,6 @@ Safeguards:
 | `translateAnywhere.dictionary.autoDownload` | `true` | Download the dictionary on first use. |
 | `translateAnywhere.dictionary.path` | *(empty)* | Use a local dictionary file. |
 | `translateAnywhere.dictionary.downloadUrl` | *(empty)* | Extra HTTPS mirror tried first. |
-| `translateAnywhere.dictionary.german` | `true` | Look up German words in the German–Chinese dictionary (downloaded on first use). |
 | `translateAnywhere.integration.enabled` | `false` | Consent for the UI integration described above. |
 | `translateAnywhere.integration.autoRepair` | `true` | Reapply after VS Code updates. |
 
@@ -172,7 +162,7 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 | --- | --- |
 | Enable / Repair Integration · Disable and Restore VS Code | Apply, repair or remove the UI integration. |
 | Select AI Provider · Select AI Model · Set API Key · Authorize AI Model | Configure the AI engine. |
-| Download Dictionary · Download German–Chinese Dictionary · Use Local Dictionary File… · Use Default Dictionary | Manage the offline dictionaries. |
+| Download Dictionary · Use Local Dictionary File… · Use Default Dictionary | Manage the offline dictionaries. |
 | Open Vocabulary · Export Vocabulary to CSV · Remove Vocabulary Entries | Manage saved words. |
 | Open Settings · Show Status · Show Log | Settings and diagnostics. |
 
@@ -197,7 +187,7 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 - Requires write access to the VS Code installation folder. For system-wide installs this means administrator confirmation.
 - The bridge uses local port `17865`. If several users of the same computer run VS Code at the same time, only the first one gets translations.
 - VS Code UI changes in future releases can break individual surfaces until the extension is updated.
-- The offline dictionaries cover English → Chinese and German → Chinese. Other language pairs always use AI.
+- Offline dictionary lookups translate into Chinese only. Other target languages always use AI.
 
 ## Uninstalling
 
@@ -210,9 +200,8 @@ Issues and pull requests are welcome at [github.com/MusingZone/vscode-translate-
 ## Credits
 
 - English → Chinese dictionary: [ECDICT](https://github.com/skywind3000/ECDICT) by skywind3000, MIT License.
-- German → Chinese dictionary: derived from [HanDeDict](https://handedict.zydeo.net/), CC BY-SA 3.0.
-- See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- Other bundled data and its licenses: see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## License
 
-Extension code: [MIT](LICENSE.txt). The German–Chinese dictionary data (`data/dictionary-de.json.gz`) is licensed under [CC BY-SA 3.0](data/HanDeDict-LICENSE.txt).
+Extension code: [MIT](LICENSE.txt). Dictionary data keeps its own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
