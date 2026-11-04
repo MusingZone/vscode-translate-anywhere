@@ -106,9 +106,13 @@ test('patch is idempotent, reversible, update aware and rejects external edits',
       fs.writeFileSync(file, originals[key]);
     }
     const config = { endpoint: 'http://127.0.0.1:17865', token: 'test' };
+    const posix = process.platform !== 'win32';
+    if (posix) fs.chmodSync(files.bundle, 0o640);
     assert.equal(applyPatch(root, state, ui.toString(), config).changed, true);
+    if (posix) assert.equal(fs.statSync(files.bundle).mode & 0o777, 0o640, 'patch keeps file permissions');
     assert.equal(applyPatch(root, state, ui.toString(), config).changed, false);
     assert.equal(restorePatch(root, state), true);
+    if (posix) assert.equal(fs.statSync(files.bundle).mode & 0o777, 0o640, 'restore keeps file permissions');
     for (const [key, file] of Object.entries(files)) assert.equal(fs.readFileSync(file, 'utf8'), originals[key]);
     assert.equal(applyPatch(root, state, ui.toString(), config).changed, true);
     fs.appendFileSync(files.bundle, '\n// other tool');

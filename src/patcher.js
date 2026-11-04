@@ -112,8 +112,15 @@ function patchSources(originals, runtime, config) {
 
 function atomicWrite(file, text) {
   const temp = file + '.immersive-translate.tmp';
+  const previous = fs.existsSync(file) ? fs.statSync(file) : null;
   try {
     fs.writeFileSync(temp, text, 'utf8');
+    if (previous && process.platform !== 'win32') {
+      fs.chmodSync(temp, previous.mode & 0o7777);
+      // An elevated (root) run must not leave root-owned files in a user-owned installation,
+      // or the user's own VS Code updates and later unprivileged repairs would fail.
+      if (process.getuid?.() === 0) fs.chownSync(temp, previous.uid, previous.gid);
+    }
     fs.renameSync(temp, file);
   } finally {
     if (fs.existsSync(temp)) fs.unlinkSync(temp);

@@ -97,6 +97,9 @@ async function main() {
     }
     assert.deepEqual(maintenance(appRoot, executable, rootState, 'restore', { sudo: true }), { ok: true, changed: true });
     assertPristine();
+    for (const file of Object.values(files)) {
+      assert.equal(fs.statSync(file).uid, process.getuid(), `${file} left owned by root after the elevated run`);
+    }
   }
   console.log('2. elevated maintenance step: ok');
 
