@@ -717,6 +717,13 @@ test('internal Copilot helpers are hidden, size words are a generic fallback, an
   assert.deepEqual(models.parseAdvice('[]', ids), []);
   assert.equal(models.parseAdvice('I would pick GPT-5 mini.', ids), undefined);
   assert.equal(models.parseAdvice('[not json', ids), undefined);
+
+  // The advisor is a lightweight model even when a large one measured faster; otherwise the fastest one.
+  const times = { 'claude-opus-4.8': 500, 'gpt-5-mini': 900, 'big-pro': 300 };
+  const rank = m => times[m.id];
+  assert.equal(models.pickAdvisor([{ id: 'claude-opus-4.8' }, { id: 'gpt-5-mini', name: 'GPT-5 mini' }], rank).id, 'gpt-5-mini');
+  assert.equal(models.pickAdvisor([{ id: 'claude-opus-4.8' }, { id: 'big-pro' }], rank).id, 'big-pro');
+  assert.equal(models.pickAdvisor([], rank), undefined);
 });
 
 test('speed benchmark warms up, takes the median, limits concurrency and reports unauthorized/failed models', async () => {

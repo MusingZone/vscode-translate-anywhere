@@ -20,7 +20,7 @@ Text editors are never touched. The extension does nothing while you edit code.
 | **Many AI providers** | VS Code language models (GitHub Copilot, no key needed), OpenAI, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Kimi, GLM, SiliconFlow, OpenRouter, Groq, Mistral, Ollama, or any OpenAI-compatible endpoint. |
 | **Settings sidebar** | Everything in one panel in the Activity Bar: shortcuts with a sample page to try them, provider and model lists, API keys, vocabulary and dictionary. |
 | **Markdown as preview** | One click in the sidebar makes `.md` files open as a rendered preview by default, which is easier to read and translate. **Open as text again** undoes it. |
-| **Vocabulary book** | Click ☆ in the popup to save a word or sentence. The sidebar shows your latest entries; open, export to CSV or remove them. |
+| **Vocabulary book** | Click ☆ in the popup to save a word or sentence. The sidebar shows your latest entries and unfolds more in place; open, export to CSV or remove them. |
 | **Your language** | 20 target languages; the UI follows your VS Code display language. |
 
 | Dictionary | AI translation |
@@ -60,14 +60,14 @@ Click the **文A** icon in the Activity Bar. The sidebar shows:
 - **Translation**: target language, full-page display mode, automatic AI.
 - **AI engine**:
   - provider list;
-  - model list: the models VS Code's model picker shows you, in its order, and **Auto** as an explicit choice. **Speed test** warms up each model once and times three runs and shows the median; then one of your own models picks the lightweight ones suited to translation, which appear as **Recommended**, with **Use it**. It never runs by itself. API providers get **Fetch list** instead;
+  - model list: the models VS Code's model picker shows you, in its order, and **Auto** as an explicit choice. **Speed test** warms up each model once and times three runs and shows the median;   then the fastest lightweight model among them picks the ones suited to translation, which appear as **Recommended**, with **Use it**. It never runs by itself; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view. API providers get **Fetch list** instead;
   - API key status with a link to the provider's key page;
   - an optional base URL.
-- **Vocabulary**: your latest saved entries; open, export, remove.
+  - **Vocabulary**: your five latest entries; **Show N more** unfolds the rest in place (the full list opens in an editor); open, export, remove.
 - **Offline dictionary**: status, Download, Choose file, Use default.
 - Footer: **Where to translate…** (per-surface switches), all settings, log.
 
-All values are ordinary VS Code settings, so they also appear in **Settings → Extensions → Translate Anywhere** and sync with Settings Sync. API keys are the exception: they never leave VS Code's Secret Storage.
+All values are ordinary VS Code settings, so they also appear in **Settings → Extensions → Translate Anywhere** and sync with Settings Sync; links there jump to the matching control in the sidebar. API keys are the exception: they never leave VS Code's Secret Storage.
 
 <br clear="right">
 
@@ -167,7 +167,7 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 | Download Dictionary · Use Local Dictionary File… · Use Default Dictionary | Manage the offline dictionaries. |
 | Try It on a Sample Page · Open Markdown Files as Preview by Default · Open Markdown Files as Text by Default · Choose Where to Translate | Getting started and reading comfort. |
 | Open Vocabulary · Export Vocabulary to CSV · Remove Vocabulary Entries | Manage saved words. |
-| Open Settings · Show Status · Show Log | Settings and diagnostics. |
+| Open the Sidebar · Open Settings · Show Status · Show Log | Settings and diagnostics. |
 
 ## Privacy
 

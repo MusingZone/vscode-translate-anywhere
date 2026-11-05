@@ -112,7 +112,7 @@ def handler(lang):
             data = {"found": bool(hit), "word": text, "phonetic": hit["phonetic"] if hit else "",
                     "translation": hit["translation"] if hit else "", "source": "ECDICT"}
         elif url == "/ai":
-            data = {"translation": AI.get(text, AI.get(text.rstrip("."), "（译文）")), "source": "AI · GPT-4o mini"}
+            data = {"translation": AI.get(text, AI.get(text.rstrip("."), "（译文）")), "source": "AI · GPT-5 mini"}
         elif url == "/vocab":
             data = {"saved": False}
         else:
@@ -255,8 +255,8 @@ def sidebar(lang, out):
         args.append("--zh")
     subprocess.run(args, check=True, env=os.environ)
     img = Image.open(out / "sidebar.png")
-    # Keep the AI engine section in view; the full panel is longer than a typical sidebar.
-    img.crop((0, 0, img.width, min(img.height, 1500))).save(out / "sidebar.png", optimize=True)
+    # panel-test.py already clips below the vocabulary section; this only guards against a runaway height.
+    img.crop((0, 0, img.width, min(img.height, 3200))).save(out / "sidebar.png", optimize=True)
 
 
 def main():

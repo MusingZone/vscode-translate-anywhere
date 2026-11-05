@@ -24,13 +24,13 @@ const STRINGS = {
     noModelChosen: 'Choose the model for phrases and paragraphs. A small, fast one works best.',
     needsAccess: 'Not authorized yet.', allowAccess: 'Allow access',
     speed: 'Test speed', testing: 'Testing… {0}%', advising: 'Picking recommendations…', unauthorized: 'not authorized', failed: 'failed',
-    speedTitle: 'Each visible, authorized model translates a sentence: one warm-up, then three timed runs (median shown). Then one of your models picks the ones suited to translation as "Recommended".',
+    speedTitle: 'Each visible, authorized model translates a sentence: one warm-up, then three timed runs (median shown). Then the fastest lightweight model picks the ones suited to translation as "Recommended". Requests to premium models count toward your Copilot premium-request quota; hide models you never use in VS Code\'s Language Models view to skip them.',
     speedRunning: 'One warm-up and three timed runs per model. This can take a minute.',
     fastest: 'Fastest: {0} · {1}', recommendedPick: 'Recommended: {0} · {1}', firstWords: 'first words {0}', useIt: 'Use it', speedNone: 'No model answered within 20 seconds.',
     speedUnauthorized: '{0} not authorized yet, so not measured. Choose one and click "Allow access".', close: 'Close', apiKey: 'API key', keySaved: 'Saved in the OS keychain',
     keyMissing: 'Not set', keyOptional: 'Optional', setKey: 'Set key', getKey: 'Get a key', fetch: 'Fetch list', fetching: 'Loading…',
     baseUrl: 'API base URL', noModels: 'No VS Code language model available. Sign in to GitHub Copilot or pick another provider.',
-    vocabulary: 'Vocabulary', vocabEmpty: 'Click ☆ in the translation popup to collect words and sentences here.', vocabMore: '+{0} more',
+    vocabulary: 'Vocabulary', vocabEmpty: 'Click ☆ in the translation popup to collect words and sentences here.', vocabMore: '{0} more in the full list →', vocabShowMore: 'Show {0} more ▾', vocabShowLess: 'Show less ▴',
     open: 'Open', export: 'Export CSV', remove: 'Remove…',
     dictionary: 'Offline dictionary', dictReady: 'Ready · {0} entries · {1}', dictLoading: 'Loading…', dictDownloading: 'Downloading… {0}',
     dictMissing: 'Not installed. Lookups fall back to AI.', dictError: 'Error: {0}', dictIdle: 'Loads on first lookup',
@@ -60,13 +60,13 @@ const STRINGS = {
     noModelChosen: '请选择用于翻译句子和段落的模型，推荐小而快的模型。',
     needsAccess: '尚未授权。', allowAccess: '授权使用',
     speed: '测速', testing: '测速中… {0}%', advising: '正在挑选推荐模型…', unauthorized: '未授权', failed: '失败',
-    speedTitle: '每个可见且已授权的模型翻译同一句话：先预热一次，再计时三次（显示中位数）。然后由你的一个模型挑出适合翻译的模型，标为“推荐”。',
+    speedTitle: '每个可见且已授权的模型翻译同一句话：先预热一次，再计时三次（显示中位数）。随后由其中最快的轻量模型挑出适合翻译的模型，标为“推荐”。对高级模型的请求会计入 Copilot 高级请求额度；不用的模型可在 VS Code 的“语言模型”视图中隐藏，测速时即会跳过。',
     speedRunning: '每个模型预热一次、计时三次，可能需要一分钟左右。',
     fastest: '最快：{0} · {1}', recommendedPick: '推荐：{0} · {1}', firstWords: '首字 {0}', useIt: '改用此模型', speedNone: '没有模型在 20 秒内返回结果。',
     speedUnauthorized: '{0} 个模型尚未授权，未参与测速。选中后点击“授权使用”即可。', close: '关闭', apiKey: 'API Key', keySaved: '已保存在系统钥匙串', keyMissing: '未设置', keyOptional: '可选',
     setKey: '设置 Key', getKey: '获取 Key', fetch: '获取列表', fetching: '加载中…', baseUrl: 'API 地址',
     noModels: '没有可用的 VS Code 语言模型。请登录 GitHub Copilot 或选择其他服务商。',
-    vocabulary: '生词本', vocabEmpty: '在翻译弹窗中点击 ☆，即可把单词和句子收藏到这里。', vocabMore: '还有 {0} 条',
+    vocabulary: '生词本', vocabEmpty: '在翻译弹窗中点击 ☆，即可把单词和句子收藏到这里。', vocabMore: '另有 {0} 条，查看完整列表 →', vocabShowMore: '展开其余 {0} 条 ▾', vocabShowLess: '收起 ▴',
     open: '打开', export: '导出 CSV', remove: '删除…',
     dictionary: '离线词典', dictReady: '可用 · {0} 词条 · {1}', dictLoading: '加载中…', dictDownloading: '下载中… {0}',
     dictMissing: '未安装，查词将回退到 AI。', dictError: '错误：{0}', dictIdle: '首次查词时加载',
@@ -96,7 +96,7 @@ const STRINGS = {
     noModelChosen: 'Wählen Sie das Modell für Sätze und Absätze. Ein kleines, schnelles eignet sich am besten.',
     needsAccess: 'Noch nicht autorisiert.', allowAccess: 'Zugriff erlauben',
     speed: 'Tempo messen', testing: 'Wird gemessen… {0}%', advising: 'Empfehlungen werden ermittelt…', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen',
-    speedTitle: 'Jedes sichtbare, autorisierte Modell übersetzt einen Satz: ein Aufwärmlauf, dann drei gemessene Läufe (Median). Danach wählt eines Ihrer Modelle die für Übersetzungen geeigneten als „Empfohlen“ aus.',
+    speedTitle: 'Jedes sichtbare, autorisierte Modell übersetzt einen Satz: ein Aufwärmlauf, dann drei gemessene Läufe (Median). Danach wählt das schnellste leichte Modell die für Übersetzungen geeigneten als „Empfohlen“ aus. Anfragen an Premium-Modelle zählen zu Ihrem Copilot-Premium-Kontingent; in der Ansicht „Sprachmodelle“ ausgeblendete Modelle werden übersprungen.',
     speedRunning: 'Ein Aufwärmlauf und drei gemessene Läufe pro Modell. Das kann eine Minute dauern.',
     fastest: 'Am schnellsten: {0} · {1}', recommendedPick: 'Empfohlen: {0} · {1}', firstWords: 'erste Wörter {0}', useIt: 'Verwenden', speedNone: 'Kein Modell hat innerhalb von 20 Sekunden geantwortet.',
     speedUnauthorized: '{0} noch nicht autorisiert und daher nicht gemessen. Eines auswählen und auf „Zugriff erlauben“ klicken.', close: 'Schließen', apiKey: 'API-Schlüssel',
@@ -104,7 +104,7 @@ const STRINGS = {
     setKey: 'Schlüssel festlegen', getKey: 'Schlüssel erhalten', fetch: 'Liste abrufen', fetching: 'Wird geladen…',
     baseUrl: 'API-Basis-URL',
     noModels: 'Kein VS Code-Sprachmodell verfügbar. Melden Sie sich bei GitHub Copilot an oder wählen Sie einen anderen Anbieter.',
-    vocabulary: 'Vokabelliste', vocabEmpty: 'Im Übersetzungsfenster auf ☆ klicken, um Wörter und Sätze hier zu sammeln.', vocabMore: '+{0} weitere',
+    vocabulary: 'Vokabelliste', vocabEmpty: 'Im Übersetzungsfenster auf ☆ klicken, um Wörter und Sätze hier zu sammeln.', vocabMore: '{0} weitere in der vollständigen Liste →', vocabShowMore: '{0} weitere anzeigen ▾', vocabShowLess: 'Weniger anzeigen ▴',
     open: 'Öffnen', export: 'CSV exportieren', remove: 'Entfernen…',
     dictionary: 'Offline-Wörterbuch', dictReady: 'Bereit · {0} Einträge · {1}', dictLoading: 'Wird geladen…', dictDownloading: 'Wird heruntergeladen… {0}',
     dictMissing: 'Nicht installiert. Nachschlagen erfolgt per KI.', dictError: 'Fehler: {0}', dictIdle: 'Wird beim ersten Nachschlagen geladen',
@@ -288,6 +288,9 @@ class SettingsPanel {
   ul.vocab .w { font-weight: 600; overflow-wrap: anywhere; }
   ul.vocab .ph { margin-left: 6px; opacity: .65; font-size: 12px; }
   ul.vocab .tr { opacity: .8; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  ul.vocab.expanded { max-height: 360px; overflow-y: auto; padding-right: 2px; }
+  .vocabfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 6px; font-size: 12px; }
+  .vocabfoot a[hidden] { display: none; }
 </style></head><body>
 <div class="banner" id="banner" role="alert" hidden><span id="bannerText"></span><button class="icon" id="bannerClose" title="${s.close}" aria-label="${s.close}">×</button></div>
 <details class="sec" data-sec="integration" open>
@@ -374,7 +377,8 @@ class SettingsPanel {
   <summary>${s.vocabulary}<span class="badge" id="vocabBadge" hidden></span></summary>
   <div class="muted" id="vocabEmpty" hidden>${s.vocabEmpty}</div>
   <ul class="vocab" id="vocabList"></ul>
-  <div class="muted" id="vocabMore" hidden></div>
+  <div class="vocabfoot"><a id="vocabToggle" role="button" tabindex="0" aria-controls="vocabList" hidden></a>
+    <a id="vocabMore" data-command="translateAnywhere.openVocabulary" role="button" tabindex="0" hidden></a></div>
   <div class="buttons"><button class="primary" id="vocabOpen" data-command="translateAnywhere.openVocabulary">${s.open}</button>
     <button id="vocabExport" data-command="translateAnywhere.exportVocabulary">${s.export}</button>
     <button id="vocabRemove" data-command="translateAnywhere.removeVocabulary">${s.remove}</button></div>
@@ -467,12 +471,19 @@ function renderSpeed(s) {
   }));
   info.hidden = !lines.length;
 }
+// Shows the newest few; the rest of what the host sent unfolds inline, anything beyond lives in the full list.
+const VOCAB_FOLDED = 5;
+let vocabExpanded = !!(vscode.getState() || {}).vocabExpanded;
 function renderVocabulary(s) {
   const recent = s.vocabularyRecent || [];
+  const extra = Math.max(0, recent.length - VOCAB_FOLDED);
+  const expanded = vocabExpanded && extra > 0;
+  const shown = expanded ? recent : recent.slice(0, VOCAB_FOLDED);
   $('vocabBadge').textContent = s.vocabularyCount;
   $('vocabBadge').hidden = !s.vocabularyCount;
   $('vocabEmpty').hidden = s.vocabularyCount > 0;
-  $('vocabList').replaceChildren(...recent.map(entry => {
+  $('vocabList').classList.toggle('expanded', expanded);
+  $('vocabList').replaceChildren(...shown.map(entry => {
     const li = document.createElement('li');
     const word = document.createElement('span');
     word.className = 'w';
@@ -493,8 +504,11 @@ function renderVocabulary(s) {
     }
     return li;
   }));
-  const more = s.vocabularyCount - recent.length;
-  $('vocabMore').hidden = more <= 0;
+  $('vocabToggle').hidden = !extra;
+  $('vocabToggle').textContent = expanded ? S.vocabShowLess : fmt(S.vocabShowMore, extra);
+  $('vocabToggle').setAttribute('aria-expanded', String(expanded));
+  const more = s.vocabularyCount - shown.length;
+  $('vocabMore').hidden = !expanded || more <= 0;
   $('vocabMore').textContent = fmt(S.vocabMore, more);
   for (const id of ['vocabOpen', 'vocabExport', 'vocabRemove']) $(id).disabled = !s.vocabularyCount;
 }
@@ -657,6 +671,8 @@ function resizeIcon(data, name) {
   img.src = data;
 }
 function focusTarget(id) {
+  if (id === 'modelId' && $('vscodeAI').hidden) id = 'apiModel';
+  if (id === 'vocabList' && $('vocabList').hidden) id = 'vocabOpen';
   const el = $(id);
   if (!el) return;
   if (id === 'dotEditor') toggleDotEditor(true);
@@ -687,6 +703,20 @@ for (const section of document.querySelectorAll('details[data-sec]')) {
   section.addEventListener('toggle', () => {
     collapsed[section.open ? 'delete' : 'add'](section.dataset.sec);
     vscode.setState({ ...(vscode.getState() || {}), collapsed: [...collapsed] });
+  });
+}
+function toggleVocab() {
+  vocabExpanded = !vocabExpanded;
+  vscode.setState({ ...(vscode.getState() || {}), vocabExpanded });
+  renderVocabulary(state);
+  if (!vocabExpanded) $('vocabList').scrollTop = 0;
+}
+$('vocabToggle').addEventListener('click', toggleVocab);
+for (const id of ['vocabToggle', 'vocabMore']) {
+  $(id).addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    $(id).click();
   });
 }
 $('bannerClose').addEventListener('click', () => { $('banner').hidden = true; });

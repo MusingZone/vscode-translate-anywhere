@@ -75,7 +75,11 @@ def state(provider="vscode", lang="en"):
         "shortcuts": {"paragraph": "Alt+Z", "fullPage": "Alt+W"},
         "vocabularyCount": 12,
         "vocabularyRecent": [{"text": "serendipity", "phonetic": "ˌserənˈdɪpəti", "translation": "n. 意外发现珍奇事物的本领"},
-                             {"text": "ephemeral", "phonetic": "", "translation": "adj. 短暂的"}],
+                             {"text": "ephemeral", "phonetic": "ɪˈfemərəl", "translation": "adj. 短暂的"}]
+        + [{"text": w, "phonetic": "", "translation": t} for w, t in [
+            ("ubiquitous", "adj. 无处不在的"), ("meticulous", "adj. 一丝不苟的"), ("resilient", "adj. 有弹性的；能复原的"),
+            ("pragmatic", "adj. 务实的"), ("ambiguous", "adj. 模棱两可的"), ("concise", "adj. 简明的"),
+            ("idempotent", "adj. 幂等的"), ("latency", "n. 延迟"), ("deprecate", "v. 弃用"), ("throttle", "v. 节流")]],
         "markdownPreviewDefault": False,
         "dot": {"size": 7, "color": "#e5484d", "borderWidth": 1, "borderColor": "#ffffff", "opacity": 0.85, "shape": "circle", "icon": "", "iconName": ""},
     }
@@ -137,8 +141,24 @@ def main():
         assert page.eval_on_selector_all("#modelId optgroup", "g => g.length") == 2
         assert page.is_visible("#chooseHint") and not page.is_visible("#accessInfo")
         assert page.is_visible("#tryBtn") and page.is_visible("#mdSet") and not page.is_visible("#mdUndo")
-        assert page.eval_on_selector_all("#vocabList li", "l => l.length") == 2 and "serendipity" in page.inner_text("#vocabList")
-        assert page.is_visible("#vocabMore") and "10" in page.inner_text("#vocabMore") and page.inner_text("#vocabBadge") == "12"
+        # Vocabulary: five shown, the rest folded inline; the full-list link only when the host sent fewer than exist.
+        assert page.eval_on_selector_all("#vocabList li", "l => l.length") == 5 and "serendipity" in page.inner_text("#vocabList")
+        assert page.is_visible("#vocabToggle") and "7" in page.inner_text("#vocabToggle") and not page.is_visible("#vocabMore")
+        assert page.inner_text("#vocabBadge") == "12"
+        page.click("#vocabToggle")
+        assert page.eval_on_selector_all("#vocabList li", "l => l.length") == 12 and not page.is_visible("#vocabMore")
+        assert page.inner_text("#vocabToggle") == STRINGS[lang].get("vocabShowLess", STRINGS["en"]["vocabShowLess"])
+        many = state("vscode", lang)
+        many["vocabularyCount"] = 130
+        post({"type": "state", "state": many})
+        wait("document.getElementById('vocabBadge').textContent === '130'")
+        assert page.is_visible("#vocabMore") and "118" in page.inner_text("#vocabMore")
+        page.click("#vocabMore")
+        assert any(m.get("command") == "translateAnywhere.openVocabulary" for m in posted())
+        page.click("#vocabToggle")
+        assert page.eval_on_selector_all("#vocabList li", "l => l.length") == 5 and not page.is_visible("#vocabMore")
+        post({"type": "state", "state": state("vscode", lang)})
+        wait("document.getElementById('vocabBadge').textContent === '12'")
         # Shortcuts come before the AI engine, the vocabulary before the dictionary.
         order = page.eval_on_selector_all("details.sec", "d => d.map(x => x.dataset.sec)")
         assert order.index("shortcuts") < order.index("ai") < order.index("vocabulary") < order.index("dictionary"), order
@@ -148,7 +168,20 @@ def main():
         assert page.is_visible("#deBox") == (lang == "de"), "German dictionary block shows only for a German UI"
         assert not page.is_visible("#speedInfo")
         if shot:
-            page.screenshot(path=shot, full_page=True)
+            # A configured, speed-tested model; clipped below the vocabulary so the README shows the main sections.
+            pretty = state("vscode", lang)
+            pretty["modelId"] = "gpt-5-mini"
+            pretty["modelAuthorized"] = True
+            for model, ms in zip(pretty["vscodeModels"], (820, 1150, 3900)):
+                model["timing"] = {"status": "ok", "median": ms, "first": ms // 2}
+            post({"type": "state", "state": pretty})
+            wait("document.getElementById('modelId').value === 'gpt-5-mini'")
+            page.mouse.move(0, 0)
+            page.wait_for_timeout(200)
+            bottom = page.eval_on_selector("details[data-sec='vocabulary']", "d => d.getBoundingClientRect().bottom + window.scrollY")
+            page.screenshot(path=shot, clip={"x": 0, "y": 0, "width": 320, "height": bottom + 12}, full_page=True)
+            post({"type": "state", "state": state("vscode", lang)})
+            wait("document.getElementById('modelId').value === ''")
         posted()
 
         # Speed test: progress on the button, then the fastest model first with a one-click switch.

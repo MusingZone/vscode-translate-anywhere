@@ -194,6 +194,13 @@ function advicePrompt(list) {
   ].join('\n');
 }
 
+// Model asked for the advice above: a lightweight one, since flagship models can cost many premium requests.
+// The fastest measured model that looks lightweight by name; else the fastest one (fast models are usually small).
+function pickAdvisor(measured, speedRank) {
+  const bySpeed = [...measured].sort((a, b) => speedRank(a) - speedRank(b));
+  return bySpeed.find(model => preferredRank(model) >= 0) || bySpeed[0];
+}
+
 // The ids from a model's answer that really are in `ids`; undefined when the answer is not a JSON array.
 function parseAdvice(text, ids) {
   const match = String(text || '').match(/\[[\s\S]*?\]/);
@@ -207,5 +214,5 @@ function parseAdvice(text, ids) {
 
 module.exports = {
   AUTO_MODEL, PREFERRED_MODELS, preferredRank, sortByPreference, pickPreferred,
-  parseHiddenModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice
+  parseHiddenModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
 };

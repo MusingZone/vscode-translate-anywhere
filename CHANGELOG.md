@@ -2,6 +2,20 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - Sidebar polish
+
+### Added
+- The extension's page in **Settings** now links to the sidebar: a tip on top, and **Set it in the sidebar** links on the shortcut, selection-dot, provider and model settings jump straight to the matching control. New command **Open the Sidebar**.
+- Sidebar vocabulary shows the five latest entries and a **Show N more** toggle that unfolds the rest in place (scrollable, remembered). Beyond 100 entries a link opens the full list.
+
+### Changed
+- After a speed test, the **Recommended** group is picked by the fastest lightweight model you have, not by your configured (possibly premium) model.
+- The speed-test tooltip explains that requests to premium models count toward your Copilot premium-request quota and that hidden models are skipped.
+- Refreshed README screenshots for the new sidebar layout.
+
+### Fixed
+- Garbled characters (`??`) in several Chinese and German setting descriptions (selection dot, model) and in an English range.
+
 ## [0.6.0] - Smarter model choice and easier start
 
 ### Added

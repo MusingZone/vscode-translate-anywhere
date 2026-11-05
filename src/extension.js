@@ -137,8 +137,8 @@ async function activate(context) {
   // A realistic UI sentence; one word measured mostly network noise and let large models look fast.
   const BENCHMARK_TEXT = 'This update makes search results appear faster and fixes a crash when you open very large files.';
   // Measures only models this extension may already use, so no consent dialog pops up per provider. Each model gets
-  // an untimed warm-up and three timed runs (median), at most two requests at a time. Then one of the user's models
-  // picks the lightweight ones for the "Recommended" group (onProgress gets phase 'advice' meanwhile).
+  // an untimed warm-up and three timed runs (median), at most two requests at a time. Then the fastest lightweight model
+  // picks the ones for the "Recommended" group (onProgress gets phase 'advice' meanwhile).
   async function measureModels(list, onProgress, token) {
     const results = await models.benchmark(list, async model => {
       const started = performance.now();
@@ -163,9 +163,7 @@ async function activate(context) {
   // Ids the user's own model judged lightweight and good for translation after the last speed test (empty: none known).
   const modelAdvice = () => new Set(context.globalState.get('modelAdvice', { ids: [] }).ids || []);
   async function adviseModels(list, token) {
-    const measuredOk = list.filter(model => modelTimings.get(model.id)?.status === 'ok');
-    const configured = measuredOk.find(model => model.id === config().get('ai.modelId', ''));
-    const advisor = configured || [...measuredOk].sort((a, b) => speedRank(a) - speedRank(b))[0];
+    const advisor = models.pickAdvisor(list.filter(model => modelTimings.get(model.id)?.status === 'ok'), speedRank);
     let ids = [];
     if (advisor) {
       try {
@@ -830,8 +828,13 @@ async function activate(context) {
     for (const key of Object.keys(DOT_DEFAULTS)) await config().update(`dot.${key}`, undefined, vscode.ConfigurationTarget.Global);
   }
   async function customizeDot() {
+    await openSidebar('dotEditor');
+  }
+  // Also the target of "command:" links in the setting descriptions; only known sidebar controls can be focused.
+  const SIDEBAR_TARGETS = new Set(['dotEditor', 'scParagraph', 'scFullPage', 'provider', 'modelId', 'targetLanguage', 'vocabList']);
+  async function openSidebar(target) {
     await vscode.commands.executeCommand(`${SettingsPanel.viewType}.focus`);
-    panel?.focus('dotEditor');
+    if (typeof target === 'string' && SIDEBAR_TARGETS.has(target)) panel?.focus(target);
   }
   // One-time hint in the translation popup that paragraph / page shortcuts exist: shown after a long selection,
   // at most three times, never twice within ten minutes, and never again once dismissed or a shortcut was used.
@@ -1164,6 +1167,7 @@ async function activate(context) {
     vscode.commands.registerCommand('translateAnywhere.authorizeAI', guarded(authorizeModel)),
     vscode.commands.registerCommand('translateAnywhere.tryIt', guarded(openPractice)),
     vscode.commands.registerCommand('translateAnywhere.customizeDot', guarded(customizeDot)),
+    vscode.commands.registerCommand('translateAnywhere.openSidebar', target => guarded(() => openSidebar(target))()),
     vscode.commands.registerCommand('translateAnywhere.openMarkdownAsPreview', guarded(() => setMarkdownPreviewDefault(true))),
     vscode.commands.registerCommand('translateAnywhere.openMarkdownAsText', guarded(() => setMarkdownPreviewDefault(false))),
     vscode.commands.registerCommand('translateAnywhere.openSurfaceSettings', () =>
@@ -1240,7 +1244,8 @@ async function activate(context) {
         }
       } catch (error) { logError(error); }
     }
-    const recent = vocabulary.list().slice(0, 5).map(entry => ({
+    // Enough for the sidebar's expandable list; the full list opens in an editor.
+    const recent = vocabulary.list().slice(0, 100).map(entry => ({
       text: entry.text.slice(0, 80), phonetic: (entry.phonetic || '').slice(0, 40),
       translation: (entry.translation || '').replace(/\s+/g, ' ').slice(0, 120)
     }));
