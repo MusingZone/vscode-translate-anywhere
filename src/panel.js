@@ -10,18 +10,23 @@ const STRINGS = {
     fullPage: 'Whole page', fullPageHint: 'translates the page you are reading; press again to switch back',
     shortcutHint: 'Click a key to record a new combination; Backspace turns it off.',
     worksIn: 'Works in Chat, Markdown preview, Release Notes, Settings and extension pages.', tryIt: 'Try it on a sample page',
+    dotEdit: 'Customize', dotEditTitle: 'Change the size, color or image of the dot', dotHeading: 'Selection dot', dotSample: 'Select some text',
+    dotSize: 'Size', dotColor: 'Color', dotBorder: 'Border', dotOpacity: 'Opacity', dotShape: 'Shape', dotCircle: 'Circle', dotRounded: 'Rounded square',
+    dotImage: 'Image', dotUseImage: 'Choose image…', dotChangeImage: 'Change…', dotRemoveImage: 'Remove',
+    dotImageHint: 'PNG, JPG, GIF, WebP or SVG. A square icon with a transparent background looks best; it is scaled to the size above (16–24 px works well).',
+    dotImageBad: 'This image could not be read. Try a PNG or SVG file.', dotReset: 'Reset to default', done: 'Done',
     mdOff: 'Markdown files open as source text. Open them as a preview to read and translate them comfortably.',
     mdOn: 'Markdown files open as a preview.', mdSet: 'Open Markdown as preview', mdUndo: 'Open as text again',
     translation: 'Translation', target: 'Target language', pageMode: 'Whole-page translation shows', translationOnly: 'Translation only',
     bilingual: 'Bilingual (original + translation)', autoAI: 'Use AI automatically for phrases and sentences',
     ai: 'AI engine', provider: 'Provider', model: 'Model', chooseModel: '— Choose a model —', recommended: 'Recommended (light & fast)',
-    otherModels: 'Other models', autoModel: 'Auto (first recommended model)', hiddenModel: 'hidden in Language Models', missingModel: 'not available',
+    otherModels: 'Other models', autoModel: 'Auto (a fast, lightweight model)', hiddenModel: 'hidden in Language Models', missingModel: 'not available',
     noModelChosen: 'Choose the model for phrases and paragraphs. A small, fast one works best.',
     needsAccess: 'Not authorized yet.', allowAccess: 'Allow access',
-    speed: 'Test speed', testing: 'Testing… {0}%', unauthorized: 'not authorized', failed: 'failed',
-    speedTitle: 'Each visible, authorized model translates a sentence: one warm-up, then three timed runs. The median time is shown.',
+    speed: 'Test speed', testing: 'Testing… {0}%', advising: 'Picking recommendations…', unauthorized: 'not authorized', failed: 'failed',
+    speedTitle: 'Each visible, authorized model translates a sentence: one warm-up, then three timed runs (median shown). Then one of your models picks the ones suited to translation as "Recommended".',
     speedRunning: 'One warm-up and three timed runs per model. This can take a minute.',
-    fastest: 'Fastest: {0} · {1}', firstWords: 'first words {0}', useIt: 'Use it', speedNone: 'No model answered within 20 seconds.',
+    fastest: 'Fastest: {0} · {1}', recommendedPick: 'Recommended: {0} · {1}', firstWords: 'first words {0}', useIt: 'Use it', speedNone: 'No model answered within 20 seconds.',
     speedUnauthorized: '{0} not authorized yet, so not measured. Choose one and click "Allow access".', close: 'Close', apiKey: 'API key', keySaved: 'Saved in the OS keychain',
     keyMissing: 'Not set', keyOptional: 'Optional', setKey: 'Set key', getKey: 'Get a key', fetch: 'Fetch list', fetching: 'Loading…',
     baseUrl: 'API base URL', noModels: 'No VS Code language model available. Sign in to GitHub Copilot or pick another provider.',
@@ -41,18 +46,23 @@ const STRINGS = {
     fullPage: '全文翻译', fullPageHint: '翻译正在阅读的整个页面，再按一次切回原文',
     shortcutHint: '点击按键框后按下新的组合键即可修改；退格键关闭该快捷键。',
     worksIn: '适用于 Chat、Markdown 预览、Release Notes、设置页和扩展详情页。', tryIt: '在示例页面上试一试',
+    dotEdit: '自定义', dotEditTitle: '修改小圆点的大小、颜色或换成图片', dotHeading: '划词小圆点', dotSample: '选中一段文字',
+    dotSize: '大小', dotColor: '颜色', dotBorder: '边框', dotOpacity: '不透明度', dotShape: '形状', dotCircle: '圆形', dotRounded: '圆角方形',
+    dotImage: '图片', dotUseImage: '选择图片…', dotChangeImage: '更换…', dotRemoveImage: '移除',
+    dotImageHint: '支持 PNG、JPG、GIF、WebP、SVG。方形、透明背景的图标效果最好；图片会缩放到上面设置的大小（16–24 像素较合适）。',
+    dotImageBad: '无法读取这张图片，请换一个 PNG 或 SVG 文件。', dotReset: '恢复默认', done: '完成',
     mdOff: 'Markdown 文件默认以源码打开。改为默认预览，阅读和翻译都更方便。',
     mdOn: 'Markdown 文件默认以预览方式打开。', mdSet: '默认以预览打开 Markdown', mdUndo: '恢复为源码打开',
     translation: '翻译', target: '目标语言', pageMode: '全文翻译显示方式', translationOnly: '仅译文', bilingual: '原文译文对照',
     autoAI: '短语、句子自动使用 AI 翻译',
     ai: 'AI 引擎', provider: '服务商', model: '模型', chooseModel: '— 请选择模型 —', recommended: '推荐（轻量、快速）',
-    otherModels: '其他模型', autoModel: '自动（首个推荐模型）', hiddenModel: '已在“语言模型”中隐藏', missingModel: '不可用',
+    otherModels: '其他模型', autoModel: '自动（轻量快速模型）', hiddenModel: '已在“语言模型”中隐藏', missingModel: '不可用',
     noModelChosen: '请选择用于翻译句子和段落的模型，推荐小而快的模型。',
     needsAccess: '尚未授权。', allowAccess: '授权使用',
-    speed: '测速', testing: '测速中… {0}%', unauthorized: '未授权', failed: '失败',
-    speedTitle: '每个可见且已授权的模型翻译同一句话：先预热一次，再计时三次，显示中位数。',
+    speed: '测速', testing: '测速中… {0}%', advising: '正在挑选推荐模型…', unauthorized: '未授权', failed: '失败',
+    speedTitle: '每个可见且已授权的模型翻译同一句话：先预热一次，再计时三次（显示中位数）。然后由你的一个模型挑出适合翻译的模型，标为“推荐”。',
     speedRunning: '每个模型预热一次、计时三次，可能需要一分钟左右。',
-    fastest: '最快：{0} · {1}', firstWords: '首字 {0}', useIt: '改用此模型', speedNone: '没有模型在 20 秒内返回结果。',
+    fastest: '最快：{0} · {1}', recommendedPick: '推荐：{0} · {1}', firstWords: '首字 {0}', useIt: '改用此模型', speedNone: '没有模型在 20 秒内返回结果。',
     speedUnauthorized: '{0} 个模型尚未授权，未参与测速。选中后点击“授权使用”即可。', close: '关闭', apiKey: 'API Key', keySaved: '已保存在系统钥匙串', keyMissing: '未设置', keyOptional: '可选',
     setKey: '设置 Key', getKey: '获取 Key', fetch: '获取列表', fetching: '加载中…', baseUrl: 'API 地址',
     noModels: '没有可用的 VS Code 语言模型。请登录 GitHub Copilot 或选择其他服务商。',
@@ -72,18 +82,23 @@ const STRINGS = {
     fullPage: 'Ganze Seite', fullPageHint: 'übersetzt die aktuelle Seite; erneut drücken schaltet zurück',
     shortcutHint: 'Auf eine Taste klicken und eine neue Kombination drücken; Rücktaste schaltet sie aus.',
     worksIn: 'Funktioniert in Chat, Markdown-Vorschau, Release Notes, Einstellungen und auf Erweiterungsseiten.', tryIt: 'Auf einer Beispielseite ausprobieren',
+    dotEdit: 'Anpassen', dotEditTitle: 'Größe, Farbe oder Bild des Punkts ändern', dotHeading: 'Auswahlpunkt', dotSample: 'Etwas Text markieren',
+    dotSize: 'Größe', dotColor: 'Farbe', dotBorder: 'Rand', dotOpacity: 'Deckkraft', dotShape: 'Form', dotCircle: 'Kreis', dotRounded: 'Abgerundetes Quadrat',
+    dotImage: 'Bild', dotUseImage: 'Bild wählen…', dotChangeImage: 'Ändern…', dotRemoveImage: 'Entfernen',
+    dotImageHint: 'PNG, JPG, GIF, WebP oder SVG. Ein quadratisches Symbol mit transparentem Hintergrund wirkt am besten; es wird auf die Größe oben skaliert (16–24 px passen gut).',
+    dotImageBad: 'Dieses Bild konnte nicht gelesen werden. Bitte eine PNG- oder SVG-Datei versuchen.', dotReset: 'Standard wiederherstellen', done: 'Fertig',
     mdOff: 'Markdown-Dateien öffnen als Quelltext. Als Vorschau lassen sie sich bequemer lesen und übersetzen.',
     mdOn: 'Markdown-Dateien öffnen als Vorschau.', mdSet: 'Markdown als Vorschau öffnen', mdUndo: 'Wieder als Text öffnen',
     translation: 'Übersetzung', target: 'Zielsprache', pageMode: 'Seitenübersetzung zeigt', translationOnly: 'Nur Übersetzung',
     bilingual: 'Zweisprachig (Original + Übersetzung)', autoAI: 'KI automatisch für Ausdrücke und Sätze verwenden',
     ai: 'KI-Engine', provider: 'Anbieter', model: 'Modell', chooseModel: '— Modell auswählen —', recommended: 'Empfohlen (leicht & schnell)',
-    otherModels: 'Weitere Modelle', autoModel: 'Automatisch (erstes empfohlenes Modell)', hiddenModel: 'in Sprachmodelle ausgeblendet', missingModel: 'nicht verfügbar',
+    otherModels: 'Weitere Modelle', autoModel: 'Automatisch (leichtes, schnelles Modell)', hiddenModel: 'in Sprachmodelle ausgeblendet', missingModel: 'nicht verfügbar',
     noModelChosen: 'Wählen Sie das Modell für Sätze und Absätze. Ein kleines, schnelles eignet sich am besten.',
     needsAccess: 'Noch nicht autorisiert.', allowAccess: 'Zugriff erlauben',
-    speed: 'Tempo messen', testing: 'Wird gemessen… {0}%', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen',
-    speedTitle: 'Jedes sichtbare, autorisierte Modell übersetzt einen Satz: ein Aufwärmlauf, dann drei gemessene Läufe. Angezeigt wird der Median.',
+    speed: 'Tempo messen', testing: 'Wird gemessen… {0}%', advising: 'Empfehlungen werden ermittelt…', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen',
+    speedTitle: 'Jedes sichtbare, autorisierte Modell übersetzt einen Satz: ein Aufwärmlauf, dann drei gemessene Läufe (Median). Danach wählt eines Ihrer Modelle die für Übersetzungen geeigneten als „Empfohlen“ aus.',
     speedRunning: 'Ein Aufwärmlauf und drei gemessene Läufe pro Modell. Das kann eine Minute dauern.',
-    fastest: 'Am schnellsten: {0} · {1}', firstWords: 'erste Wörter {0}', useIt: 'Verwenden', speedNone: 'Kein Modell hat innerhalb von 20 Sekunden geantwortet.',
+    fastest: 'Am schnellsten: {0} · {1}', recommendedPick: 'Empfohlen: {0} · {1}', firstWords: 'erste Wörter {0}', useIt: 'Verwenden', speedNone: 'Kein Modell hat innerhalb von 20 Sekunden geantwortet.',
     speedUnauthorized: '{0} noch nicht autorisiert und daher nicht gemessen. Eines auswählen und auf „Zugriff erlauben“ klicken.', close: 'Schließen', apiKey: 'API-Schlüssel',
     keySaved: 'Im Schlüsselbund des Betriebssystems gespeichert', keyMissing: 'Nicht festgelegt', keyOptional: 'Optional',
     setKey: 'Schlüssel festlegen', getKey: 'Schlüssel erhalten', fetch: 'Liste abrufen', fetching: 'Wird geladen…',
@@ -162,13 +177,21 @@ class SettingsPanel {
         catch (error) { this.post({ type: 'models', error: error instanceof Error ? error.message : String(error) }); }
         return undefined;
       case 'benchmark': try { await this.api.benchmark(); } finally { this.refresh(); } return undefined;
+      case 'pickDotIcon': {
+        const picked = await this.api.pickDotIcon();
+        if (picked?.resize) this.post({ type: 'resizeIcon', data: picked.resize, name: picked.name });
+        return this.refresh();
+      }
+      case 'setDotIcon': await this.api.setDotIcon(message.data, message.name); return this.refresh();
+      case 'removeDotIcon': await this.api.removeDotIcon(); return this.refresh();
+      case 'resetDot': await this.api.resetDot(); return this.refresh();
       default: return undefined;
     }
   }
 
   html(s) {
     const nonce = crypto.randomBytes(16).toString('base64');
-    const csp = `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';`;
+    const csp = `default-src 'none'; img-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';`;
     return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -227,6 +250,31 @@ class SettingsPanel {
     border-bottom-color: var(--vscode-keybindingLabel-bottomBorder, rgba(128,128,128,.5)); border-radius: 3px; box-shadow: inset 0 -1px 0 rgba(128,128,128,.35); }
   input.kbd:placeholder-shown { font-weight: normal; opacity: .6; }
   .reddot { justify-self: center; width: 9px; height: 9px; margin: 0 34px; border: 1px solid #fff; border-radius: 50%; background: #e5484d; box-shadow: 0 0 2px #0006; }
+  /* The selection dot as the user styled it (custom properties are set through CSSOM, which the CSP allows). */
+  .seldot { flex: none; box-sizing: border-box; width: var(--s, 7px); height: var(--s, 7px); border: var(--b, 1px solid #fff); border-radius: var(--r, 50%);
+    background: var(--bg, #e5484d); opacity: var(--o, .85); box-shadow: var(--sh, 0 0 2px #0006); }
+  button.dotcell { justify-self: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box;
+    width: 78px; min-height: 30px; padding: 3px 0; color: inherit; background: transparent; border: 1px dashed transparent; border-radius: 4px; }
+  button.dotcell:hover, button.dotcell[aria-expanded=true] { background: transparent; border-color: var(--vscode-focusBorder); }
+  button.dotcell:hover .seldot { opacity: 1; }
+  .dotcell .cap { font-size: 11px; line-height: 1; color: var(--vscode-textLink-foreground); }
+  .dothead { display: flex; align-items: baseline; gap: 8px; }
+  .dothead b { flex: 1; }
+  .dotstage { display: flex; align-items: flex-end; gap: 3px; min-height: 40px; margin: 8px 0 4px; padding: 6px 10px; border-radius: 3px;
+    background: var(--vscode-editor-background, #1f1f1f); }
+  .dotstage .sample { padding: 0 1px; color: var(--vscode-editor-foreground, inherit); background: var(--vscode-editor-selectionBackground, #264f78); }
+  .dotgrid { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin-top: 6px; }
+  .dotgrid > label, .dotgrid > span { white-space: nowrap; }
+  .dotgrid input[type=range] { flex: 1; min-width: 0; margin: 0; accent-color: var(--vscode-button-background); }
+  .dotgrid output { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; opacity: .8; }
+  input[type=color] { flex: none; width: 26px; height: 20px; padding: 0; border: 1px solid var(--vscode-widget-border, rgba(128,128,128,.4)); border-radius: 3px; background: none; cursor: pointer; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  button.swatch { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid rgba(128,128,128,.5); background: var(--c); }
+  button.swatch:hover { background: var(--c); transform: scale(1.15); }
+  button.swatch[aria-pressed=true] { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+  .thumb { flex: none; width: 24px; height: 24px; border-radius: 3px; background: var(--img) center / contain no-repeat, rgba(128,128,128,.15); }
+  .dotedit:focus { outline: none; }
+  .disabled { opacity: .45; pointer-events: none; }
   .card { margin-top: 10px; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--vscode-widget-border, rgba(128,128,128,.25));
     background: var(--vscode-textBlockQuote-background, rgba(128,128,128,.08)); }
   .card .buttons { margin-top: 6px; }
@@ -252,11 +300,38 @@ class SettingsPanel {
 <details class="sec" data-sec="shortcuts" open>
   <summary>${s.shortcuts}</summary>
   <div class="how">
-    <div><b>${s.selectTitle}</b><div class="muted">${s.selectHint}</div></div><span class="reddot" aria-hidden="true"></span>
+    <div><b>${s.selectTitle}</b><div class="muted">${s.selectHint}</div></div>
+    <button class="dotcell" id="dotBtn" title="${s.dotEditTitle}" aria-controls="dotEditor" aria-expanded="false"><span class="seldot" id="dotPreview"></span><span class="cap">${s.dotEdit}</span></button>
     <label for="scParagraph"><b>${s.paragraph}</b><div class="muted">${s.paragraphHint}</div></label>
     <input type="text" class="kbd" id="scParagraph" data-shortcut="shortcuts.paragraph" readonly placeholder="—">
     <label for="scFullPage"><b>${s.fullPage}</b><div class="muted">${s.fullPageHint}</div></label>
     <input type="text" class="kbd" id="scFullPage" data-shortcut="shortcuts.fullPage" readonly placeholder="—">
+  </div>
+  <div class="card dotedit" id="dotEditor" tabindex="-1" hidden>
+    <div class="dothead"><b>${s.dotHeading}</b><a id="dotReset">${s.dotReset}</a></div>
+    <div class="dotstage" aria-hidden="true"><span class="sample">${s.dotSample}</span><span class="seldot" id="dotStage"></span></div>
+    <div class="dotgrid">
+      <label for="dotSize">${s.dotSize}</label>
+      <div class="inline"><input type="range" id="dotSize" data-key="dot.size" min="4" max="32" step="1"><output id="dotSizeOut"></output></div>
+      <span>${s.dotColor}</span>
+      <div class="swatches" id="dotColorRow">
+        <button class="swatch" data-color="#e5484d"></button><button class="swatch" data-color="#f76b15"></button><button class="swatch" data-color="#ffc53d"></button>
+        <button class="swatch" data-color="#30a46c"></button><button class="swatch" data-color="#0090ff"></button><button class="swatch" data-color="#8e4ec6"></button>
+        <button class="swatch" data-color="#d6409f"></button><button class="swatch" data-color="#8b8d98"></button>
+        <input type="color" id="dotColor" data-key="dot.color" title="${s.dotColor}" aria-label="${s.dotColor}">
+      </div>
+      <label for="dotBorderWidth">${s.dotBorder}</label>
+      <div class="inline"><input type="range" id="dotBorderWidth" data-key="dot.borderWidth" min="0" max="4" step="1"><output id="dotBorderOut"></output>
+        <input type="color" id="dotBorderColor" data-key="dot.borderColor" title="${s.dotBorder}" aria-label="${s.dotBorder}"></div>
+      <label for="dotOpacity">${s.dotOpacity}</label>
+      <div class="inline"><input type="range" id="dotOpacity" data-key="dot.opacity" min="0.2" max="1" step="0.05"><output id="dotOpacityOut"></output></div>
+      <label for="dotShape">${s.dotShape}</label>
+      <select id="dotShape" data-key="dot.shape"><option value="circle">${s.dotCircle}</option><option value="rounded">${s.dotRounded}</option></select>
+      <span>${s.dotImage}</span>
+      <div class="inline"><span class="thumb" id="dotThumb" hidden></span><button id="dotPick">${s.dotUseImage}</button><a id="dotRemove" hidden>${s.dotRemoveImage}</a></div>
+    </div>
+    <div class="muted">${s.dotImageHint}</div>
+    <div class="buttons"><button class="primary" id="dotDone">${s.done}</button></div>
   </div>
   <div class="muted">${s.worksIn} ${s.shortcutHint}</div>
   <div class="buttons"><button class="primary" id="tryBtn" data-command="translateAnywhere.tryIt">${s.tryIt}</button></div>
@@ -363,15 +438,19 @@ function fillModels(s) {
 function renderSpeed(s) {
   const run = s.benchmark;
   $('speedBtn').disabled = !!run || !s.vscodeModels.length;
-  $('speedBtn').textContent = run ? fmt(S.testing, run.total ? Math.round(run.done / run.total * 100) : 0) : S.speed;
+  $('speedBtn').textContent = !run ? S.speed : run.phase === 'advice' ? S.advising : fmt(S.testing, run.total ? Math.round(run.done / run.total * 100) : 0);
   const info = $('speedInfo');
   const lines = [];
-  if (run) lines.push([S.speedRunning]);
+  if (run) lines.push([run.phase === 'advice' ? S.advising : S.speedRunning]);
   else if (s.vscodeModels.some(m => m.timing)) {
-    const fastest = s.vscodeModels.filter(measured).sort((a, b) => a.timing.median - b.timing.median)[0];
+    const byTime = s.vscodeModels.filter(measured).sort((a, b) => a.timing.median - b.timing.median);
+    // A model the user's own AI judged lightweight comes first; without any advice the fastest one is shown.
+    const pick = byTime.find(m => m.recommended);
+    const fastest = byTime[0];
+    const timeText = m => seconds(m.timing.median) + ' (' + fmt(S.firstWords, seconds(m.timing.first)) + ')';
     if (!fastest) lines.push([S.speedNone]);
-    else lines.push([fmt(S.fastest, fastest.name, seconds(fastest.timing.median) + ' (' + fmt(S.firstWords, seconds(fastest.timing.first)) + ')'),
-      fastest.id === s.modelId ? null : fastest.id]);
+    if (pick) lines.push([fmt(S.recommendedPick, pick.name, timeText(pick)), pick.id === s.modelId ? null : pick.id]);
+    if (fastest && fastest !== pick) lines.push([fmt(S.fastest, fastest.name, timeText(fastest)), fastest.id === s.modelId ? null : fastest.id]);
     const skipped = s.vscodeModels.filter(m => m.timing && m.timing.status === 'unauthorized').length;
     if (skipped) lines.push([fmt(S.speedUnauthorized, skipped)]);
   }
@@ -482,10 +561,105 @@ function render() {
   // The German block appears for a German UI or once a German word has been looked up.
   $('deBox').hidden = s.uiLanguage !== 'de' && !['ready', 'loading', 'downloading', 'error'].includes(de.status);
   $('version').textContent = 'v' + s.version;
+  renderDot(s.dot);
+}
+// The selection dot drawn exactly as the injected UI draws it (see .imt-dot in ui.js).
+let dot;
+function paintDot(el, d) {
+  const icon = !!d.icon;
+  el.style.setProperty('--s', d.size + 'px');
+  el.style.setProperty('--b', d.borderWidth + 'px solid ' + d.borderColor);
+  el.style.setProperty('--r', icon ? '0' : d.shape === 'rounded' ? '28%' : '50%');
+  el.style.setProperty('--bg', icon ? 'transparent url("' + d.icon + '") center / contain no-repeat' : d.color);
+  el.style.setProperty('--o', d.opacity);
+  el.style.setProperty('--sh', icon ? 'none' : '0 0 2px #0006');
+}
+function renderDot(d) {
+  if (!d) return;
+  dot = { ...d };
+  paintDot($('dotPreview'), dot);
+  paintDot($('dotStage'), dot);
+  // A control the user is still holding keeps its value.
+  const set = (id, value) => { if (document.activeElement !== $(id)) $(id).value = value; };
+  set('dotSize', dot.size);
+  set('dotBorderWidth', dot.borderWidth);
+  set('dotOpacity', dot.opacity);
+  set('dotColor', dot.color);
+  set('dotBorderColor', dot.borderColor);
+  set('dotShape', dot.shape);
+  dotOutputs();
+  for (const sw of document.querySelectorAll('.swatch')) {
+    sw.style.setProperty('--c', sw.dataset.color);
+    sw.title = sw.dataset.color;
+    sw.setAttribute('aria-label', S.dotColor + ' ' + sw.dataset.color);
+    sw.setAttribute('aria-pressed', String(!dot.icon && sw.dataset.color.toLowerCase() === dot.color.toLowerCase()));
+  }
+  // With an image the fill color and shape are not visible, so those rows are dimmed.
+  $('dotColorRow').classList.toggle('disabled', !!dot.icon);
+  $('dotShape').disabled = !!dot.icon;
+  $('dotThumb').hidden = !dot.icon;
+  if (dot.icon) $('dotThumb').style.setProperty('--img', 'url("' + dot.icon + '")');
+  $('dotThumb').title = dot.iconName || '';
+  $('dotPick').textContent = dot.icon ? S.dotChangeImage : S.dotUseImage;
+  $('dotRemove').hidden = !dot.icon;
+}
+function dotOutputs() {
+  $('dotSizeOut').textContent = $('dotSize').value + ' px';
+  $('dotBorderOut').textContent = $('dotBorderWidth').value + ' px';
+  $('dotOpacityOut').textContent = Math.round($('dotOpacity').value * 100) + '%';
+}
+function toggleDotEditor(open = $('dotEditor').hidden) {
+  $('dotEditor').hidden = !open;
+  $('dotBtn').setAttribute('aria-expanded', String(open));
+  vscode.setState({ ...(vscode.getState() || {}), dotEditor: open });
+}
+// Sliders and pickers repaint the preview while moving; the setting itself is written on "change".
+const DOT_LIVE = { dotSize: 'size', dotBorderWidth: 'borderWidth', dotOpacity: 'opacity', dotColor: 'color', dotBorderColor: 'borderColor', dotShape: 'shape' };
+for (const [id, key] of Object.entries(DOT_LIVE)) {
+  $(id).addEventListener('input', () => {
+    if (!dot) return;
+    dot[key] = $(id).type === 'range' ? Number($(id).value) : $(id).value;
+    paintDot($('dotPreview'), dot);
+    paintDot($('dotStage'), dot);
+    dotOutputs();
+  });
+}
+$('dotBtn').addEventListener('click', () => {
+  toggleDotEditor();
+  if (!$('dotEditor').hidden) $('dotEditor').scrollIntoView({ block: 'nearest' });
+});
+$('dotDone').addEventListener('click', () => { toggleDotEditor(false); $('dotBtn').focus(); });
+$('dotColorRow').addEventListener('click', event => {
+  const sw = event.target.closest('.swatch');
+  if (!sw) return;
+  $('dotColor').value = sw.dataset.color;
+  vscode.postMessage({ type: 'update', key: 'dot.color', value: sw.dataset.color });
+});
+$('dotPick').addEventListener('click', () => vscode.postMessage({ type: 'pickDotIcon' }));
+$('dotRemove').addEventListener('click', () => vscode.postMessage({ type: 'removeDotIcon' }));
+$('dotReset').addEventListener('click', () => vscode.postMessage({ type: 'resetDot' }));
+if ((vscode.getState() || {}).dotEditor) toggleDotEditor(true);
+// Large images are scaled down here (the extension host has no image decoder): fit into 64×64, keep transparency.
+function resizeIcon(data, name) {
+  const img = new Image();
+  img.onload = () => {
+    const box = 64, scale = Math.min(box / img.naturalWidth, box / img.naturalHeight, 1);
+    const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = box;
+    canvas.height = box;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, (box - w) / 2, (box - h) / 2, w, h);
+    vscode.postMessage({ type: 'setDotIcon', data: canvas.toDataURL('image/png'), name });
+  };
+  img.onerror = () => { $('bannerText').textContent = S.dotImageBad; $('banner').hidden = false; };
+  img.src = data;
 }
 function focusTarget(id) {
   const el = $(id);
   if (!el) return;
+  if (id === 'dotEditor') toggleDotEditor(true);
   const section = el.closest('details');
   if (section) section.open = true;
   el.scrollIntoView({ block: 'center' });
@@ -552,6 +726,7 @@ window.addEventListener('message', ({ data }) => {
     if (data.focus) focusTarget(data.focus);
   }
   if (data.type === 'error') { $('bannerText').textContent = data.message; $('banner').hidden = false; }
+  if (data.type === 'resizeIcon') resizeIcon(data.data, data.name);
   if (data.type === 'models') {
     $('fetchBtn').disabled = false;
     $('fetchBtn').textContent = S.fetch;

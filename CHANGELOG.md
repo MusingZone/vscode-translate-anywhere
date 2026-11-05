@@ -10,14 +10,15 @@ All notable changes to this extension are documented here. The format follows [K
 - **Open Markdown as preview**: one click makes `.md` files open as a rendered preview by default (easier to read and translate), with **Open as text again** to undo. Also offered once when you open a Markdown file as text.
 - The sidebar vocabulary section shows your five most recent entries.
 - New commands: **Try It on a Sample Page**, **Open Markdown Files as Preview by Default / as Text by Default**, **Choose Where to Translate**.
+- **Customize the selection dot**: click the dot in the sidebar's Shortcuts section to change its size, color, border, opacity and shape with a live preview, or use your own image (PNG, JPG, GIF, WebP or SVG; large images are scaled down). Also available as the command **Customize Selection Dot** and as `translateAnywhere.dot.*` settings.
 
 ### Changed
-- **Default model**: the extension picks the first model from a built-in list of lightweight models (GPT luna, Claude Haiku, Gemini Flash, GPT mini…) that you have. If none matches, the sidebar asks you to choose. **Auto** is still available, but only when you select it.
-- Models you hid in VS Code's **Language Models** view are no longer listed or picked.
+- **Default model**: on a fresh install the extension picks a lightweight model you can see in VS Code's model picker (matched by tier and size words such as luna, haiku, flash, mini, so new versions are recognized without an update). If none matches, the sidebar asks you to choose. **Auto** is still available, but only when you select it.
+- Models you hid in VS Code's **Language Models** view are no longer listed or picked, and neither are Copilot's internal helper models that VS Code never shows (for example "GPT-5.4 nano" used for dictation).
+- **Recommended** models come from the speed test: after timing your models, one of your own models judges which of them are lightweight and suited to translation. Without such advice there is no Recommended group and models keep VS Code's order.
 - **Speed test** is reliable now: it uses a realistic sentence, warms up each model once, times three rounds with limited parallelism and shows the median (and time to first words). It only runs when you click it.
 - Sidebar order: Shortcuts before AI engine; Vocabulary before Offline dictionary. **Test AI** is replaced by an **Allow access** link shown only when the model is not authorized yet. Per-surface switches moved to **Where to translate…** in the footer.
 - Chinese words in the Marketplace name, description and keywords so the extension is found by searching 翻译.
-- README credits the German → Chinese dictionary (HanDeDict) and its license again.
 
 ## [0.5.1] - Sidebar polish
 

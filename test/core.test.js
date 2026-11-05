@@ -691,6 +691,34 @@ test('model preference ranks lightweight models, skips hidden ones and never pic
   assert.equal(models.parseHiddenModels({ visibility: 'not json' }).size, 0);
 });
 
+test('internal Copilot helpers are hidden, size words are a generic fallback, and AI advice is parsed strictly', () => {
+  const cached = JSON.stringify([
+    { identifier: 'copilot/copilot-dictation-cleanup-nano', metadata: { id: 'copilot-dictation-cleanup-nano', name: 'GPT-5.4 nano', isUserSelectable: false } },
+    { identifier: 'copilot/gpt-5-mini', metadata: { id: 'gpt-5-mini', isUserSelectable: true } },
+    { identifier: 'copilot/claude-opus-4.8', metadata: { id: 'claude-opus-4.8' } }
+  ]);
+  const hidden = models.parseHiddenModels({ cached, visibility: JSON.stringify({ hiddenModels: ['copilot/claude-opus-4.8'] }) });
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'copilot-dictation-cleanup-nano' }, hidden));
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'claude-opus-4.8' }, hidden), 'user-hidden models are still read alongside the cache');
+  assert.ok(!models.isHidden({ vendor: 'copilot', id: 'gpt-5-mini' }, hidden));
+
+  // Specialized models never become the default, even when small; unknown "flash"/"mini" models still can.
+  assert.equal(models.preferredRank({ id: 'copilot-utility-small', name: 'GPT-4o mini' }), -1);
+  assert.equal(models.preferredRank({ id: 'gpt-5.3-codex-mini', name: 'GPT-5.3-Codex mini' }), -1);
+  assert.equal(models.preferredRank({ id: 'acme-chat-flash', name: 'Acme Chat Flash' }), models.PREFERRED_MODELS.length - 1);
+  assert.equal(models.pickPreferred([{ id: 'big-model-pro', name: 'Big Pro' }]), undefined, 'no match means the user chooses');
+
+  const list = [{ id: 'gpt-5-mini', name: 'GPT-5 mini', vendor: 'copilot', timing: { status: 'ok', median: 700 } },
+    { id: 'claude-opus-4.8', name: 'Claude Opus 4.8', vendor: 'copilot' }];
+  const prompt = models.advicePrompt(list);
+  assert.ok(prompt.includes('"gpt-5-mini"') && prompt.includes('700 ms') && prompt.includes('JSON array'));
+  const ids = list.map(m => m.id);
+  assert.deepEqual(models.parseAdvice('Sure:\n```json\n["gpt-5-mini", "made-up", "gpt-5-mini"]\n```', ids), ['gpt-5-mini']);
+  assert.deepEqual(models.parseAdvice('[]', ids), []);
+  assert.equal(models.parseAdvice('I would pick GPT-5 mini.', ids), undefined);
+  assert.equal(models.parseAdvice('[not json', ids), undefined);
+});
+
 test('speed benchmark warms up, takes the median, limits concurrency and reports unauthorized/failed models', async () => {
   const delays = { fast: [900, 100, 120, 500], slow: [50, 300, 310, 290], broken: null };
   const calls = {};

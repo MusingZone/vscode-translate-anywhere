@@ -77,6 +77,7 @@ def state(provider="vscode", lang="en"):
         "vocabularyRecent": [{"text": "serendipity", "phonetic": "ˌserənˈdɪpəti", "translation": "n. 意外发现珍奇事物的本领"},
                              {"text": "ephemeral", "phonetic": "", "translation": "adj. 短暂的"}],
         "markdownPreviewDefault": False,
+        "dot": {"size": 7, "color": "#e5484d", "borderWidth": 1, "borderColor": "#ffffff", "opacity": 0.85, "shape": "circle", "icon": "", "iconName": ""},
     }
 
 
@@ -93,11 +94,18 @@ def html(lang):
     return out.stdout
 
 
+def strings():
+    code = "const m=require('module');const l=m._load;m._load=(r,...a)=>r==='vscode'?{}:l(r,...a);process.stdout.write(JSON.stringify(require(process.argv[1]).STRINGS))"
+    out = subprocess.run([node(), "-e", code, str(ROOT / "src" / "panel.js")], capture_output=True, text=True, encoding="utf-8", check=True)
+    return json.loads(out.stdout)
+
+
 def main():
     args = sys.argv[1:]
     shot = args[args.index("--screenshot") + 1] if "--screenshot" in args else None
     lang = "zh" if "--zh" in args else "de" if "--de" in args else "en"
     page_html = html(lang)
+    STRINGS = strings()
     errors = []
     with sync_playwright() as p:
         browser = p.chromium.launch(channel="chrome", headless=True)
@@ -107,12 +115,21 @@ def main():
         page.add_init_script(INIT)
         page.route("https://panel.test/", lambda route: route.fulfill(status=200, content_type="text/html; charset=utf-8", body=page_html))
         page.goto("https://panel.test/", wait_until="domcontentloaded")
-        page.wait_for_function("window.__posted.some(m => m.type === 'ready')")
         post = lambda message: page.evaluate("m => window.postMessage(m, '*')", message)
         posted = lambda: page.evaluate("window.__posted.splice(0)")
 
+        def wait(expression, timeout=5000):
+            # Polled from here: Playwright's wait_for_function polls with eval, which the panel CSP blocks.
+            for _ in range(timeout // 50):
+                if page.evaluate(expression):
+                    return
+                page.wait_for_timeout(50)
+            raise AssertionError("timed out waiting for " + expression)
+
+        wait("window.__posted.some(function (m) { return m.type === 'ready'; })")
+
         post({"type": "state", "state": state("vscode", lang)})
-        page.wait_for_function("document.getElementById('version').textContent === 'v0.3.0'")
+        wait("document.getElementById('version').textContent === 'v0.3.0'")
         assert page.is_visible("#vscodeAI") and not page.is_visible("#httpAI")
         # Placeholder (no model chosen yet), two recommended, one other, then Auto as an explicit choice.
         assert page.eval_on_selector("#modelId", "s => [...s.options].map(o => o.value)") == ["", "gpt-5-mini", "claude-haiku-4.5", "claude-opus-4.8", "@auto"]
@@ -140,22 +157,76 @@ def main():
         s = state("vscode", lang)
         s["benchmark"] = {"done": 1, "total": 2}
         post({"type": "state", "state": s})
-        page.wait_for_function("document.getElementById('speedBtn').textContent.includes('50%')")
+        wait("document.getElementById('speedBtn').textContent.includes('50%')")
         assert page.is_disabled("#speedBtn") and page.is_visible("#speedInfo")
+        s["benchmark"] = {"done": 1, "total": 1, "phase": "advice"}
+        post({"type": "state", "state": s})
+        wait("document.getElementById('speedBtn').textContent.indexOf('%') < 0")
+        assert page.inner_text("#speedBtn") == STRINGS[lang]["advising"]
+        assert page.is_disabled("#speedBtn")
         s = state("vscode", lang)
         s["vscodeModels"] = [dict(s["vscodeModels"][1], timing={"status": "ok", "median": 820, "first": 410}),
                              dict(s["vscodeModels"][0], timing={"status": "unauthorized"}), s["vscodeModels"][2]]
         post({"type": "state", "state": s})
-        page.wait_for_function("!document.getElementById('speedBtn').disabled")
+        wait("!document.getElementById('speedBtn').disabled")
         assert page.eval_on_selector("#modelId", "s => s.options[1].textContent").startswith("0.8s · Claude Haiku 4.5")
         assert "0.4s" in page.inner_text("#speedInfo"), "time to first words is shown"
         assert "Claude Haiku 4.5" in page.inner_text("#speedInfo") and page.eval_on_selector_all("#speedInfo div", "d => d.length") == 2
         page.click("#speedInfo [data-use]")
         assert posted() == [{"type": "update", "key": "ai.modelId", "value": "claude-haiku-4.5"}]
+        assert STRINGS[lang]["recommendedPick"].split("{0}")[0] in page.inner_text("#speedInfo")
+        # Without advice there is no "Recommended" group, just the models in VS Code's order.
+        s = state("vscode", lang)
+        s["vscodeModels"] = [dict(m, recommended=False) for m in s["vscodeModels"]]
+        post({"type": "state", "state": s})
+        wait("document.querySelectorAll('#modelId optgroup').length === 1")
+        assert page.eval_on_selector("#modelId optgroup", "g => g.label") == STRINGS[lang]["model"]
+
+        # Selection dot: the dot in the shortcuts list opens an editor with a live preview.
+        assert not page.is_visible("#dotEditor")
+        assert page.eval_on_selector("#dotPreview", "e => getComputedStyle(e).width") == "7px"
+        page.click("#dotBtn")
+        assert page.is_visible("#dotEditor") and page.get_attribute("#dotBtn", "aria-expanded") == "true"
+        page.eval_on_selector("#dotSize", "e => { e.value = 20; e.dispatchEvent(new Event('input', {bubbles: true})); }")
+        assert page.eval_on_selector("#dotStage", "e => getComputedStyle(e).width") == "20px", "preview follows the slider live"
+        assert posted() == []
+        page.eval_on_selector("#dotSize", "e => e.dispatchEvent(new Event('change', {bubbles: true}))")
+        assert posted() == [{"type": "update", "key": "dot.size", "value": "20"}]
+        page.click(".swatch[data-color='#0090ff']")
+        assert posted() == [{"type": "update", "key": "dot.color", "value": "#0090ff"}]
+        page.select_option("#dotShape", "rounded")
+        assert posted() == [{"type": "update", "key": "dot.shape", "value": "rounded"}]
+        page.click("#dotPick")
+        assert posted() == [{"type": "pickDotIcon"}]
+        # A large image comes back to be scaled down to 64×64 here, then is saved.
+        svg = "data:image/svg+xml;base64," + __import__("base64").b64encode(
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150"><rect width="300" height="150" fill="#0a0"/></svg>').decode()
+        post({"type": "resizeIcon", "data": svg, "name": "logo.svg"})
+        wait("window.__posted.length > 0")
+        msg = posted()[0]
+        assert msg["type"] == "setDotIcon" and msg["name"] == "logo.svg" and msg["data"].startswith("data:image/png;base64,"), msg
+        s = state("vscode", lang)
+        s["dot"] = dict(s["dot"], size=16, borderWidth=0, opacity=1, icon=msg["data"], iconName="logo.svg")
+        post({"type": "state", "state": s})
+        wait("!document.getElementById('dotRemove').hidden")
+        assert page.is_visible("#dotThumb") and page.is_disabled("#dotShape")
+        assert "url(" in page.eval_on_selector("#dotPreview", "e => getComputedStyle(e).backgroundImage")
+        assert page.eval_on_selector("#dotPreview", "e => getComputedStyle(e).borderRadius") == "0px", "images are not clipped to a circle"
+        page.click("#dotRemove")
+        assert posted() == [{"type": "removeDotIcon"}]
+        page.click("#dotReset")
+        assert posted() == [{"type": "resetDot"}]
+        page.click("#dotDone")
+        assert not page.is_visible("#dotEditor")
+        # The "Customize selection dot" command opens the editor through focus().
+        post({"type": "state", "state": s, "focus": "dotEditor"})
+        wait("!document.getElementById('dotEditor').hidden")
+        posted()
+        page.click("#dotDone")
 
         # Errors from commands appear in a dismissible banner at the top.
         post({"type": "error", "message": "Something failed"})
-        page.wait_for_function("!document.getElementById('banner').hidden")
+        wait("!document.getElementById('banner').hidden")
         page.click("#bannerClose")
         assert not page.is_visible("#banner")
 
@@ -169,7 +240,7 @@ def main():
         s = state("vscode", lang)
         s.update(modelId="claude-haiku-4.5", modelAuthorized=False, markdownPreviewDefault=True)
         post({"type": "state", "state": s})
-        page.wait_for_function("!document.getElementById('accessInfo').hidden")
+        wait("!document.getElementById('accessInfo').hidden")
         assert page.eval_on_selector("#modelId", "s => s.options[0].value") == "gpt-5-mini", "no placeholder once a model is chosen"
         assert not page.is_visible("#chooseHint") and not page.is_visible("#mdSet") and page.is_visible("#mdUndo")
         page.click("#accessInfo a")
@@ -185,7 +256,7 @@ def main():
         page.click("details[data-sec='ai'] > summary")
         posted()
         post({"type": "state", "state": state("vscode", lang), "focus": "modelId"})
-        page.wait_for_function("document.activeElement && document.activeElement.id === 'modelId'")
+        wait("document.activeElement && document.activeElement.id === 'modelId'")
         assert page.evaluate("document.querySelector(\"details[data-sec='ai']\").open")
         assert {"type": "focused"} in posted()
 
@@ -193,12 +264,12 @@ def main():
         s = state("vscode", lang)
         s["germanDictionary"] = {"status": "ready", "entries": 133000, "kind": "downloaded", "enabled": True}
         post({"type": "state", "state": s})
-        page.wait_for_function("!document.getElementById('deBox').hidden")
+        wait("!document.getElementById('deBox').hidden")
 
         page.select_option("#provider", "deepseek")
         assert posted() == [{"type": "update", "key": "ai.provider", "value": "deepseek"}]
         post({"type": "state", "state": state("deepseek", lang)})
-        page.wait_for_function("!document.getElementById('httpAI').hidden")
+        wait("!document.getElementById('httpAI').hidden")
         assert not page.is_visible("#vscodeAI")
         assert page.get_attribute("#apiModel", "placeholder") == "deepseek-chat"
         assert page.is_visible("#keyLink")
@@ -210,10 +281,10 @@ def main():
         page.click("#fetchBtn")
         assert posted() == [{"type": "listModels"}]
         post({"type": "models", "models": ["deepseek-chat", "deepseek-reasoner"]})
-        page.wait_for_function("document.querySelectorAll('#modelList option').length === 2")
+        wait("document.querySelectorAll('#modelList option').length === 2")
 
         post({"type": "models", "error": "DeepSeek HTTP 401: invalid key"})
-        page.wait_for_function("!document.getElementById('aiError').hidden")
+        wait("!document.getElementById('aiError').hidden")
 
         page.click("#keyLink")
         msgs = posted()
@@ -236,7 +307,7 @@ def main():
         s = state("deepseek", lang)
         s["dictionary"] = {"status": "downloading", "percent": 42, "received": 0, "path": "", "owner": True}
         post({"type": "state", "state": s})
-        page.wait_for_function("document.getElementById('dictText').textContent.includes('42%')")
+        wait("document.getElementById('dictText').textContent.includes('42%')")
         assert not page.is_visible("#dictDownload")
         browser.close()
     assert not errors, errors

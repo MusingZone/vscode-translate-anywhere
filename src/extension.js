@@ -110,7 +110,10 @@ async function activate(context) {
             const value = query.get(key)?.value;
             return value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value;
           };
-          set = models.parseHiddenModels({ visibility: read('chatModelVisibility'), pickerPreferences: read('chatModelPickerPreferences') });
+          set = models.parseHiddenModels({
+            visibility: read('chatModelVisibility'), pickerPreferences: read('chatModelPickerPreferences'),
+            cached: read('chat.cachedLanguageModels.v2')
+          });
         } finally { db.close(); }
       }
     } catch (error) {
@@ -120,10 +123,10 @@ async function activate(context) {
     hiddenCache = { at: Date.now(), set };
     return set;
   }
-  // Visible VS Code models, recommended lightweight ones first.
+  // Visible VS Code models, in VS Code's own order.
   const visibleModels = async () => {
     const hidden = hiddenModels();
-    return models.sortByPreference((await vscode.lm.selectChatModels({})).filter(model => !models.isHidden(model, hidden)));
+    return (await vscode.lm.selectChatModels({})).filter(model => !models.isHidden(model, hidden));
   };
   const noModelsError = () => new Error(L('No VS Code language model is available. Sign in to GitHub Copilot or configure a model provider first.',
     '没有可用的 VS Code 语言模型。请先登录 Copilot 或配置模型提供程序。',
@@ -134,7 +137,8 @@ async function activate(context) {
   // A realistic UI sentence; one word measured mostly network noise and let large models look fast.
   const BENCHMARK_TEXT = 'This update makes search results appear faster and fixes a crash when you open very large files.';
   // Measures only models this extension may already use, so no consent dialog pops up per provider. Each model gets
-  // an untimed warm-up and three timed runs (median), at most two requests at a time.
+  // an untimed warm-up and three timed runs (median), at most two requests at a time. Then one of the user's models
+  // picks the lightweight ones for the "Recommended" group (onProgress gets phase 'advice' meanwhile).
   async function measureModels(list, onProgress, token) {
     const results = await models.benchmark(list, async model => {
       const started = performance.now();
@@ -153,7 +157,60 @@ async function activate(context) {
       output.appendLine(`Speed ${id}: ${result.status === 'ok' ? `median ${result.median} ms, first words ${result.first} ms, ${result.min}–${result.max} ms` : result.status}`);
     }
     await context.globalState.update('modelTimings', Object.fromEntries(modelTimings));
+    onProgress?.(1, 1, 'advice');
+    await adviseModels(list, token);
   }
+  // Ids the user's own model judged lightweight and good for translation after the last speed test (empty: none known).
+  const modelAdvice = () => new Set(context.globalState.get('modelAdvice', { ids: [] }).ids || []);
+  async function adviseModels(list, token) {
+    const measuredOk = list.filter(model => modelTimings.get(model.id)?.status === 'ok');
+    const configured = measuredOk.find(model => model.id === config().get('ai.modelId', ''));
+    const advisor = configured || [...measuredOk].sort((a, b) => speedRank(a) - speedRank(b))[0];
+    let ids = [];
+    if (advisor) {
+      try {
+        const prompt = models.advicePrompt(list.map(model => ({
+          id: model.id, name: model.name, vendor: model.vendor, family: model.family, timing: modelTimings.get(model.id)
+        })));
+        const answer = await askModel(advisor, prompt, 30000, token);
+        ids = models.parseAdvice(answer, list.map(model => model.id)) ?? [];
+        output.appendLine(`Recommended by ${advisor.id}: ${ids.length ? ids.join(', ') : '(none)'}`);
+      } catch (error) {
+        output.appendLine(`Model recommendation skipped (${errorText(error)}).`);
+      }
+    }
+    if (token?.isCancellationRequested) return;
+    await context.globalState.update('modelAdvice', { ids, by: advisor?.id || '', at: Date.now() });
+  }
+  // A plain (non-translation) request, e.g. for the recommendation above.
+  async function askModel(model, prompt, timeoutMs, token) {
+    const cancellation = new vscode.CancellationTokenSource();
+    const timer = setTimeout(() => cancellation.cancel(), timeoutMs);
+    const tokenListener = token?.onCancellationRequested(() => cancellation.cancel());
+    try {
+      const response = await model.sendRequest([vscode.LanguageModelChatMessage.User(prompt)], {
+        justification: L('Translate Anywhere asks this model which of your models suit quick translation.',
+          'Translate Anywhere 请该模型判断你的哪些模型适合快速翻译。',
+          'Translate Anywhere fragt dieses Modell, welche Ihrer Modelle sich für schnelle Übersetzungen eignen.')
+      }, cancellation.token);
+      let text = '';
+      for await (const fragment of response.text) {
+        text += fragment;
+        if (text.length > 8000) break;
+      }
+      return text;
+    } finally {
+      clearTimeout(timer);
+      tokenListener?.dispose();
+      cancellation.dispose();
+    }
+  }
+  // Recommended visible models, fastest first.
+  const recommendedModels = list => {
+    const advice = modelAdvice();
+    return list.filter(model => advice.has(model.id) && modelTimings.get(model.id)?.status !== 'failed')
+      .sort((a, b) => speedRank(a) - speedRank(b));
+  };
   // Opens the sidebar with the model list focused.
   async function focusModelPicker() {
     await vscode.commands.executeCommand(`${SettingsPanel.viewType}.focus`);
@@ -209,7 +266,8 @@ async function activate(context) {
     if (!visible.length) throw noModelsError();
     if (modelId === models.AUTO_MODEL) {
       const measured = [...visible].sort((a, b) => speedRank(a) - speedRank(b))[0];
-      return models.pickPreferred(visible) || (speedRank(measured) < Number.MAX_SAFE_INTEGER ? measured : visible[0]);
+      return recommendedModels(visible)[0] || models.pickPreferred(visible) ||
+        (speedRank(measured) < Number.MAX_SAFE_INTEGER ? measured : visible[0]);
     }
     const best = models.pickPreferred(visible);
     if (best) {
@@ -228,15 +286,14 @@ async function activate(context) {
     const current = config().get('ai.modelId', '');
     const picker = vscode.window.createQuickPick();
     picker.title = L('Translate Anywhere: AI translation model', 'Translate Anywhere：选择 AI 翻译模型', 'Translate Anywhere: KI-Übersetzungsmodell');
-    picker.placeholder = L('Recommended lightweight models are listed first. The speed button benchmarks authorized models (about a minute).',
-      '推荐的轻量模型排在前面。点击测速按钮可测量已授权模型的速度（约一分钟）。',
-      'Empfohlene leichte Modelle stehen oben. Die Tempo-Schaltfläche misst autorisierte Modelle (etwa eine Minute).');
+    picker.placeholder = L('Pick a small, fast model. The speed button measures your authorized models and marks the ones suited to translation (about a minute).',
+      '推荐选小而快的模型。点击测速按钮会测量已授权的模型，并标出适合翻译的模型（约一分钟）。',
+      'Wählen Sie ein kleines, schnelles Modell. Die Tempo-Schaltfläche misst Ihre autorisierten Modelle und markiert die für Übersetzungen geeigneten (etwa eine Minute).');
     picker.matchOnDescription = picker.matchOnDetail = true;
     const measure = { iconPath: new vscode.ThemeIcon('dashboard'), tooltip: L('Measure translation speed', '测速', 'Übersetzungstempo messen') };
     picker.buttons = [measure];
-    const auto = { label: `$(sparkle) ${L('Auto', '自动', 'Automatisch')}`, detail: L('Uses the first recommended lightweight model you have',
-      '自动使用你可用的首个推荐轻量模型', 'Verwendet das erste empfohlene leichte Modell, das Sie haben'), id: models.AUTO_MODEL };
-    const recommended = new Set(list.filter(model => models.preferredRank(model) >= 0).map(model => model.id));
+    const auto = { label: `$(sparkle) ${L('Auto', '自动', 'Automatisch')}`, detail: L('Uses the fastest recommended model after a speed test, otherwise a lightweight model you have',
+      '测速后使用最快的推荐模型，否则使用你已有的轻量模型', 'Verwendet nach einer Tempomessung das schnellste empfohlene Modell, sonst ein leichtes Modell, das Sie haben'), id: models.AUTO_MODEL };
     const speed = model => {
       const timing = modelTimings.get(model.id);
       if (!timing) return '';
@@ -245,14 +302,22 @@ async function activate(context) {
     };
     const render = () => {
       auto.description = current === models.AUTO_MODEL ? L('current', '当前', 'aktuell') : '';
-      const items = [...list.map(model => ({
+      const item = model => ({
         label: model.name,
-        description: `${speed(model)}${recommended.has(model.id) ? L('recommended · ', '推荐 · ', 'empfohlen · ') : ''}${model.vendor} · ${model.family}${model.id === current ? L(' · current', ' · 当前', ' · aktuell') : ''}`,
+        description: `${speed(model)}${model.vendor} · ${model.family}${model.id === current ? L(' · current', ' · 当前', ' · aktuell') : ''}`,
         detail: model.id, id: model.id
-      })), auto];
+      });
+      // A "Recommended" group exists only after a speed test produced one; otherwise VS Code's order.
+      const recommended = recommendedModels(list);
+      const ids = new Set(recommended.map(model => model.id));
+      const separator = label => ({ label, kind: vscode.QuickPickItemKind.Separator });
+      const items = recommended.length
+        ? [separator(L('Recommended (light & fast)', '推荐（轻量、快速）', 'Empfohlen (leicht & schnell)')), ...recommended.map(item),
+          separator(L('Other models', '其他模型', 'Weitere Modelle')), ...list.filter(model => !ids.has(model.id)).map(item), auto]
+        : [...list.map(item), auto];
       const active = picker.activeItems[0]?.id ?? current;
       picker.items = items;
-      picker.activeItems = [items.find(item => item.id === active) || items[0]];
+      picker.activeItems = [items.find(entry => entry.id && entry.id === active) || items.find(entry => entry.id)];
     };
     render();
     const cancel = new vscode.CancellationTokenSource();
@@ -700,9 +765,74 @@ async function activate(context) {
         paragraph: typeof shortcuts.paragraph === 'string' ? shortcuts.paragraph : 'Alt+Z',
         fullPage: typeof shortcuts.fullPage === 'string' ? shortcuts.fullPage : 'Alt+W'
       },
-      tip: tipActive()
+      tip: tipActive(),
+      dot: dotStyle()
     };
   };
+  // Look of the selection dot. A custom image lives in globalState (a data URI would clutter settings.json).
+  const DOT_DEFAULTS = { size: 7, color: '#e5484d', borderWidth: 1, borderColor: '#ffffff', opacity: 0.85, shape: 'circle' };
+  const DOT_NUMBERS = { size: [4, 32], borderWidth: [0, 4], opacity: [0.2, 1] };
+  const hexColor = (value, fallback) => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+  function dotStyle() {
+    const get = key => config().get(`dot.${key}`, DOT_DEFAULTS[key]);
+    const number = key => {
+      const value = Number(get(key));
+      const [min, max] = DOT_NUMBERS[key];
+      return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : DOT_DEFAULTS[key];
+    };
+    const icon = context.globalState.get('dotIcon');
+    return {
+      size: number('size'), borderWidth: number('borderWidth'), opacity: number('opacity'),
+      color: hexColor(get('color'), DOT_DEFAULTS.color), borderColor: hexColor(get('borderColor'), DOT_DEFAULTS.borderColor),
+      shape: get('shape') === 'rounded' ? 'rounded' : 'circle',
+      icon: typeof icon?.data === 'string' ? icon.data : ''
+    };
+  }
+  const DOT_ICON = /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/]+=*$/;
+  const MAX_DOT_ICON = 64 * 1024;
+  // Chosen with the OS file dialog. Small files are kept as they are (an animated GIF stays animated); larger raster
+  // images are returned for the sidebar to scale down to 64×64 PNG, since the host has no image library.
+  async function pickDotIcon() {
+    const [uri] = await vscode.window.showOpenDialog({
+      canSelectMany: false, openLabel: L('Use as dot', '用作小圆点', 'Als Punkt verwenden'),
+      title: L('Choose an image for the selection dot', '选择小圆点使用的图片', 'Bild für den Auswahlpunkt wählen'),
+      filters: { [L('Images', '图片', 'Bilder')]: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] }
+    }) || [];
+    if (!uri) return undefined;
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    const ext = path.extname(uri.path).slice(1).toLowerCase();
+    const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' }[ext];
+    const name = path.basename(uri.path);
+    if (!mime) throw new Error(L('Choose a PNG, JPG, GIF, WebP or SVG image.', '请选择 PNG、JPG、GIF、WebP 或 SVG 图片。', 'Bitte ein PNG-, JPG-, GIF-, WebP- oder SVG-Bild wählen.'));
+    const data = `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`;
+    if (ext === 'svg' || bytes.length <= 16 * 1024) {
+      if (data.length > MAX_DOT_ICON) throw new Error(L('This SVG is larger than 48 KB. Choose a simpler icon or a PNG.',
+        '该 SVG 超过 48 KB，请选择更简单的图标或 PNG 图片。', 'Dieses SVG ist größer als 48 KB. Bitte ein einfacheres Symbol oder ein PNG wählen.'));
+      await setDotIcon(data, name);
+      return undefined;
+    }
+    if (bytes.length > 8 * 1024 * 1024) throw new Error(L('This image is larger than 8 MB.', '图片超过 8 MB。', 'Dieses Bild ist größer als 8 MB.'));
+    return { resize: data, name };
+  }
+  async function setDotIcon(data, name) {
+    if (typeof data !== 'string' || data.length > MAX_DOT_ICON || !DOT_ICON.test(data)) {
+      throw new Error(L('This image could not be used.', '无法使用这张图片。', 'Dieses Bild kann nicht verwendet werden.'));
+    }
+    await context.globalState.update('dotIcon', { data, name: String(name || '').slice(0, 120) });
+    // Images need more room than a 7 px dot, and a white ring rarely suits them; only defaults are adjusted.
+    const unset = key => config().inspect(`dot.${key}`)?.globalValue === undefined;
+    if (dotStyle().size < 14) await config().update('dot.size', 16, vscode.ConfigurationTarget.Global);
+    if (unset('borderWidth')) await config().update('dot.borderWidth', 0, vscode.ConfigurationTarget.Global);
+    if (unset('opacity')) await config().update('dot.opacity', 1, vscode.ConfigurationTarget.Global);
+  }
+  async function resetDot() {
+    await context.globalState.update('dotIcon', undefined);
+    for (const key of Object.keys(DOT_DEFAULTS)) await config().update(`dot.${key}`, undefined, vscode.ConfigurationTarget.Global);
+  }
+  async function customizeDot() {
+    await vscode.commands.executeCommand(`${SettingsPanel.viewType}.focus`);
+    panel?.focus('dotEditor');
+  }
   // One-time hint in the translation popup that paragraph / page shortcuts exist: shown after a long selection,
   // at most three times, never twice within ten minutes, and never again once dismissed or a shortcut was used.
   const TIP_KEY = 'paragraphTip';
@@ -1033,6 +1163,7 @@ async function activate(context) {
     vscode.commands.registerCommand('translateAnywhere.showLog', () => output.show(true)),
     vscode.commands.registerCommand('translateAnywhere.authorizeAI', guarded(authorizeModel)),
     vscode.commands.registerCommand('translateAnywhere.tryIt', guarded(openPractice)),
+    vscode.commands.registerCommand('translateAnywhere.customizeDot', guarded(customizeDot)),
     vscode.commands.registerCommand('translateAnywhere.openMarkdownAsPreview', guarded(() => setMarkdownPreviewDefault(true))),
     vscode.commands.registerCommand('translateAnywhere.openMarkdownAsText', guarded(() => setMarkdownPreviewDefault(false))),
     vscode.commands.registerCommand('translateAnywhere.openSurfaceSettings', () =>
@@ -1091,9 +1222,10 @@ async function activate(context) {
     let modelAuthorized = true;
     if (providerId === 'vscode') {
       try {
+        const advice = modelAdvice();
         const describe = (model, extra = {}) => ({
           id: model.id, name: model.name, detail: `${model.vendor} · ${model.family}`,
-          recommended: models.preferredRank(model) >= 0, timing: modelTimings.get(model.id) ?? null, ...extra
+          recommended: advice.has(model.id) && modelTimings.get(model.id)?.status !== 'failed', timing: modelTimings.get(model.id) ?? null, ...extra
         });
         const visible = await visibleModels();
         vscodeModels = visible.map(model => describe(model));
@@ -1131,6 +1263,7 @@ async function activate(context) {
       surfaces: runtimeSettings().surfaces,
       shortcuts: runtimeSettings().shortcuts,
       markdownPreviewDefault: markdownPreviewIsDefault(),
+      dot: { ...dotStyle(), iconName: context.globalState.get('dotIcon')?.name || '' },
       vocabularyCount: vocabulary.list().length, vocabularyRecent: recent
     };
   }
@@ -1142,18 +1275,31 @@ async function activate(context) {
     benchmark = { done: 0, total: 0 };
     panel.refresh();
     try {
-      await measureModels(list, (done, total) => { benchmark = { done, total }; panel.refresh(); });
+      await measureModels(list, (done, total, phase) => { benchmark = { done, total, phase: phase || 'speed' }; panel.refresh(); });
     } finally {
       benchmark = null;
       panel.refresh();
     }
   }
-  const PANEL_KEYS = /^(targetLanguage|fullPage\.mode|ai\.(autoTranslate|provider|modelId|apiModel|baseUrl)|surfaces\.\w+|shortcuts\.(paragraph|fullPage))$/;
+  const PANEL_KEYS = /^(targetLanguage|fullPage\.mode|ai\.(autoTranslate|provider|modelId|apiModel|baseUrl)|surfaces\.\w+|shortcuts\.(paragraph|fullPage)|dot\.(size|color|borderWidth|borderColor|opacity|shape))$/;
   panel = new SettingsPanel(context, {
     state: panelState,
     update: async (key, value) => {
       if (!PANEL_KEYS.test(key)) throw new Error(`Unsupported setting: ${key}`);
       if (key === 'ai.provider') return switchProvider(value);
+      if (key.startsWith('dot.')) {
+        const name = key.slice(4);
+        let next;
+        if (DOT_NUMBERS[name]) {
+          const [min, max] = DOT_NUMBERS[name];
+          const number = Number(value);
+          if (!Number.isFinite(number)) throw new Error(`Invalid value for ${key}`);
+          next = Math.round(Math.min(max, Math.max(min, number)) * 100) / 100;
+        } else if (name === 'shape') next = value === 'rounded' ? 'rounded' : 'circle';
+        else next = hexColor(value, undefined);
+        if (next === undefined) throw new Error(`Invalid value for ${key}`);
+        return config().update(key, next === DOT_DEFAULTS[name] ? undefined : next, vscode.ConfigurationTarget.Global);
+      }
       if (key.startsWith('surfaces.') || key.startsWith('shortcuts.')) {
         const [group, name] = key.split('.');
         if (group === 'shortcuts') return config().update(`shortcuts.${name}`, value, vscode.ConfigurationTarget.Global);
@@ -1171,6 +1317,8 @@ async function activate(context) {
       });
     },
     benchmark: benchmarkModels,
+    pickDotIcon, setDotIcon, resetDot,
+    removeDotIcon: () => context.globalState.update('dotIcon', undefined),
     openExternal: url => vscode.env.openExternal(vscode.Uri.parse(url))
   });
   context.subscriptions.push(

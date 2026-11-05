@@ -228,7 +228,7 @@ function immersiveUI(config) {
     const nonceStyle = doc.querySelector('style[nonce], script[nonce]');
     if (nonceStyle?.nonce) style.nonce = nonceStyle.nonce;
     style.textContent = `
-      .imt-dot{position:fixed!important;box-sizing:border-box!important;width:7.2px!important;height:7.2px!important;min-width:0!important;min-height:0!important;padding:0!important;margin:0!important;border:1px solid #fff!important;border-radius:50%!important;background:#e5484d!important;opacity:.85!important;box-shadow:0 0 2px #0006!important;z-index:2147483646!important;cursor:pointer!important;transition:transform .12s,opacity .12s!important}
+      .imt-dot{position:fixed!important;box-sizing:border-box!important;width:var(--imt-dot-size,7.2px)!important;height:var(--imt-dot-size,7.2px)!important;min-width:0!important;min-height:0!important;padding:0!important;margin:0!important;border:var(--imt-dot-border,1px solid #fff)!important;border-radius:var(--imt-dot-radius,50%)!important;background:var(--imt-dot-bg,#e5484d)!important;opacity:var(--imt-dot-opacity,.85)!important;box-shadow:var(--imt-dot-shadow,0 0 2px #0006)!important;z-index:2147483646!important;cursor:pointer!important;transition:transform .12s,opacity .12s!important}
       .imt-dot::before{content:""!important;position:absolute!important;inset:-6px!important;border-radius:50%!important}
       .imt-dot:hover,.imt-dot:focus-visible{opacity:1!important;transform:scale(1.3)!important;outline:none!important}
       .imt-panel{position:fixed!important;box-sizing:border-box!important;max-width:calc(100vw - 16px)!important;width:360px!important;max-height:60vh!important;overflow:auto!important;padding:10px 12px 10px 14px!important;border:1px solid var(--vscode-widget-border,#777)!important;border-radius:10px!important;background:var(--vscode-editorWidget-background,#252526)!important;color:var(--vscode-editorWidget-foreground,#eee)!important;box-shadow:0 5px 24px #0005!important;z-index:2147483647!important;font:14px/1.6 var(--vscode-font-family,system-ui)!important;user-select:text!important}
@@ -276,6 +276,22 @@ function immersiveUI(config) {
     const dot = doc.createElement('button');
     dot.className = 'imt-dot';
     dot.hidden = true;
+    // The user's dot style (size, colors, shape, image) as custom properties read by the .imt-dot rule.
+    function styleDot() {
+      const d = settings.dot || {};
+      const size = d.size > 0 ? d.size : 7.2;
+      const icon = typeof d.icon === 'string' && /^data:image\/[\w.+-]+;base64,[A-Za-z0-9+/]+=*$/.test(d.icon) ? d.icon : '';
+      const color = value => /^#[0-9a-f]{6}$/i.test(value || '') ? value : '';
+      const set = (name, value) => value === '' ? dot.style.removeProperty(name) : dot.style.setProperty(name, value);
+      set('--imt-dot-size', `${size}px`);
+      set('--imt-dot-border', d.borderWidth >= 0 ? `${d.borderWidth}px solid ${color(d.borderColor) || '#fff'}` : '');
+      set('--imt-dot-radius', icon ? '0' : d.shape === 'rounded' ? '28%' : '');
+      set('--imt-dot-opacity', d.opacity > 0 ? String(d.opacity) : '');
+      set('--imt-dot-bg', icon ? `transparent url("${icon}") center / contain no-repeat` : color(d.color));
+      set('--imt-dot-shadow', icon ? 'none' : '');
+    }
+    styleDot();
+    statusListeners.push(styleDot);
     const panel = doc.createElement('section');
     panel.className = 'imt-panel';
     panel.setAttribute('role', 'dialog');
@@ -418,7 +434,8 @@ function immersiveUI(config) {
         const rects = [...probe.getClientRects()].filter(r => r.width || r.height);
         if (!rects.length) continue;
         const r = backward ? rects[0] : rects[rects.length - 1];
-        return backward ? { x: r.left - 11, y: r.top - 9 } : { x: r.right + 3, y: r.bottom + 1 };
+        const size = dot.getBoundingClientRect().width || settings.dot?.size || 7.2;
+        return backward ? { x: r.left - size - 4, y: r.top - size - 2 } : { x: r.right + 3, y: r.bottom + 1 };
       }
       const r = range.getBoundingClientRect();
       return { x: r.right + 3, y: r.bottom + 1 };

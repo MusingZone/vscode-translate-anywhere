@@ -4,8 +4,9 @@
 // Explicit "Auto" choice in translateAnywhere.ai.modelId. Not "auto": Copilot has a real model with that id.
 const AUTO_MODEL = '@auto';
 
-// Lightweight models that translate well, best first. A model takes the rank of the first pattern it matches;
-// within a rank the newer version wins. Models matching none are never picked as the default.
+// Only used to pick the very first model on a fresh install, among the models the user can see; never shown.
+// Patterns name model tiers and size words, not versions, so newer releases still match. The last pattern
+// catches any "mini/nano/flash/lite/…" model. If nothing matches, the user is asked to choose.
 const PREFERRED_MODELS = [
   /\bgpt-[\d.]+-luna\b/,
   /\bclaude-(?:[\d.-]+-)?haiku\b/,
@@ -15,15 +16,18 @@ const PREFERRED_MODELS = [
   /\bgpt-[\d.]+-nano\b/,
   /\bgrok-[\w.-]*(?:fast|mini)\b/,
   /\b(?:deepseek|qwen|glm|kimi)[\w.-]*(?:flash|turbo|lite)\b/,
-  /\b(?:mistral-small|ministral)\b/
+  /\b(?:mistral-small|ministral)\b/,
+  /\b(?:mini|nano|flash|lite|haiku|small|fast|turbo)\b/
 ];
+// Specialized models that are a poor default for translation even when they are small.
+const NOT_FOR_TRANSLATION = /\b(?:code|codex|coder|embed\w*|vision|audio|tts|whisper|image|dictation|utility)\b/;
 
 const textOf = model => `${model.id} ${model.family || ''} ${String(model.name || '').replace(/\s+/g, '-')}`.toLowerCase();
 
 // Index into PREFERRED_MODELS, or -1.
 function preferredRank(model) {
   const text = textOf(model);
-  if (/(^|\/)auto\b/.test(String(model.id).toLowerCase())) return -1;
+  if (/(^|\/)auto\b/.test(String(model.id).toLowerCase()) || NOT_FOR_TRANSLATION.test(text)) return -1;
   return PREFERRED_MODELS.findIndex(pattern => pattern.test(text));
 }
 
@@ -59,16 +63,24 @@ function pickPreferred(models) {
 }
 
 /**
- * Model identifiers hidden in VS Code's "Language Models" view. Newer VS Code stores
- * {"hiddenModels": [...]} under "chatModelVisibility"; older builds stored {identifier: visible}
- * under "chatModelPickerPreferences".
+ * Model identifiers missing from VS Code's model picker: those the user hid in the "Language Models" view and
+ * internal helper models that are not user-selectable (e.g. Copilot's "copilot-dictation-cleanup-nano"),
+ * which the extension API still returns. Newer VS Code stores {"hiddenModels": [...]} under
+ * "chatModelVisibility"; older builds stored {identifier: visible} under "chatModelPickerPreferences".
+ * "chat.cachedLanguageModels.v2" lists [{identifier, metadata: {isUserSelectable}}].
  */
-function parseHiddenModels({ visibility, pickerPreferences } = {}) {
+function parseHiddenModels({ visibility, pickerPreferences, cached } = {}) {
   const hidden = new Set();
   const parse = value => {
     if (!value) return undefined;
     try { return typeof value === 'string' ? JSON.parse(value) : value; } catch { return undefined; }
   };
+  const models = parse(cached);
+  if (Array.isArray(models)) {
+    for (const item of models) {
+      if (typeof item?.identifier === 'string' && item.metadata?.isUserSelectable === false) hidden.add(item.identifier);
+    }
+  }
   const current = parse(visibility);
   if (Array.isArray(current?.hiddenModels)) {
     for (const id of current.hiddenModels) if (typeof id === 'string') hidden.add(id);
@@ -159,7 +171,41 @@ async function benchmark(models, run, {
 // Sort key for measured results: milliseconds, unmeasured last.
 const timingRank = timing => timing?.status === 'ok' ? timing.median : Number.MAX_SAFE_INTEGER;
 
+/**
+ * After a speed test, one of the user's own models judges which visible models are lightweight and suited to
+ * quick translation, so recommendations follow the models people actually have instead of a built-in list.
+ * @param {{id: string, name: string, vendor?: string, family?: string, timing?: object}[]} list
+ */
+function advicePrompt(list) {
+  const lines = list.map(model => {
+    const time = model.timing?.status === 'ok' ? `, measured ${model.timing.median} ms` : '';
+    return `- id: ${JSON.stringify(model.id)}, name: ${JSON.stringify(model.name || model.id)}, vendor: ${model.vendor || '?'}, family: ${model.family || '?'}${time}`;
+  });
+  return [
+    'You help pick an AI model for translating short UI text, sentences and paragraphs quickly.',
+    'From the models below, choose the ones that are lightweight, low-latency general chat models that translate well',
+    '(for example "mini", "flash", "haiku", "lite" or similar small tiers). Exclude large flagship models,',
+    'reasoning-focused models, and models specialized for code, embeddings, images or audio. Measured times, when given,',
+    'are the median for one translation and may help, but judge mainly by the model itself.',
+    'If you do not recognize a model, leave it out. If none fit, answer [].',
+    'Reply with only a JSON array of the chosen ids, e.g. ["id-a", "id-b"]. No other text.',
+    '',
+    ...lines
+  ].join('\n');
+}
+
+// The ids from a model's answer that really are in `ids`; undefined when the answer is not a JSON array.
+function parseAdvice(text, ids) {
+  const match = String(text || '').match(/\[[\s\S]*?\]/);
+  if (!match) return undefined;
+  let list;
+  try { list = JSON.parse(match[0]); } catch { return undefined; }
+  if (!Array.isArray(list)) return undefined;
+  const known = new Set(ids);
+  return [...new Set(list.filter(id => typeof id === 'string' && known.has(id)))];
+}
+
 module.exports = {
   AUTO_MODEL, PREFERRED_MODELS, preferredRank, sortByPreference, pickPreferred,
-  parseHiddenModels, isHidden, median, benchmark, timingRank
+  parseHiddenModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice
 };
