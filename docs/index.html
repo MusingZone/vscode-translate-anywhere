@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Translate Anywhere brings select-and-hover translation to VS Code Chat, Markdown previews, and other built-in pages.">
+  <title>Translate Anywhere | MusingZone</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #0b111c;
+      color: #f0f5fc;
+      line-height: 1.6;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 85% 4%, #173349 0, transparent 34rem), #0b111c;
+    }
+    a { color: inherit; }
+    a:focus-visible { outline: 3px solid #8cebc8; outline-offset: 4px; }
+    img { display: block; max-width: 100%; height: auto; }
+    .wrap { width: min(1120px, calc(100% - 48px)); margin: 0 auto; }
+    .skip {
+      position: absolute;
+      left: 16px;
+      top: -80px;
+      padding: 8px 12px;
+      background: #8cebc8;
+      color: #10221e;
+      z-index: 1;
+    }
+    .skip:focus { top: 16px; }
+    header { border-bottom: 1px solid #263748; }
+    .header-inner {
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 750;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      background: #8cebc8;
+      color: #10221e;
+      font-size: 13px;
+      letter-spacing: -.04em;
+    }
+    nav { display: flex; flex-wrap: wrap; gap: 22px; }
+    nav a, footer a { color: #c1cfdf; text-decoration: none; }
+    nav a:hover, footer a:hover { color: #fff; text-decoration: underline; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+      align-items: center;
+      gap: 56px;
+      padding: 86px 0 76px;
+    }
+    .eyebrow {
+      margin: 0 0 18px;
+      color: #8cebc8;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(2.6rem, 5vw, 4.3rem);
+      line-height: 1.08;
+      letter-spacing: -.045em;
+    }
+    h1 span { color: #8cebc8; }
+    .lead { max-width: 39rem; margin: 24px 0 0; color: #c6d3e2; font-size: 1.15rem; }
+    .translation { margin: 12px 0 0; color: #b7c8da; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 10px 18px;
+      border: 1px solid #42556a;
+      border-radius: 10px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .button-primary { border-color: #8cebc8; background: #8cebc8; color: #10221e; }
+    .button:hover { filter: brightness(1.12); }
+    .byline { margin: 20px 0 0; color: #a9bbce; font-size: .9rem; }
+    figure {
+      margin: 0;
+      padding: 9px;
+      border: 1px solid #34485b;
+      border-radius: 16px;
+      background: #131f2c;
+      box-shadow: 0 24px 60px #0006;
+    }
+    figure img { width: 100%; border-radius: 9px; }
+    figcaption { padding: 10px 4px 2px; color: #b7c8da; font-size: .84rem; }
+    section { scroll-margin-top: 24px; }
+    .features { padding: 0 0 64px; }
+    h2 { margin: 0 0 22px; font-size: 1.8rem; letter-spacing: -.025em; }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .card { padding: 24px; border: 1px solid #263b4e; border-radius: 14px; background: #111d2a; }
+    .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .card p { margin: 0; color: #bdccdc; }
+    kbd {
+      padding: 2px 6px;
+      border: 1px solid #4a6074;
+      border-radius: 5px;
+      color: #f0f5fc;
+      font: inherit;
+      font-size: .88em;
+      white-space: nowrap;
+    }
+    .details {
+      padding: 28px;
+      border: 1px solid #2c4657;
+      border-radius: 14px;
+      background: #12222c;
+    }
+    .details h2 { margin-bottom: 12px; font-size: 1.35rem; }
+    .details p { margin: 10px 0; color: #c6d3e2; }
+    .details a { color: #a2f1d4; }
+    footer { padding: 44px 0; color: #a9bbce; font-size: .9rem; }
+    footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+    footer p { margin: 0; }
+    footer .links { display: flex; flex-wrap: wrap; gap: 18px; }
+    @media (max-width: 760px) {
+      .hero { grid-template-columns: 1fr; gap: 32px; padding: 56px 0; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 420px) {
+      .wrap { width: calc(100% - 32px); }
+      .header-inner { align-items: flex-start; flex-direction: column; gap: 12px; padding: 16px 0; }
+      nav { gap: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <header>
+    <div class="wrap header-inner">
+      <a class="brand" href="#content"><span class="brand-mark" aria-hidden="true">TA</span> Translate Anywhere</a>
+      <nav aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a href="https://github.com/MusingZone/vscode-translate-anywhere">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <main id="content" class="wrap">
+    <section class="hero" aria-labelledby="headline">
+      <div>
+        <p class="eyebrow">An open-source VS Code extension</p>
+        <h1 id="headline">Read anywhere.<br><span>Understand more.</span></h1>
+        <p class="lead">Translate the words, conversations, and documentation you read in VS Code, without leaving your flow.</p>
+        <p class="translation" lang="zh-CN">在 VS Code 中划词、悬停，即可翻译聊天和文档等内容。</p>
+        <div class="actions">
+          <a class="button button-primary" href="https://marketplace.visualstudio.com/items?itemName=MusingZone.vscode-translate-anywhere">Get the extension</a>
+          <a class="button" href="https://github.com/MusingZone/vscode-translate-anywhere">View on GitHub</a>
+        </div>
+        <p class="byline">Made by MusingZone · Available on Visual Studio Marketplace</p>
+      </div>
+      <figure>
+        <img src="./images/en/chat.png" alt="A translation popup over a selected passage in VS Code Chat" width="880" height="540">
+        <figcaption>Select text and hover the dot to see its translation.</figcaption>
+      </figure>
+    </section>
+    <section id="features" class="features" aria-labelledby="features-heading">
+      <p class="eyebrow">A little help while you read</p>
+      <h2 id="features-heading">Translation in your workflow</h2>
+      <div class="feature-grid">
+        <article class="card">
+          <h3>Select and hover</h3>
+          <p>Look up a word or translate a longer selection in Chat, Markdown previews, and other built-in pages.</p>
+        </article>
+        <article class="card">
+          <h3>Paragraphs and pages</h3>
+          <p>Use <kbd>Alt+Z</kbd> for a paragraph or <kbd>Alt+W</kbd> for a full page. Press again to restore the original.</p>
+        </article>
+        <article class="card">
+          <h3>Choose your model</h3>
+          <p>Use a VS Code language model, your preferred AI provider, or a compatible local endpoint.</p>
+        </article>
+      </div>
+    </section>
+    <section id="privacy" class="details" aria-labelledby="privacy-heading">
+      <h2 id="privacy-heading">Know how it works</h2>
+      <p>AI translation sends the text being translated to your configured model provider or local endpoint. English-to-Chinese word lookups can use an offline dictionary.</p>
+      <p>Enabling the integration changes VS Code installation files. Review the disclosure before enabling it; you can disable the integration and restore the files. <a href="https://github.com/MusingZone/vscode-translate-anywhere#readme">Read the documentation</a>.</p>
+    </section>
+  </main>
+  <footer>
+    <div class="wrap">
+      <p>Translate Anywhere by MusingZone</p>
+      <div class="links">
+        <a href="https://github.com/MusingZone/vscode-translate-anywhere">Source</a>
+        <a href="https://github.com/MusingZone/vscode-translate-anywhere/issues">Issues</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=MusingZone.vscode-translate-anywhere">Marketplace</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

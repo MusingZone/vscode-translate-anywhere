@@ -22,7 +22,7 @@ Official reference: <https://code.visualstudio.com/api/working-with-extensions/p
 | `data/dictionary-de.json.gz` | ✅ | offline build only | German–Chinese dictionary from HanDeDict (≈ 3 MB, CC BY-SA 3.0) |
 | `data/dictionary-de-source.json`, `data/*-LICENSE.txt` | ✅ | ✅ | German dictionary provenance and SHA-256; dictionary licences |
 | `images/` | ✅ | ✅ | Extension icon and Activity Bar icon |
-| `docs/images/` | ✅ | ❌ | README screenshots and GIF (vsce rewrites the links to GitHub) |
+| `docs/index.html`, `docs/CNAME`, `docs/images/` | ✅ | ❌ | Publisher website and README screenshots (vsce rewrites image links to GitHub) |
 | `package.json`, `package.nls*.json` | ✅ | ✅ | Manifest and English / Chinese / German UI strings |
 | `README*.md`, `CHANGELOG.md`, `LICENSE.txt`, `SECURITY.md`, `THIRD-PARTY-NOTICES.md` | ✅ | ✅ | Documentation |
 | `PUBLISHING.md`, `CONTRIBUTING.md` | ✅ | ❌ | This guide; contributor guide |
@@ -105,6 +105,24 @@ curl.exe -sIL https://cdn.jsdelivr.net/gh/MusingZone/vscode-translate-anywhere@d
    - Use **All accessible organizations** with the **Marketplace → Manage** scope.
    - Then run `npx @vscode/vsce login MusingZone`.
    - Never commit the token.
+
+### Verified publisher badge
+
+The verified publisher badge is separate from authentication for publishing. To request it:
+
+1. In the Marketplace management page, open **MusingZone → Details → Verified domain**.
+2. Enter and save a root domain that represents the publisher or extension and whose DNS records you can manage. It must use HTTPS, respond with HTTP 200 to a HEAD request, and not be a subdomain. The website should contain information relevant to the extension.
+3. Select **Verify** to open the DNS instructions. Add the specified TXT record, then select **Verify** in the dialog to validate the record and submit the request.
+
+Before applying, Microsoft requires at least one extension to have been on the Marketplace for six months and the domain to have been registered for at least six months. Microsoft also reviews the domain, website, extensions and their standing; approval is not immediate or guaranteed. See the [verified publisher requirements](https://code.visualstudio.com/api/working-with-extensions/publishing-extension.md#verify-a-publisher) and [extension runtime security](https://code.visualstudio.com/docs/configure/extensions/extension-runtime-security).
+
+VS Code still asks users to trust a third-party publisher the first time they install one of its extensions, even when the publisher has a verified badge.
+
+### Publisher website
+
+The GitHub Pages landing page is `docs/index.html`; `docs/CNAME` specifies `musingzone.com`. Configure Pages to deploy from the `main` branch's `/docs` folder. Before directing DNS to GitHub, verify the domain in the MusingZone GitHub account and configure the custom domain in Pages. Keep the GitHub verification TXT record in DNS, and check whether changing the existing domain records would disrupt another service.
+
+Use GitHub's [custom domain configuration guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) for the current DNS records and HTTPS setup. Once DNS and the certificate have propagated, confirm that `curl.exe -I https://musingzone.com` returns HTTP 200 from a network that can reach the site.
 
 ## 5. Pre-flight checklist (every release)
 
