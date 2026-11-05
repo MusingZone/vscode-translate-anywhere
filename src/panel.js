@@ -5,78 +5,98 @@ const crypto = require('node:crypto');
 const STRINGS = {
   en: {
     integration: 'Integration', active: 'Active', off: 'Not enabled', enable: 'Enable / Repair', disable: 'Disable & Restore',
-    translation: 'Translation', target: 'Target language', pageMode: 'Full-page translation display', translationOnly: 'Translation only',
+    shortcuts: 'Shortcuts & how to use', selectTitle: 'Select text', selectHint: 'then point at the red dot for a dictionary or AI translation',
+    paragraph: 'Paragraph under the mouse', paragraphHint: 'translation appears in place; press again to restore',
+    fullPage: 'Whole page', fullPageHint: 'translates the page you are reading; press again to switch back',
+    shortcutHint: 'Click a key to record a new combination; Backspace turns it off.',
+    worksIn: 'Works in Chat, Markdown preview, Release Notes, Settings and extension pages.', tryIt: 'Try it on a sample page',
+    mdOff: 'Markdown files open as source text. Open them as a preview to read and translate them comfortably.',
+    mdOn: 'Markdown files open as a preview.', mdSet: 'Open Markdown as preview', mdUndo: 'Open as text again',
+    translation: 'Translation', target: 'Target language', pageMode: 'Whole-page translation shows', translationOnly: 'Translation only',
     bilingual: 'Bilingual (original + translation)', autoAI: 'Use AI automatically for phrases and sentences',
-    ai: 'AI engine', provider: 'Provider', model: 'Model', autoModel: 'Auto (prefer a lightweight model)', speed: 'Test speed',
-    testing: 'Testing {0}/{1}…', unauthorized: 'not authorized', failed: 'failed',
-    speedTitle: 'Time how long each available model takes to translate a word', speedRunning: 'Each model translates one word. This takes up to 15 seconds.',
-    fastest: 'Fastest: {0} · {1}', useIt: 'Use it', speedNone: 'No model answered within 15 seconds.',
-    speedUnauthorized: '{0} not authorized yet, so not measured. Select one and click Test AI to allow it.', close: 'Close', apiKey: 'API key', keySaved: 'Saved in the OS keychain',
+    ai: 'AI engine', provider: 'Provider', model: 'Model', chooseModel: '— Choose a model —', recommended: 'Recommended (light & fast)',
+    otherModels: 'Other models', autoModel: 'Auto (first recommended model)', hiddenModel: 'hidden in Language Models', missingModel: 'not available',
+    noModelChosen: 'Choose the model for phrases and paragraphs. A small, fast one works best.',
+    needsAccess: 'Not authorized yet.', allowAccess: 'Allow access',
+    speed: 'Test speed', testing: 'Testing… {0}%', unauthorized: 'not authorized', failed: 'failed',
+    speedTitle: 'Each visible, authorized model translates a sentence: one warm-up, then three timed runs. The median time is shown.',
+    speedRunning: 'One warm-up and three timed runs per model. This can take a minute.',
+    fastest: 'Fastest: {0} · {1}', firstWords: 'first words {0}', useIt: 'Use it', speedNone: 'No model answered within 20 seconds.',
+    speedUnauthorized: '{0} not authorized yet, so not measured. Choose one and click "Allow access".', close: 'Close', apiKey: 'API key', keySaved: 'Saved in the OS keychain',
     keyMissing: 'Not set', keyOptional: 'Optional', setKey: 'Set key', getKey: 'Get a key', fetch: 'Fetch list', fetching: 'Loading…',
-    baseUrl: 'API base URL', testAI: 'Test AI', noModels: 'No VS Code language model available. Sign in to GitHub Copilot or pick another provider.',
+    baseUrl: 'API base URL', noModels: 'No VS Code language model available. Sign in to GitHub Copilot or pick another provider.',
+    vocabulary: 'Vocabulary', vocabEmpty: 'Click ☆ in the translation popup to collect words and sentences here.', vocabMore: '+{0} more',
+    open: 'Open', export: 'Export CSV', remove: 'Remove…',
     dictionary: 'Offline dictionary', dictReady: 'Ready · {0} entries · {1}', dictLoading: 'Loading…', dictDownloading: 'Downloading… {0}',
     dictMissing: 'Not installed. Lookups fall back to AI.', dictError: 'Error: {0}', dictIdle: 'Loads on first lookup',
     germanDictionary: 'German → Chinese (HanDeDict)', germanIdle: 'Downloads automatically (about 3 MB) on the first German word', germanOff: 'Off',
     dictShared: 'Served by another VS Code window', bundled: 'bundled', downloaded: 'downloaded', custom: 'custom file',
     download: 'Download', choose: 'Choose file…', useDefault: 'Use default',
-    surfaces: 'Where to translate', markdownPreview: 'Markdown preview', releaseNotes: 'Release Notes', chat: 'Chat',
-    settings: 'Settings & Keyboard Shortcuts', extensionPages: 'Extension pages', welcome: 'Welcome & walkthroughs',
-    workbenchUI: 'Notifications, dialogs & hovers',
-    shortcuts: 'Shortcuts', paragraph: 'Translate paragraph under mouse', fullPage: 'Translate whole page',
-    shortcutHint: 'Click a box and press the key combination. Backspace clears it.',
-    vocabulary: 'Vocabulary', entries: '{0} entries', open: 'Open', export: 'Export', remove: 'Remove…',
-    allSettings: 'All settings', log: 'Show log'
+    surfaces: 'Where to translate…', allSettings: 'All settings', log: 'Show log'
   },
   zh: {
     integration: '界面集成', active: '已启用', off: '未启用', enable: '启用 / 修复', disable: '禁用并恢复',
+    shortcuts: '快捷键与用法', selectTitle: '划词', selectHint: '选中文字后，鼠标移到小红点上查看词典或 AI 翻译',
+    paragraph: '翻译鼠标所在段落', paragraphHint: '译文直接显示在原处，再按一次恢复',
+    fullPage: '全文翻译', fullPageHint: '翻译正在阅读的整个页面，再按一次切回原文',
+    shortcutHint: '点击按键框后按下新的组合键即可修改；退格键关闭该快捷键。',
+    worksIn: '适用于 Chat、Markdown 预览、Release Notes、设置页和扩展详情页。', tryIt: '在示例页面上试一试',
+    mdOff: 'Markdown 文件默认以源码打开。改为默认预览，阅读和翻译都更方便。',
+    mdOn: 'Markdown 文件默认以预览方式打开。', mdSet: '默认以预览打开 Markdown', mdUndo: '恢复为源码打开',
     translation: '翻译', target: '目标语言', pageMode: '全文翻译显示方式', translationOnly: '仅译文', bilingual: '原文译文对照',
     autoAI: '短语、句子自动使用 AI 翻译',
-    ai: 'AI 引擎', provider: '服务商', model: '模型', autoModel: '自动（优先轻量模型）', speed: '测速', testing: '测速中 {0}/{1}…',
-    unauthorized: '未授权', failed: '失败',
-    speedTitle: '测量每个可用模型翻译一个单词所需的时间', speedRunning: '每个模型翻译一个单词，最多约 15 秒。',
-    fastest: '最快：{0} · {1}', useIt: '改用此模型', speedNone: '没有模型在 15 秒内返回结果。',
-    speedUnauthorized: '{0} 个模型尚未授权，未参与测速。选中后点击“测试 AI”即可授权。', close: '关闭', apiKey: 'API Key', keySaved: '已保存在系统钥匙串', keyMissing: '未设置', keyOptional: '可选',
-    setKey: '设置 Key', getKey: '获取 Key', fetch: '获取列表', fetching: '加载中…', baseUrl: 'API 地址', testAI: '测试 AI',
+    ai: 'AI 引擎', provider: '服务商', model: '模型', chooseModel: '— 请选择模型 —', recommended: '推荐（轻量、快速）',
+    otherModels: '其他模型', autoModel: '自动（首个推荐模型）', hiddenModel: '已在“语言模型”中隐藏', missingModel: '不可用',
+    noModelChosen: '请选择用于翻译句子和段落的模型，推荐小而快的模型。',
+    needsAccess: '尚未授权。', allowAccess: '授权使用',
+    speed: '测速', testing: '测速中… {0}%', unauthorized: '未授权', failed: '失败',
+    speedTitle: '每个可见且已授权的模型翻译同一句话：先预热一次，再计时三次，显示中位数。',
+    speedRunning: '每个模型预热一次、计时三次，可能需要一分钟左右。',
+    fastest: '最快：{0} · {1}', firstWords: '首字 {0}', useIt: '改用此模型', speedNone: '没有模型在 20 秒内返回结果。',
+    speedUnauthorized: '{0} 个模型尚未授权，未参与测速。选中后点击“授权使用”即可。', close: '关闭', apiKey: 'API Key', keySaved: '已保存在系统钥匙串', keyMissing: '未设置', keyOptional: '可选',
+    setKey: '设置 Key', getKey: '获取 Key', fetch: '获取列表', fetching: '加载中…', baseUrl: 'API 地址',
     noModels: '没有可用的 VS Code 语言模型。请登录 GitHub Copilot 或选择其他服务商。',
+    vocabulary: '生词本', vocabEmpty: '在翻译弹窗中点击 ☆，即可把单词和句子收藏到这里。', vocabMore: '还有 {0} 条',
+    open: '打开', export: '导出 CSV', remove: '删除…',
     dictionary: '离线词典', dictReady: '可用 · {0} 词条 · {1}', dictLoading: '加载中…', dictDownloading: '下载中… {0}',
     dictMissing: '未安装，查词将回退到 AI。', dictError: '错误：{0}', dictIdle: '首次查词时加载',
     germanDictionary: '德译中（HanDeDict）', germanIdle: '首次选中德语单词时自动下载（约 3 MB）', germanOff: '已关闭',
     dictShared: '由另一个 VS Code 窗口提供', bundled: '内置', downloaded: '已下载', custom: '自定义文件',
     download: '下载', choose: '选择文件…', useDefault: '恢复默认',
-    surfaces: '翻译范围', markdownPreview: 'Markdown 预览', releaseNotes: 'Release Notes', chat: 'Chat 对话',
-    settings: '设置与快捷键页', extensionPages: '扩展详情页', welcome: '欢迎页与演练',
-    workbenchUI: '通知、对话框与悬停提示',
-    shortcuts: '快捷键', paragraph: '翻译鼠标所在段落', fullPage: '全文翻译',
-    shortcutHint: '点击输入框后直接按下组合键；退格键清空。',
-    vocabulary: '生词本', entries: '{0} 条', open: '打开', export: '导出', remove: '删除…',
-    allSettings: '全部设置', log: '查看日志'
+    surfaces: '翻译范围…', allSettings: '全部设置', log: '查看日志'
   },
   de: {
     integration: 'Integration', active: 'Aktiv', off: 'Nicht aktiviert', enable: 'Aktivieren / Reparieren', disable: 'Deaktivieren & wiederherstellen',
-    translation: 'Übersetzung', target: 'Zielsprache', pageMode: 'Anzeige der Seitenübersetzung', translationOnly: 'Nur Übersetzung',
+    shortcuts: 'Tastenkürzel & Bedienung', selectTitle: 'Text markieren', selectHint: 'dann auf den roten Punkt zeigen für Wörterbuch oder KI-Übersetzung',
+    paragraph: 'Absatz unter der Maus', paragraphHint: 'Übersetzung erscheint an Ort und Stelle; erneut drücken stellt das Original her',
+    fullPage: 'Ganze Seite', fullPageHint: 'übersetzt die aktuelle Seite; erneut drücken schaltet zurück',
+    shortcutHint: 'Auf eine Taste klicken und eine neue Kombination drücken; Rücktaste schaltet sie aus.',
+    worksIn: 'Funktioniert in Chat, Markdown-Vorschau, Release Notes, Einstellungen und auf Erweiterungsseiten.', tryIt: 'Auf einer Beispielseite ausprobieren',
+    mdOff: 'Markdown-Dateien öffnen als Quelltext. Als Vorschau lassen sie sich bequemer lesen und übersetzen.',
+    mdOn: 'Markdown-Dateien öffnen als Vorschau.', mdSet: 'Markdown als Vorschau öffnen', mdUndo: 'Wieder als Text öffnen',
+    translation: 'Übersetzung', target: 'Zielsprache', pageMode: 'Seitenübersetzung zeigt', translationOnly: 'Nur Übersetzung',
     bilingual: 'Zweisprachig (Original + Übersetzung)', autoAI: 'KI automatisch für Ausdrücke und Sätze verwenden',
-    ai: 'KI-Engine', provider: 'Anbieter', model: 'Modell', autoModel: 'Automatisch (leichtes Modell bevorzugen)', speed: 'Tempo messen',
-    testing: 'Wird gemessen {0}/{1}…', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen',
-    speedTitle: 'Misst, wie lange jedes verfügbare Modell für die Übersetzung eines Wortes braucht',
-    speedRunning: 'Jedes Modell übersetzt ein Wort. Das dauert höchstens etwa 15 Sekunden.',
-    fastest: 'Am schnellsten: {0} · {1}', useIt: 'Verwenden', speedNone: 'Kein Modell hat innerhalb von 15 Sekunden geantwortet.',
-    speedUnauthorized: '{0} noch nicht autorisiert und daher nicht gemessen. Eines auswählen und auf „KI testen“ klicken, um es zuzulassen.', close: 'Schließen', apiKey: 'API-Schlüssel',
+    ai: 'KI-Engine', provider: 'Anbieter', model: 'Modell', chooseModel: '— Modell auswählen —', recommended: 'Empfohlen (leicht & schnell)',
+    otherModels: 'Weitere Modelle', autoModel: 'Automatisch (erstes empfohlenes Modell)', hiddenModel: 'in Sprachmodelle ausgeblendet', missingModel: 'nicht verfügbar',
+    noModelChosen: 'Wählen Sie das Modell für Sätze und Absätze. Ein kleines, schnelles eignet sich am besten.',
+    needsAccess: 'Noch nicht autorisiert.', allowAccess: 'Zugriff erlauben',
+    speed: 'Tempo messen', testing: 'Wird gemessen… {0}%', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen',
+    speedTitle: 'Jedes sichtbare, autorisierte Modell übersetzt einen Satz: ein Aufwärmlauf, dann drei gemessene Läufe. Angezeigt wird der Median.',
+    speedRunning: 'Ein Aufwärmlauf und drei gemessene Läufe pro Modell. Das kann eine Minute dauern.',
+    fastest: 'Am schnellsten: {0} · {1}', firstWords: 'erste Wörter {0}', useIt: 'Verwenden', speedNone: 'Kein Modell hat innerhalb von 20 Sekunden geantwortet.',
+    speedUnauthorized: '{0} noch nicht autorisiert und daher nicht gemessen. Eines auswählen und auf „Zugriff erlauben“ klicken.', close: 'Schließen', apiKey: 'API-Schlüssel',
     keySaved: 'Im Schlüsselbund des Betriebssystems gespeichert', keyMissing: 'Nicht festgelegt', keyOptional: 'Optional',
     setKey: 'Schlüssel festlegen', getKey: 'Schlüssel erhalten', fetch: 'Liste abrufen', fetching: 'Wird geladen…',
-    baseUrl: 'API-Basis-URL', testAI: 'KI testen',
+    baseUrl: 'API-Basis-URL',
     noModels: 'Kein VS Code-Sprachmodell verfügbar. Melden Sie sich bei GitHub Copilot an oder wählen Sie einen anderen Anbieter.',
+    vocabulary: 'Vokabelliste', vocabEmpty: 'Im Übersetzungsfenster auf ☆ klicken, um Wörter und Sätze hier zu sammeln.', vocabMore: '+{0} weitere',
+    open: 'Öffnen', export: 'CSV exportieren', remove: 'Entfernen…',
     dictionary: 'Offline-Wörterbuch', dictReady: 'Bereit · {0} Einträge · {1}', dictLoading: 'Wird geladen…', dictDownloading: 'Wird heruntergeladen… {0}',
     dictMissing: 'Nicht installiert. Nachschlagen erfolgt per KI.', dictError: 'Fehler: {0}', dictIdle: 'Wird beim ersten Nachschlagen geladen',
     germanDictionary: 'Deutsch → Chinesisch (HanDeDict)', germanIdle: 'Wird beim ersten deutschen Wort automatisch heruntergeladen (ca. 3 MB)', germanOff: 'Aus',
     dictShared: 'Wird von einem anderen VS Code-Fenster bereitgestellt', bundled: 'mitgeliefert', downloaded: 'heruntergeladen', custom: 'eigene Datei',
     download: 'Herunterladen', choose: 'Datei auswählen…', useDefault: 'Standard verwenden',
-    surfaces: 'Wo übersetzt wird', markdownPreview: 'Markdown-Vorschau', releaseNotes: 'Release Notes', chat: 'Chat',
-    settings: 'Einstellungen & Tastenkombinationen', extensionPages: 'Erweiterungsseiten', welcome: 'Willkommensseite & Anleitungen',
-    workbenchUI: 'Benachrichtigungen, Dialoge & Hover',
-    shortcuts: 'Tastenkombinationen', paragraph: 'Absatz unter der Maus übersetzen', fullPage: 'Ganze Seite übersetzen',
-    shortcutHint: 'In ein Feld klicken und die Tastenkombination drücken. Rücktaste löscht sie.',
-    vocabulary: 'Vokabelliste', entries: '{0} Einträge', open: 'Öffnen', export: 'Exportieren', remove: 'Entfernen…',
-    allSettings: 'Alle Einstellungen', log: 'Protokoll anzeigen'
+    surfaces: 'Wo übersetzt wird…', allSettings: 'Alle Einstellungen', log: 'Protokoll anzeigen'
   }
 };
 
@@ -89,6 +109,7 @@ class SettingsPanel {
     this.view = undefined;
     this.language = undefined;
     this.pending = undefined;
+    this.focusTarget = undefined;
   }
 
   resolveWebviewView(view) {
@@ -98,6 +119,12 @@ class SettingsPanel {
       this.post({ type: 'error', message: error instanceof Error ? error.message : String(error) })));
     view.onDidChangeVisibility(() => { if (view.visible) this.refresh(); });
     view.onDidDispose(() => { this.view = undefined; this.language = undefined; });
+    this.refresh();
+  }
+
+  // Scrolls to and highlights a control (e.g. the model list); kept until the page confirms, since the view may still be loading.
+  focus(target) {
+    this.focusTarget = target;
     this.refresh();
   }
 
@@ -113,7 +140,7 @@ class SettingsPanel {
         this.language = language;
         this.view.webview.html = this.html({ ...STRINGS.en, ...STRINGS[language] });
       }
-      this.post({ type: 'state', state });
+      this.post({ type: 'state', state, focus: this.focusTarget });
     }, 50);
   }
 
@@ -124,6 +151,7 @@ class SettingsPanel {
   async receive(message) {
     switch (message.type) {
       case 'ready': return this.refresh();
+      case 'focused': this.focusTarget = undefined; return undefined;
       case 'update': await this.api.update(message.key, message.value); return this.refresh();
       case 'command':
         if (!/^translateAnywhere\.\w+$/.test(message.command)) return undefined;
@@ -155,6 +183,8 @@ class SettingsPanel {
   details[open] > summary::before { transform: rotate(90deg); }
   summary:hover { opacity: 1; }
   summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+  .badge { min-width: 8px; padding: 0 6px; border-radius: 9px; font-size: 10px; line-height: 16px; text-align: center; letter-spacing: 0;
+    color: var(--vscode-badge-foreground, #fff); background: var(--vscode-badge-background, #4d4d4d); }
   .banner { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0; padding: 6px 8px; border-radius: 2px; overflow-wrap: anywhere;
     color: var(--vscode-inputValidation-errorForeground, inherit); background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
     border: 1px solid var(--vscode-inputValidation-errorBorder, #be1100); }
@@ -184,9 +214,32 @@ class SettingsPanel {
   a { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; }
   a:hover { text-decoration: underline; }
   [hidden] { display: none !important; }
-  footer { display: flex; gap: 12px; margin-top: 16px; }
+  footer { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 16px; }
   .grow { flex: 1; }
   .end { margin: 0 0 0 auto; }
+  /* Shortcuts: one row per gesture, the key on the right is also the recorder. */
+  .how { display: grid; grid-template-columns: 1fr auto; gap: 8px 10px; align-items: center; margin: 4px 0 2px; }
+  .how b { display: block; font-weight: 600; }
+  .how .muted { margin-top: 1px; }
+  input.kbd { box-sizing: border-box; width: 78px; padding: 2px 4px; text-align: center; cursor: pointer; caret-color: transparent;
+    font: 600 12px var(--vscode-editor-font-family, monospace); color: var(--vscode-keybindingLabel-foreground, inherit);
+    background: var(--vscode-keybindingLabel-background, rgba(128,128,128,.17)); border: 1px solid var(--vscode-keybindingLabel-border, rgba(128,128,128,.35));
+    border-bottom-color: var(--vscode-keybindingLabel-bottomBorder, rgba(128,128,128,.5)); border-radius: 3px; box-shadow: inset 0 -1px 0 rgba(128,128,128,.35); }
+  input.kbd:placeholder-shown { font-weight: normal; opacity: .6; }
+  .reddot { justify-self: center; width: 9px; height: 9px; margin: 0 34px; border: 1px solid #fff; border-radius: 50%; background: #e5484d; box-shadow: 0 0 2px #0006; }
+  .card { margin-top: 10px; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--vscode-widget-border, rgba(128,128,128,.25));
+    background: var(--vscode-textBlockQuote-background, rgba(128,128,128,.08)); }
+  .card .buttons { margin-top: 6px; }
+  .ok::before { content: '✓ '; color: var(--vscode-testing-iconPassed, #73c991); }
+  .flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { 0%, 40% { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
+  /* Vocabulary: the latest entries, word over a one-line translation. */
+  ul.vocab { list-style: none; margin: 4px 0 0; padding: 0; }
+  ul.vocab li { padding: 5px 8px; border-left: 2px solid var(--vscode-textLink-foreground, #4daafc); margin-top: 4px; border-radius: 0 3px 3px 0;
+    background: var(--vscode-textBlockQuote-background, rgba(128,128,128,.08)); }
+  ul.vocab .w { font-weight: 600; overflow-wrap: anywhere; }
+  ul.vocab .ph { margin-left: 6px; opacity: .65; font-size: 12px; }
+  ul.vocab .tr { opacity: .8; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style></head><body>
 <div class="banner" id="banner" role="alert" hidden><span id="bannerText"></span><button class="icon" id="bannerClose" title="${s.close}" aria-label="${s.close}">×</button></div>
 <details class="sec" data-sec="integration" open>
@@ -195,6 +248,23 @@ class SettingsPanel {
   <div class="muted" id="intDetail"></div>
   <div class="buttons"><button id="enableBtn" class="primary" data-command="translateAnywhere.enable">${s.enable}</button>
     <button id="disableBtn" data-command="translateAnywhere.disable">${s.disable}</button></div>
+</details>
+<details class="sec" data-sec="shortcuts" open>
+  <summary>${s.shortcuts}</summary>
+  <div class="how">
+    <div><b>${s.selectTitle}</b><div class="muted">${s.selectHint}</div></div><span class="reddot" aria-hidden="true"></span>
+    <label for="scParagraph"><b>${s.paragraph}</b><div class="muted">${s.paragraphHint}</div></label>
+    <input type="text" class="kbd" id="scParagraph" data-shortcut="shortcuts.paragraph" readonly placeholder="—">
+    <label for="scFullPage"><b>${s.fullPage}</b><div class="muted">${s.fullPageHint}</div></label>
+    <input type="text" class="kbd" id="scFullPage" data-shortcut="shortcuts.fullPage" readonly placeholder="—">
+  </div>
+  <div class="muted">${s.worksIn} ${s.shortcutHint}</div>
+  <div class="buttons"><button class="primary" id="tryBtn" data-command="translateAnywhere.tryIt">${s.tryIt}</button></div>
+  <div class="card" id="mdCard">
+    <div id="mdText"></div>
+    <div class="buttons"><button id="mdSet" data-command="translateAnywhere.openMarkdownAsPreview">${s.mdSet}</button>
+      <a id="mdUndo" data-command="translateAnywhere.openMarkdownAsText">${s.mdUndo}</a></div>
+  </div>
 </details>
 <details class="sec" data-sec="translation" open>
   <summary>${s.translation}</summary>
@@ -209,6 +279,8 @@ class SettingsPanel {
   <div id="vscodeAI">
     <label class="row" for="modelId">${s.model}</label>
     <div class="inline"><select id="modelId" data-key="ai.modelId"></select><button id="speedBtn" title="${s.speedTitle}">${s.speed}</button></div>
+    <div class="muted" id="chooseHint" hidden>${s.noModelChosen}</div>
+    <div class="muted" id="accessInfo" hidden>${s.needsAccess} <a data-command="translateAnywhere.authorizeAI">${s.allowAccess}</a></div>
     <div class="muted" id="speedInfo" aria-live="polite" hidden></div>
     <div class="muted" id="noModels" hidden>${s.noModels}</div>
   </div>
@@ -222,7 +294,15 @@ class SettingsPanel {
     <label class="row" for="baseUrl">${s.baseUrl}</label><input type="text" id="baseUrl" data-key="ai.baseUrl" spellcheck="false">
   </div>
   <div class="muted error" id="aiError" hidden></div>
-  <div class="buttons"><button data-command="translateAnywhere.authorizeAI">${s.testAI}</button></div>
+</details>
+<details class="sec" data-sec="vocabulary" open>
+  <summary>${s.vocabulary}<span class="badge" id="vocabBadge" hidden></span></summary>
+  <div class="muted" id="vocabEmpty" hidden>${s.vocabEmpty}</div>
+  <ul class="vocab" id="vocabList"></ul>
+  <div class="muted" id="vocabMore" hidden></div>
+  <div class="buttons"><button class="primary" id="vocabOpen" data-command="translateAnywhere.openVocabulary">${s.open}</button>
+    <button id="vocabExport" data-command="translateAnywhere.exportVocabulary">${s.export}</button>
+    <button id="vocabRemove" data-command="translateAnywhere.removeVocabulary">${s.remove}</button></div>
 </details>
 <details class="sec" data-sec="dictionary" open>
   <summary>${s.dictionary}</summary>
@@ -237,28 +317,11 @@ class SettingsPanel {
     <div class="buttons"><button id="deDownload" data-command="translateAnywhere.downloadGermanDictionary">${s.download}</button></div>
   </div>
 </details>
-<details class="sec" data-sec="surfaces" open>
-  <summary>${s.surfaces}</summary>
-  ${['chat', 'markdownPreview', 'releaseNotes', 'settings', 'extensionPages', 'welcome', 'workbenchUI'].map(key =>
-    `<label class="check"><input type="checkbox" data-key="surfaces.${key}">${s[key]}</label>`).join('')}
-</details>
-<details class="sec" data-sec="shortcuts" open>
-  <summary>${s.shortcuts}</summary>
-  <label class="row" for="scParagraph">${s.paragraph}</label><input type="text" id="scParagraph" data-shortcut="shortcuts.paragraph" readonly>
-  <label class="row" for="scFullPage">${s.fullPage}</label><input type="text" id="scFullPage" data-shortcut="shortcuts.fullPage" readonly>
-  <div class="muted">${s.shortcutHint}</div>
-</details>
-<details class="sec" data-sec="vocabulary" open>
-  <summary>${s.vocabulary}</summary>
-  <div id="vocabCount"></div>
-  <div class="buttons"><button data-command="translateAnywhere.openVocabulary">${s.open}</button>
-    <button data-command="translateAnywhere.exportVocabulary">${s.export}</button>
-    <button data-command="translateAnywhere.removeVocabulary">${s.remove}</button></div>
-</details>
-<footer><a data-command="translateAnywhere.openSettings">${s.allSettings}</a><a data-command="translateAnywhere.showLog">${s.log}</a><span class="muted end" id="version"></span></footer>
+<footer><a data-command="translateAnywhere.openSurfaceSettings">${s.surfaces}</a><a data-command="translateAnywhere.openSettings">${s.allSettings}</a><a data-command="translateAnywhere.showLog">${s.log}</a><span class="muted end" id="version"></span></footer>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const S = ${JSON.stringify(s)};
+const AUTO = '@auto';
 const $ = id => document.getElementById(id);
 const fmt = (text, ...args) => text.replace(/\\{(\\d)\\}/g, (_, i) => args[i]);
 let state;
@@ -268,19 +331,48 @@ function fill(select, items, value) {
   select.value = value;
 }
 const seconds = ms => (ms / 1000).toFixed(1) + 's';
+const measured = m => m.timing && m.timing.status === 'ok';
+// Recommended models, then the rest, then Auto. Without a choice a disabled placeholder is shown instead of guessing.
+function fillModels(s) {
+  const label = m => {
+    const name = m.missing ? m.id : m.name + (m.detail ? ' (' + m.detail + ')' : '');
+    const note = m.missing ? S.missingModel : m.hidden ? S.hiddenModel : m.timing && !measured(m) ? (S[m.timing.status] || m.timing.status) : '';
+    return (measured(m) ? seconds(m.timing.median) + ' · ' : '') + name + (note ? ' · ' + note : '');
+  };
+  const group = (title, list) => {
+    const g = document.createElement('optgroup');
+    g.label = title;
+    g.append(...list.map(m => option(m.id, label(m))));
+    return g;
+  };
+  const nodes = [];
+  if (!s.modelId) {
+    const placeholder = option('', S.chooseModel);
+    placeholder.disabled = true;
+    nodes.push(placeholder);
+  }
+  const recommended = s.vscodeModels.filter(m => m.recommended);
+  const other = s.vscodeModels.filter(m => !m.recommended);
+  if (recommended.length) nodes.push(group(S.recommended, recommended));
+  if (other.length) nodes.push(recommended.length ? group(S.otherModels, other) : group(S.model, other));
+  nodes.push(option(AUTO, S.autoModel));
+  $('modelId').replaceChildren(...nodes);
+  $('modelId').value = s.modelId;
+}
 // Speed-test progress, then the fastest model with a one-click switch and why some models were skipped.
 function renderSpeed(s) {
   const run = s.benchmark;
   $('speedBtn').disabled = !!run || !s.vscodeModels.length;
-  $('speedBtn').textContent = run ? fmt(S.testing, run.done, run.total) : S.speed;
+  $('speedBtn').textContent = run ? fmt(S.testing, run.total ? Math.round(run.done / run.total * 100) : 0) : S.speed;
   const info = $('speedInfo');
   const lines = [];
   if (run) lines.push([S.speedRunning]);
-  else if (s.vscodeModels.some(m => m.timing !== null)) {
-    const fastest = s.vscodeModels.find(m => typeof m.timing === 'number');
+  else if (s.vscodeModels.some(m => m.timing)) {
+    const fastest = s.vscodeModels.filter(measured).sort((a, b) => a.timing.median - b.timing.median)[0];
     if (!fastest) lines.push([S.speedNone]);
-    else lines.push([fmt(S.fastest, fastest.name, seconds(fastest.timing)), fastest.id === s.modelId ? null : fastest.id]);
-    const skipped = s.vscodeModels.filter(m => m.timing === 'unauthorized').length;
+    else lines.push([fmt(S.fastest, fastest.name, seconds(fastest.timing.median) + ' (' + fmt(S.firstWords, seconds(fastest.timing.first)) + ')'),
+      fastest.id === s.modelId ? null : fastest.id]);
+    const skipped = s.vscodeModels.filter(m => m.timing && m.timing.status === 'unauthorized').length;
     if (skipped) lines.push([fmt(S.speedUnauthorized, skipped)]);
   }
   info.replaceChildren(...lines.map(([text, useId]) => {
@@ -296,6 +388,37 @@ function renderSpeed(s) {
   }));
   info.hidden = !lines.length;
 }
+function renderVocabulary(s) {
+  const recent = s.vocabularyRecent || [];
+  $('vocabBadge').textContent = s.vocabularyCount;
+  $('vocabBadge').hidden = !s.vocabularyCount;
+  $('vocabEmpty').hidden = s.vocabularyCount > 0;
+  $('vocabList').replaceChildren(...recent.map(entry => {
+    const li = document.createElement('li');
+    const word = document.createElement('span');
+    word.className = 'w';
+    word.textContent = entry.text;
+    li.append(word);
+    if (entry.phonetic) {
+      const ph = document.createElement('span');
+      ph.className = 'ph';
+      ph.textContent = '/' + entry.phonetic + '/';
+      li.append(ph);
+    }
+    if (entry.translation) {
+      const tr = document.createElement('div');
+      tr.className = 'tr';
+      tr.textContent = entry.translation;
+      tr.title = entry.translation;
+      li.append(tr);
+    }
+    return li;
+  }));
+  const more = s.vocabularyCount - recent.length;
+  $('vocabMore').hidden = more <= 0;
+  $('vocabMore').textContent = fmt(S.vocabMore, more);
+  for (const id of ['vocabOpen', 'vocabExport', 'vocabRemove']) $(id).disabled = !s.vocabularyCount;
+}
 function render() {
   const s = state;
   $('intDot').classList.toggle('on', s.integration.enabled);
@@ -303,6 +426,12 @@ function render() {
   $('intDetail').textContent = s.integration.enabled ? s.integration.status : '';
   $('enableBtn').classList.toggle('primary', !s.integration.enabled);
   $('disableBtn').hidden = !s.integration.enabled;
+  $('scParagraph').value = s.shortcuts.paragraph;
+  $('scFullPage').value = s.shortcuts.fullPage;
+  $('mdText').textContent = s.markdownPreviewDefault ? S.mdOn : S.mdOff;
+  $('mdText').classList.toggle('ok', !!s.markdownPreviewDefault);
+  $('mdSet').hidden = !!s.markdownPreviewDefault;
+  $('mdUndo').hidden = !s.markdownPreviewDefault;
   fill($('targetLanguage'), s.languages.map(l => [l.code, l.label]), s.targetLanguage);
   $('fullPageMode').value = s.fullPageMode;
   $('autoAI').checked = s.autoAI;
@@ -311,13 +440,10 @@ function render() {
   $('vscodeAI').hidden = !vs;
   $('httpAI').hidden = vs;
   if (vs) {
-    // The extension sends the models fastest first once measured; a measured time leads so it stays visible in a narrow sidebar.
-    const label = m => {
-      const name = m.name + ' (' + m.detail + ')';
-      return typeof m.timing === 'number' ? seconds(m.timing) + ' · ' + name : m.timing ? name + ' · ' + (S[m.timing] || m.timing) : name;
-    };
-    fill($('modelId'), [['', S.autoModel], ...s.vscodeModels.map(m => [m.id, label(m)])], s.modelId);
+    fillModels(s);
     $('noModels').hidden = s.vscodeModels.length > 0;
+    $('chooseHint').hidden = !!s.modelId || !s.vscodeModels.length;
+    $('accessInfo').hidden = !s.modelId || s.modelId === AUTO || s.modelAuthorized !== false;
     renderSpeed(s);
   } else {
     const d = s.providerDefaults;
@@ -330,6 +456,7 @@ function render() {
     if (document.activeElement !== $('baseUrl')) $('baseUrl').value = s.baseUrl;
     $('baseUrl').placeholder = d.baseUrl || 'https://…/v1';
   }
+  renderVocabulary(s);
   const dict = s.dictionary;
   const kind = S[dict.kind] || '';
   $('dictText').classList.toggle('error', dict.status === 'error');
@@ -352,13 +479,21 @@ function render() {
     de.status === 'error' ? fmt(S.dictError, de.error) :
     de.enabled === false ? S.germanOff : dict.owner ? S.germanIdle : S.dictShared;
   $('deDownload').hidden = de.status === 'ready' || de.status === 'downloading' || de.status === 'loading';
-  // German support stays implicit: the block appears for a German UI or once a German word has been looked up.
+  // The German block appears for a German UI or once a German word has been looked up.
   $('deBox').hidden = s.uiLanguage !== 'de' && !['ready', 'loading', 'downloading', 'error'].includes(de.status);
-  for (const box of document.querySelectorAll('[data-key^="surfaces."]')) box.checked = s.surfaces[box.dataset.key.slice(9)];
-  $('scParagraph').value = s.shortcuts.paragraph;
-  $('scFullPage').value = s.shortcuts.fullPage;
-  $('vocabCount').textContent = fmt(S.entries, s.vocabularyCount);
   $('version').textContent = 'v' + s.version;
+}
+function focusTarget(id) {
+  const el = $(id);
+  if (!el) return;
+  const section = el.closest('details');
+  if (section) section.open = true;
+  el.scrollIntoView({ block: 'center' });
+  el.focus();
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+  vscode.postMessage({ type: 'focused' });
 }
 document.addEventListener('change', event => {
   const el = event.target;
@@ -367,7 +502,7 @@ document.addEventListener('change', event => {
 });
 document.addEventListener('click', event => {
   const el = event.target.closest('[data-command]');
-  if (el) vscode.postMessage({ type: 'command', command: el.dataset.command });
+  if (el && !el.disabled) vscode.postMessage({ type: 'command', command: el.dataset.command });
   const use = event.target.closest('[data-use]');
   if (use) vscode.postMessage({ type: 'update', key: 'ai.modelId', value: use.dataset.use });
 });
@@ -410,7 +545,12 @@ for (const input of document.querySelectorAll('[data-shortcut]')) {
   });
 }
 window.addEventListener('message', ({ data }) => {
-  if (data.type === 'state') { state = data.state; render(); $('aiError').hidden = true; }
+  if (data.type === 'state') {
+    state = data.state;
+    render();
+    $('aiError').hidden = true;
+    if (data.focus) focusTarget(data.focus);
+  }
   if (data.type === 'error') { $('bannerText').textContent = data.message; $('banner').hidden = false; }
   if (data.type === 'models') {
     $('fetchBtn').disabled = false;

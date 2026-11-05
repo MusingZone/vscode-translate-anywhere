@@ -1,6 +1,6 @@
 {
-  "displayName": "Translate Anywhere - Select & Hover Translator",
-  "description": "Select text in Chat, Markdown preview, Release Notes, Settings and more, then hover the red dot for an instant dictionary or AI translation. Paragraph and full-page translation included.",
+  "displayName": "Translate Anywhere - 翻译 · 划词翻译 · Select & Hover Translator",
+  "description": "Select text in Chat, Markdown preview, Release Notes, Settings and more, then hover the red dot for an instant dictionary or AI translation. Paragraph and full-page translation included. 翻译 · 划词翻译 · 段落翻译 · 全文翻译 · 中英翻译 · AI 翻译",
   "command.enable": "Enable / Repair Integration",
   "command.disable": "Disable and Restore VS Code",
   "command.openSettings": "Open Settings",
@@ -27,7 +27,7 @@
   "config.fullPage.mode.translationOnly": "Translation only: replace the original text (press the shortcut again to restore).",
   "config.fullPage.mode.bilingual": "Bilingual: show the translation below the original.",
   "config.ai.autoTranslate": "Automatically use the AI model when the offline dictionary has no entry (phrases, sentences, paragraphs). When off, click **AI translate** in the popup.",
-  "config.ai.modelId": "VS Code language model ID used when **AI Provider** is `VS Code Language Models`. Empty = automatically prefer a lightweight model. Pick one from the list in the Translate Anywhere sidebar or with **Translate Anywhere: Select AI Model**.",
+  "config.ai.modelId": "VS Code language model used when **AI Provider** is `VS Code Language Models`. Set automatically to the first recommended lightweight model you have (for example a GPT luna, Claude Haiku, Gemini Flash or GPT mini model) that is not hidden in VS Code's **Language Models** view; if none matches, the sidebar asks you to choose. `@auto` = always use the first recommended visible model. Pick one in the Translate Anywhere sidebar or with **Translate Anywhere: Select AI Model**.",
   "config.integration.enabled": "Consent to add a reversible UI script to the local VS Code installation (required for translation in Chat, previews and Settings). Use **Translate Anywhere: Disable and Restore VS Code** to remove it.",
   "config.integration.autoRepair": "Reapply the UI integration automatically after VS Code updates replace its files.",
   "view.panel": "Settings",
@@ -46,5 +46,9 @@
   "config.dictionary.downloadUrl": "Extra HTTPS URL tried first when downloading the dictionary, e.g. an internal mirror. The file must match the published SHA-256.",
   "config.dictionary.downloadUrl.error": "Enter an https:// URL, or leave empty.",
   "command.downloadGermanDictionary": "Download German–Chinese Dictionary",
-  "config.dictionary.german": "Look up selected German words in the offline German–Chinese dictionary ([HanDeDict](https://handedict.zydeo.net/), CC BY-SA 3.0). It is downloaded once (about 3 MB) the first time you select a German word; until then, and for phrases, AI translation is used."
+  "config.dictionary.german": "Look up selected German words in the offline German–Chinese dictionary ([HanDeDict](https://handedict.zydeo.net/), CC BY-SA 3.0). It is downloaded once (about 3 MB) the first time you select a German word; until then, and for phrases, AI translation is used.",
+  "command.tryIt": "Try It on a Sample Page",
+  "command.openMarkdownAsPreview": "Open Markdown Files as Preview by Default",
+  "command.openMarkdownAsText": "Open Markdown Files as Text by Default",
+  "command.openSurfaceSettings": "Choose Where to Translate"
 }

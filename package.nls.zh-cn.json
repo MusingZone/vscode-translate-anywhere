@@ -1,6 +1,6 @@
 {
-  "displayName": "Translate Anywhere - Select & Hover Translator",
-  "description": "在 Chat、Markdown 预览、Release Notes、设置页等处划词，悬停红点即可秒出词典或 AI 翻译；支持段落翻译与全文翻译。",
+  "displayName": "Translate Anywhere - 翻译 · 划词翻译 · 段落/全文翻译",
+  "description": "翻译插件：在 Chat、Markdown 预览、Release Notes、设置页等处划词，悬停红点即可秒出词典或 AI 翻译；支持段落翻译、全文翻译与生词本。",
   "command.enable": "启用 / 修复界面集成",
   "command.disable": "禁用并恢复 VS Code 原文件",
   "command.openSettings": "打开设置",
@@ -27,7 +27,7 @@
   "config.fullPage.mode.translationOnly": "仅译文：用译文替换原文（再按一次快捷键恢复原文）。",
   "config.fullPage.mode.bilingual": "双语对照：在原文下方显示译文。",
   "config.ai.autoTranslate": "离线词典未收录时（短语、句子、段落）自动调用 AI 模型翻译。关闭后需在弹窗中点击 **AI 翻译**。",
-  "config.ai.modelId": "当 **AI 服务商** 为 `VS Code Language Models` 时使用的 VS Code 语言模型 ID。留空则自动优先选择轻量模型。可在 Translate Anywhere 侧边栏或通过 **Translate Anywhere: 选择 AI 模型** 从列表中选择。",
+  "config.ai.modelId": "当 **AI 服务商** 为 `VS Code Language Models` 时使用的语言模型。默认自动设为你可用、且未在 VS Code **语言模型** 视图中隐藏的首个推荐轻量模型（如 GPT luna、Claude Haiku、Gemini Flash、GPT mini 系列）；都不匹配时会引导你在侧边栏中手动选择。`@auto` 表示始终使用首个可见的推荐模型。可在 Translate Anywhere 侧边栏或通过 **Translate Anywhere: 选择 AI 模型** 选择。",
   "config.integration.enabled": "同意向本机 VS Code 安装目录加入可还原的界面脚本（在 Chat、预览、设置页中翻译所必需）。运行 **Translate Anywhere: 禁用并恢复 VS Code 原文件** 可移除。",
   "config.integration.autoRepair": "VS Code 更新替换文件后自动重新集成。",
   "view.panel": "设置",
@@ -46,5 +46,9 @@
   "config.dictionary.downloadUrl": "下载词典时优先尝试的额外 HTTPS 地址，例如内部镜像。文件必须与发布的 SHA-256 一致。",
   "config.dictionary.downloadUrl.error": "请输入 https:// 地址，或留空。",
   "command.downloadGermanDictionary": "下载德汉词典",
-  "config.dictionary.german": "选中德语单词时使用离线德汉词典（[HanDeDict](https://handedict.zydeo.net/)，CC BY-SA 3.0）查询。首次选中德语单词时自动下载一次（约 3 MB）；下载完成前以及短语/句子使用 AI 翻译。"
+  "config.dictionary.german": "选中德语单词时使用离线德汉词典（[HanDeDict](https://handedict.zydeo.net/)，CC BY-SA 3.0）查询。首次选中德语单词时自动下载一次（约 3 MB）；下载完成前以及短语/句子使用 AI 翻译。",
+  "command.tryIt": "在示例页面上试用",
+  "command.openMarkdownAsPreview": "默认以预览方式打开 Markdown 文件",
+  "command.openMarkdownAsText": "默认以文本方式打开 Markdown 文件",
+  "command.openSurfaceSettings": "选择翻译范围"
 }

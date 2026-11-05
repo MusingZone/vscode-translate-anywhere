@@ -2,7 +2,7 @@
   "name": "vscode-translate-anywhere",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "publisher": "MusingZone",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -24,13 +24,18 @@
     "select",
     "chat",
     "markdown",
-    "release notes",
     "bilingual",
     "vocabulary",
+    "ai translate",
     "翻译",
     "划词翻译",
+    "段落翻译",
+    "全文翻译",
     "中英翻译",
-    "英汉词典"
+    "英汉词典",
+    "AI翻译",
+    "翻译插件",
+    "德语"
   ],
   "categories": [
     "Education",
@@ -89,6 +94,26 @@
         "command": "translateAnywhere.authorizeAI",
         "category": "Translate Anywhere",
         "title": "%command.authorizeAI%"
+      },
+      {
+        "command": "translateAnywhere.tryIt",
+        "category": "Translate Anywhere",
+        "title": "%command.tryIt%"
+      },
+      {
+        "command": "translateAnywhere.openMarkdownAsPreview",
+        "category": "Translate Anywhere",
+        "title": "%command.openMarkdownAsPreview%"
+      },
+      {
+        "command": "translateAnywhere.openMarkdownAsText",
+        "category": "Translate Anywhere",
+        "title": "%command.openMarkdownAsText%"
+      },
+      {
+        "command": "translateAnywhere.openSurfaceSettings",
+        "category": "Translate Anywhere",
+        "title": "%command.openSurfaceSettings%"
       },
       {
         "command": "translateAnywhere.openVocabulary",

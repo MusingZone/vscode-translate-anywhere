@@ -61,10 +61,11 @@ def state(provider="vscode", lang="en"):
         "providers": [{"id": "vscode", "label": {"zh": "VS Code 语言模型（Copilot 等）", "de": "VS Code-Sprachmodelle (Copilot…)"}.get(lang, "VS Code language models (Copilot…)")}]
         + [{"id": k, "label": v["label"]} for k, v in presets.items()],
         "vscodeModels": [
-            {"id": "gpt-5-mini", "name": "GPT-5 mini", "detail": "copilot · gpt-5-mini", "timing": None},
-            {"id": "claude-haiku-4.5", "name": "Claude Haiku 4.5", "detail": "copilot · claude-haiku-4.5", "timing": None},
+            {"id": "gpt-5-mini", "name": "GPT-5 mini", "detail": "copilot · gpt-5-mini", "timing": None, "recommended": True},
+            {"id": "claude-haiku-4.5", "name": "Claude Haiku 4.5", "detail": "copilot · claude-haiku-4.5", "timing": None, "recommended": True},
+            {"id": "claude-opus-4.8", "name": "Claude Opus 4.8", "detail": "copilot · claude-opus-4.8", "timing": None},
         ],
-        "modelId": "", "apiModel": "", "baseUrl": "", "benchmark": None,
+        "modelId": "", "modelAuthorized": None, "apiModel": "", "baseUrl": "", "benchmark": None,
         "providerDefaults": None if not preset else {"model": preset.get("model", ""), "baseUrl": preset.get("baseUrl", ""),
                                                       "keyUrl": preset.get("keyUrl", ""), "keyOptional": bool(preset.get("keyOptional"))},
         "hasKey": provider == "deepseek",
@@ -73,6 +74,9 @@ def state(provider="vscode", lang="en"):
         "surfaces": {"markdownPreview": True, "releaseNotes": True, "chat": True, "settings": True, "extensionPages": True, "welcome": True, "workbenchUI": True},
         "shortcuts": {"paragraph": "Alt+Z", "fullPage": "Alt+W"},
         "vocabularyCount": 12,
+        "vocabularyRecent": [{"text": "serendipity", "phonetic": "ˌserənˈdɪpəti", "translation": "n. 意外发现珍奇事物的本领"},
+                             {"text": "ephemeral", "phonetic": "", "translation": "adj. 短暂的"}],
+        "markdownPreviewDefault": False,
     }
 
 
@@ -110,7 +114,18 @@ def main():
         post({"type": "state", "state": state("vscode", lang)})
         page.wait_for_function("document.getElementById('version').textContent === 'v0.3.0'")
         assert page.is_visible("#vscodeAI") and not page.is_visible("#httpAI")
-        assert page.eval_on_selector("#modelId", "s => s.options.length") == 3
+        # Placeholder (no model chosen yet), two recommended, one other, then Auto as an explicit choice.
+        assert page.eval_on_selector("#modelId", "s => [...s.options].map(o => o.value)") == ["", "gpt-5-mini", "claude-haiku-4.5", "claude-opus-4.8", "@auto"]
+        assert page.eval_on_selector("#modelId", "s => s.value") == ""
+        assert page.eval_on_selector_all("#modelId optgroup", "g => g.length") == 2
+        assert page.is_visible("#chooseHint") and not page.is_visible("#accessInfo")
+        assert page.is_visible("#tryBtn") and page.is_visible("#mdSet") and not page.is_visible("#mdUndo")
+        assert page.eval_on_selector_all("#vocabList li", "l => l.length") == 2 and "serendipity" in page.inner_text("#vocabList")
+        assert page.is_visible("#vocabMore") and "10" in page.inner_text("#vocabMore") and page.inner_text("#vocabBadge") == "12"
+        # Shortcuts come before the AI engine, the vocabulary before the dictionary.
+        order = page.eval_on_selector_all("details.sec", "d => d.map(x => x.dataset.sec)")
+        assert order.index("shortcuts") < order.index("ai") < order.index("vocabulary") < order.index("dictionary"), order
+        assert not page.query_selector("[data-key^='surfaces.']") and not page.query_selector("#testBtn")
         assert page.eval_on_selector("#scParagraph", "i => i.value") == "Alt+Z"
         assert "770" in page.inner_text("#dictText")
         assert page.is_visible("#deBox") == (lang == "de"), "German dictionary block shows only for a German UI"
@@ -125,13 +140,15 @@ def main():
         s = state("vscode", lang)
         s["benchmark"] = {"done": 1, "total": 2}
         post({"type": "state", "state": s})
-        page.wait_for_function("document.getElementById('speedBtn').textContent.includes('1/2')")
+        page.wait_for_function("document.getElementById('speedBtn').textContent.includes('50%')")
         assert page.is_disabled("#speedBtn") and page.is_visible("#speedInfo")
         s = state("vscode", lang)
-        s["vscodeModels"] = [dict(s["vscodeModels"][1], timing=820), dict(s["vscodeModels"][0], timing="unauthorized")]
+        s["vscodeModels"] = [dict(s["vscodeModels"][1], timing={"status": "ok", "median": 820, "first": 410}),
+                             dict(s["vscodeModels"][0], timing={"status": "unauthorized"}), s["vscodeModels"][2]]
         post({"type": "state", "state": s})
         page.wait_for_function("!document.getElementById('speedBtn').disabled")
         assert page.eval_on_selector("#modelId", "s => s.options[1].textContent").startswith("0.8s · Claude Haiku 4.5")
+        assert "0.4s" in page.inner_text("#speedInfo"), "time to first words is shown"
         assert "Claude Haiku 4.5" in page.inner_text("#speedInfo") and page.eval_on_selector_all("#speedInfo div", "d => d.length") == 2
         page.click("#speedInfo [data-use]")
         assert posted() == [{"type": "update", "key": "ai.modelId", "value": "claude-haiku-4.5"}]
@@ -143,10 +160,34 @@ def main():
         assert not page.is_visible("#banner")
 
         # Collapsing a section is remembered in the webview state.
-        page.click("details[data-sec='surfaces'] > summary")
-        assert page.evaluate("document.querySelector(\"details[data-sec='surfaces']\").open") is False
-        page.click("details[data-sec='surfaces'] > summary")
+        page.click("details[data-sec='shortcuts'] > summary")
+        assert page.evaluate("document.querySelector(\"details[data-sec='shortcuts']\").open") is False
+        page.click("details[data-sec='shortcuts'] > summary")
         posted()
+
+        # A chosen but unauthorized model offers "Allow access"; Markdown preview already on offers the undo link.
+        s = state("vscode", lang)
+        s.update(modelId="claude-haiku-4.5", modelAuthorized=False, markdownPreviewDefault=True)
+        post({"type": "state", "state": s})
+        page.wait_for_function("!document.getElementById('accessInfo').hidden")
+        assert page.eval_on_selector("#modelId", "s => s.options[0].value") == "gpt-5-mini", "no placeholder once a model is chosen"
+        assert not page.is_visible("#chooseHint") and not page.is_visible("#mdSet") and page.is_visible("#mdUndo")
+        page.click("#accessInfo a")
+        assert posted() == [{"type": "command", "command": "translateAnywhere.authorizeAI"}]
+        page.click("#mdUndo")
+        assert posted() == [{"type": "command", "command": "translateAnywhere.openMarkdownAsText"}]
+        page.click("#tryBtn")
+        assert posted() == [{"type": "command", "command": "translateAnywhere.tryIt"}]
+        page.click("footer [data-command='translateAnywhere.openSurfaceSettings']")
+        assert posted() == [{"type": "command", "command": "translateAnywhere.openSurfaceSettings"}]
+
+        # The extension can ask the panel to reveal the model picker (no matching default model).
+        page.click("details[data-sec='ai'] > summary")
+        posted()
+        post({"type": "state", "state": state("vscode", lang), "focus": "modelId"})
+        page.wait_for_function("document.activeElement && document.activeElement.id === 'modelId'")
+        assert page.evaluate("document.querySelector(\"details[data-sec='ai']\").open")
+        assert {"type": "focused"} in posted()
 
         # The German block also appears once a German word has been looked up.
         s = state("vscode", lang)
@@ -188,9 +229,6 @@ def main():
         assert posted() == [{"type": "update", "key": "shortcuts.paragraph", "value": ""}]
         page.keyboard.press("Alt+Backquote")
         assert posted() == [{"type": "update", "key": "shortcuts.paragraph", "value": "Alt+`"}]
-
-        page.uncheck("[data-key='surfaces.chat']")
-        assert posted() == [{"type": "update", "key": "surfaces.chat", "value": False}]
 
         page.select_option("#fullPageMode", "bilingual")
         assert posted() == [{"type": "update", "key": "fullPage.mode", "value": "bilingual"}]

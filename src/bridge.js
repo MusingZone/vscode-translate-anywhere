@@ -9,7 +9,7 @@ function allowedOrigin(origin) {
     /^vscode-webview:\/\/[a-z0-9-]+$/i.test(origin || '');
 }
 
-function createBridge({ token, dictionary, translate, vocabulary, isEnabled, getStatus = () => ({}), onError, port = PORT }) {
+function createBridge({ token, dictionary, translate, vocabulary, isEnabled, getStatus = () => ({}), onTip = () => {}, onError, port = PORT }) {
   // Last mouse press in any VS Code page (workbench or webview), so a popup open in one page closes on a click in another.
   let lastPointer = { time: 0, source: '' };
   const server = http.createServer(async (req, res) => {
@@ -40,7 +40,7 @@ function createBridge({ token, dictionary, translate, vocabulary, isEnabled, get
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
       return reply(401, { error: 'Invalid bridge token' });
     }
-    if (req.method !== 'POST' || !['/lookup', '/ai', '/status', '/vocab', '/pointer'].includes(req.url)) {
+    if (req.method !== 'POST' || !['/lookup', '/ai', '/status', '/vocab', '/pointer', '/tip'].includes(req.url)) {
       return reply(404, { error: 'Unknown route' });
     }
     if (req.url === '/status') return reply(200, { ...getStatus(), service: 'immersive-translate-vscode', enabled: isEnabled() });
@@ -65,6 +65,12 @@ function createBridge({ token, dictionary, translate, vocabulary, isEnabled, get
           lastPointer = { time: Date.now(), source: body.source.slice(0, 64) };
         }
         return reply(200, lastPointer);
+      }
+      // Onboarding hint in the popup: shown / dismissed / tried / used (a paragraph or page shortcut was pressed).
+      if (req.url === '/tip') {
+        if (!['shown', 'dismissed', 'tried', 'used'].includes(body.action)) return reply(400, { error: 'Unknown tip action' });
+        onTip(body.action);
+        return reply(200, { ok: true });
       }
       if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 1200) {
         return reply(400, { error: 'Select between 1 and 1200 characters' });

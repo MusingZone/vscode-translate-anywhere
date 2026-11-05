@@ -333,7 +333,7 @@ def cross_page_test(browser, handle, ui, select):
 def main():
     ui = (ROOT / "src" / "ui.js").read_text(encoding="utf-8")
     ui = ui[:ui.rindex("if (typeof module")]  # production injects immersiveUI.toString() only
-    calls, vocab, langs = [], set(), []
+    calls, vocab, langs, tips = [], set(), [], []
     pointer = {"time": 0, "source": ""}
     status = {"uiLanguage": "zh-cn", "fullPageMode": "translationOnly"}
 
@@ -362,6 +362,9 @@ def main():
             if body.get("action") == "down" and body.get("source"):
                 pointer.update(time=int(time.time() * 1000), source=body["source"])
             data = dict(pointer)
+        elif path == "/tip":
+            tips.append(body.get("action"))
+            data = {"ok": True}
         elif path == "/vocab":
             if body["action"] == "toggle":
                 vocab.symmetric_difference_update({body["text"]})
@@ -534,6 +537,49 @@ def main():
         assert rect[0] >= 0 and rect[1] <= rect[2], rect
         results["panel_in_view"] = rect
         page.keyboard.press("Escape")
+        page.evaluate("getSelection().removeAllRanges()")
+        # 8. Long selection: a one-time hint about the paragraph/page shortcuts; "Translate this paragraph" uses Alt+Z's path.
+        page.evaluate("window.scrollTo(0, 0)")
+        select(page, "p2")
+        page.locator(".imt-dot").hover()
+        page.wait_for_function("document.querySelector('.imt-panel p').textContent.startsWith('译(selection)')")
+        assert page.evaluate("document.querySelector('.imt-tip').hidden"), "no hint while the extension has not enabled it"
+        page.keyboard.press("Escape")
+        page.evaluate("getSelection().removeAllRanges()")
+        status["tip"] = True
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+        page.wait_for_timeout(150)
+        page.mouse.move(5, 5)
+        select(page, "p2")
+        page.locator(".imt-dot").hover()
+        page.wait_for_function("!document.querySelector('.imt-panel').hidden")
+        assert page.evaluate("document.querySelector('.imt-tip').hidden"), "short sentences get no hint"
+        page.keyboard.press("Escape")
+        page.evaluate("getSelection().removeAllRanges()")
+        page.evaluate("document.getElementById('long').scrollIntoView({block: 'center'})")
+        select(page, "long")
+        page.locator(".imt-dot").hover()
+        page.wait_for_function("!document.querySelector('.imt-tip').hidden")
+        assert page.evaluate("[...document.querySelectorAll('.imt-tip kbd')].map(k => k.textContent)") == ["Alt+Z", "Alt+W"]
+        assert ("/tip", None, None) in calls or any(c[0] == "/tip" for c in calls)
+        page.locator(".imt-tip-actions button").first.click()
+        page.wait_for_function("document.querySelector('#long > .imt-trans:not(.imt-loading)')")
+        assert trans(page, "long").startswith("译(paragraph)"), trans(page, "long")
+        assert tips == ["used", "shown", "tried"], tips  # "used" once, from the Alt+Z steps above
+        page.mouse.move(5, 5)
+        select(page, "long")
+        page.locator(".imt-dot").hover()
+        page.wait_for_function("!document.querySelector('.imt-panel').hidden")
+        assert page.evaluate("document.querySelector('.imt-tip').hidden"), "the hint is shown once per page"
+        page.keyboard.press("Escape")
+        page.evaluate("getSelection().removeAllRanges()")
+        page.mouse.move(5, 5)
+        box = page.locator("#long").bounding_box()
+        page.mouse.move(box["x"] + 5, box["y"] + 5)
+        page.keyboard.press("Alt+z")
+        page.wait_for_function("!document.querySelector('#long > .imt-trans')")
+        status.pop("tip")
+        results["tip"] = "ok"
         results["ai_calls"] = sum(1 for c in calls if c[0] == "/ai")
         results["chat"] = chat_test(browser, handle, ui)
         results["settings"] = settings_test(browser, handle, ui, status)

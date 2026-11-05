@@ -2,6 +2,23 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - Smarter model choice and easier start
+
+### Added
+- **Shortcuts & how to use** section at the top of the sidebar explains select, paragraph (Alt+Z) and full-page (Alt+W) translation, with a **Try it on a sample page** button that opens a short practice page.
+- When you select a long passage, the popup shows a one-line hint about the paragraph and full-page shortcuts, with a **Translate this paragraph** button. It appears at most three times and stops once you use a shortcut or dismiss it.
+- **Open Markdown as preview**: one click makes `.md` files open as a rendered preview by default (easier to read and translate), with **Open as text again** to undo. Also offered once when you open a Markdown file as text.
+- The sidebar vocabulary section shows your five most recent entries.
+- New commands: **Try It on a Sample Page**, **Open Markdown Files as Preview by Default / as Text by Default**, **Choose Where to Translate**.
+
+### Changed
+- **Default model**: the extension picks the first model from a built-in list of lightweight models (GPT luna, Claude Haiku, Gemini Flash, GPT mini…) that you have. If none matches, the sidebar asks you to choose. **Auto** is still available, but only when you select it.
+- Models you hid in VS Code's **Language Models** view are no longer listed or picked.
+- **Speed test** is reliable now: it uses a realistic sentence, warms up each model once, times three rounds with limited parallelism and shows the median (and time to first words). It only runs when you click it.
+- Sidebar order: Shortcuts before AI engine; Vocabulary before Offline dictionary. **Test AI** is replaced by an **Allow access** link shown only when the model is not authorized yet. Per-surface switches moved to **Where to translate…** in the footer.
+- Chinese words in the Marketplace name, description and keywords so the extension is found by searching 翻译.
+- README credits the German → Chinese dictionary (HanDeDict) and its license again.
+
 ## [0.5.1] - Sidebar polish
 
 ### Changed

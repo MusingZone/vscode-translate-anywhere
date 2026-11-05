@@ -661,3 +661,80 @@ test('the elevated maintenance step patches and restores (unprivileged run of th
     fs.rmSync(temp, { recursive: true });
   }
 });
+
+const models = require('../src/models');
+
+test('model preference ranks lightweight models, skips hidden ones and never picks Copilot auto', () => {
+  const list = [
+    { vendor: 'copilot', id: 'auto', name: 'Auto' },
+    { vendor: 'copilot', id: 'claude-opus-4.8', name: 'Claude Opus 4.8' },
+    { vendor: 'copilot', id: 'gpt-4o-mini', name: 'GPT-4o mini' },
+    { vendor: 'copilot', id: 'claude-haiku-4.5', name: 'Claude Haiku 4.5' },
+    { vendor: 'copilot', id: 'gpt-5.6-luna', name: 'GPT-5.6 luna' },
+    { vendor: 'copilot', id: 'gpt-6-luna', name: 'GPT-6 luna' }
+  ];
+  assert.equal(models.preferredRank(list[0]), -1);
+  assert.equal(models.preferredRank(list[1]), -1);
+  assert.deepEqual(models.sortByPreference(list).map(m => m.id),
+    ['gpt-6-luna', 'gpt-5.6-luna', 'claude-haiku-4.5', 'gpt-4o-mini', 'auto', 'claude-opus-4.8']);
+  assert.equal(models.pickPreferred(list).id, 'gpt-6-luna');
+  assert.equal(models.pickPreferred(list.slice(0, 2)), undefined);
+
+  const hidden = models.parseHiddenModels({ visibility: JSON.stringify({ hiddenModels: ['copilot/gpt-6-luna', 'customendpoint/Gateway/gpt-5.6-luna'] }) });
+  const visible = list.filter(m => !models.isHidden(m, hidden));
+  assert.ok(!visible.some(m => m.id === 'gpt-6-luna'));
+  assert.ok(visible.some(m => m.id === 'gpt-5.6-luna'), 'a hidden model of another vendor does not hide this one');
+  assert.ok(models.isHidden({ vendor: 'customendpoint', id: 'gpt-5.6-luna' }, hidden));
+  assert.equal(models.pickPreferred(visible).id, 'gpt-5.6-luna');
+  // Legacy {identifier: visible} format and garbage input.
+  assert.deepEqual([...models.parseHiddenModels({ pickerPreferences: '{"copilot/a":false,"copilot/b":true}' })], ['copilot/a']);
+  assert.equal(models.parseHiddenModels({ visibility: 'not json' }).size, 0);
+});
+
+test('speed benchmark warms up, takes the median, limits concurrency and reports unauthorized/failed models', async () => {
+  const delays = { fast: [900, 100, 120, 500], slow: [50, 300, 310, 290], broken: null };
+  const calls = {};
+  let inFlight = 0;
+  let peak = 0;
+  const progress = [];
+  const result = await models.benchmark(
+    [{ id: 'fast' }, { id: 'slow' }, { id: 'broken' }, { id: 'locked' }],
+    async model => {
+      inFlight++; peak = Math.max(peak, inFlight);
+      try {
+        await new Promise(resolve => setTimeout(resolve, 2));
+        if (!delays[model.id]) throw new Error('boom');
+        const total = delays[model.id][calls[model.id] = (calls[model.id] ?? -1) + 1];
+        return { total, first: total / 2 };
+      } finally { inFlight--; }
+    },
+    { runs: 3, concurrency: 2, warmupConcurrency: 2, canRun: model => model.id !== 'locked', onProgress: (done, total) => progress.push([done, total]) }
+  );
+  assert.ok(peak <= 2);
+  assert.deepEqual(result.get('fast'), { status: 'ok', median: 120, first: 60, min: 100, max: 500, runs: 3 });
+  assert.equal(result.get('slow').median, 300, 'the cold warm-up (50 ms) is not counted');
+  assert.equal(result.get('broken').status, 'failed');
+  assert.equal(result.get('locked').status, 'unauthorized');
+  assert.deepEqual(progress.at(-1), [12, 12]);
+  assert.ok(models.timingRank(result.get('fast')) < models.timingRank(result.get('slow')));
+  assert.equal(models.timingRank(result.get('broken')), Number.MAX_SAFE_INTEGER);
+});
+
+test('bridge /tip route forwards known actions only', async () => {
+  const tips = [];
+  const server = await createBridge({
+    port: 0, token: 'secret', isEnabled: () => true,
+    dictionary: { lookup: () => null }, translate: async () => ({ translation: '' }),
+    onTip: action => tips.push(action), onError: () => {}
+  });
+  try {
+    const post = body => fetch(`http://127.0.0.1:${server.address().port}/tip`, {
+      method: 'POST', headers: { Origin: 'vscode-file://vscode-app', 'X-Immersive-Token': 'secret', 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    for (const action of ['shown', 'dismissed', 'tried', 'used']) assert.equal((await post({ action })).status, 200);
+    assert.equal((await post({ action: 'other' })).status, 400);
+    assert.deepEqual(tips, ['shown', 'dismissed', 'tried', 'used']);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});

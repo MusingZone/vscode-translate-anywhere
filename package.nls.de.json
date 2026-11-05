@@ -1,5 +1,5 @@
 {
-  "displayName": "Translate Anywhere - Select & Hover Translator",
+  "displayName": "Translate Anywhere - Übersetzer · Select & Hover Translator",
   "description": "Text in Chat, Markdown-Vorschau, Release Notes, Einstellungen und mehr markieren und auf den roten Punkt zeigen: sofortige Wörterbuch- oder KI-Übersetzung. Mit Absatz- und Seitenübersetzung.",
   "command.enable": "Integration aktivieren / reparieren",
   "command.disable": "Deaktivieren und VS Code wiederherstellen",
@@ -27,7 +27,7 @@
   "config.fullPage.mode.translationOnly": "Nur Übersetzung: ersetzt den Originaltext (Tastenkombination erneut drücken zum Wiederherstellen).",
   "config.fullPage.mode.bilingual": "Zweisprachig: zeigt die Übersetzung unter dem Original.",
   "config.ai.autoTranslate": "Das KI-Modell automatisch verwenden, wenn das Offline-Wörterbuch keinen Eintrag hat (Ausdrücke, Sätze, Absätze). Wenn aus, im Popup auf **KI-Übersetzung** klicken.",
-  "config.ai.modelId": "ID des VS Code-Sprachmodells, das verwendet wird, wenn **KI-Anbieter** auf `VS Code Language Models` steht. Leer = automatisch ein leichtes Modell bevorzugen. Auswahl über die Liste in der Translate Anywhere-Seitenleiste oder mit **Translate Anywhere: KI-Modell auswählen**.",
+  "config.ai.modelId": "Sprachmodell, das verwendet wird, wenn **KI-Anbieter** auf `VS Code Language Models` steht. Wird automatisch auf das erste empfohlene leichte Modell gesetzt, das Sie haben und das in der Ansicht **Sprachmodelle** von VS Code nicht ausgeblendet ist (z. B. GPT luna, Claude Haiku, Gemini Flash oder GPT mini); passt keines, fordert die Seitenleiste zur Auswahl auf. `@auto` = immer das erste sichtbare empfohlene Modell. Auswahl in der Translate Anywhere-Seitenleiste oder mit **Translate Anywhere: KI-Modell auswählen**.",
   "config.integration.enabled": "Zustimmung, der lokalen VS Code-Installation ein umkehrbares UI-Skript hinzuzufügen (nötig für Übersetzungen in Chat, Vorschauen und Einstellungen). Entfernen mit **Translate Anywhere: Deaktivieren und VS Code wiederherstellen**.",
   "config.integration.autoRepair": "Die UI-Integration automatisch erneut anwenden, nachdem VS Code-Updates die Dateien ersetzt haben.",
   "view.panel": "Einstellungen",
@@ -46,5 +46,9 @@
   "config.dictionary.downloadUrl": "Zusätzliche HTTPS-URL, die beim Herunterladen des Wörterbuchs zuerst versucht wird, z. B. ein interner Spiegel. Die Datei muss zur veröffentlichten SHA-256-Prüfsumme passen.",
   "config.dictionary.downloadUrl.error": "Eine https://-URL eingeben oder leer lassen.",
   "command.downloadGermanDictionary": "Deutsch-Chinesisch-Wörterbuch herunterladen",
-  "config.dictionary.german": "Markierte deutsche Wörter im Offline-Wörterbuch Deutsch–Chinesisch ([HanDeDict](https://handedict.zydeo.net/), CC BY-SA 3.0) nachschlagen. Es wird einmalig (ca. 3 MB) heruntergeladen, wenn Sie zum ersten Mal ein deutsches Wort markieren; bis dahin und für Wortgruppen wird die KI-Übersetzung verwendet."
+  "config.dictionary.german": "Markierte deutsche Wörter im Offline-Wörterbuch Deutsch–Chinesisch ([HanDeDict](https://handedict.zydeo.net/), CC BY-SA 3.0) nachschlagen. Es wird einmalig (ca. 3 MB) heruntergeladen, wenn Sie zum ersten Mal ein deutsches Wort markieren; bis dahin und für Wortgruppen wird die KI-Übersetzung verwendet.",
+  "command.tryIt": "Auf einer Beispielseite ausprobieren",
+  "command.openMarkdownAsPreview": "Markdown-Dateien standardmäßig als Vorschau öffnen",
+  "command.openMarkdownAsText": "Markdown-Dateien standardmäßig als Text öffnen",
+  "command.openSurfaceSettings": "Auswählen, wo übersetzt wird"
 }

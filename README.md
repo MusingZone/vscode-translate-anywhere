@@ -15,11 +15,12 @@ Text editors are never touched. The extension does nothing while you edit code.
 | Feature | How |
 | --- | --- |
 | **Select & hover translation** | Select text, then hover the red dot. Words use the offline dictionary (English → Chinese). Anything longer, or other target languages, uses AI automatically. |
-| **Paragraph translation** | Hover a paragraph and press **Alt+Z**. Press again to remove the translation. |
+| **Paragraph translation** | Hover a paragraph and press **Alt+Z**. Press again to remove the translation. When you select a long passage, the popup shows a one-line hint about this shortcut (a few times at most). |
 | **Full-page translation** | Press **Alt+W** to translate the Chat conversation, preview or page you are working in. Press again to restore. "Translation only" (default) or "bilingual" display. |
 | **Many AI providers** | VS Code language models (GitHub Copilot, no key needed), OpenAI, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Kimi, GLM, SiliconFlow, OpenRouter, Groq, Mistral, Ollama, or any OpenAI-compatible endpoint. |
-| **Settings sidebar** | Everything in one panel in the Activity Bar: provider and model lists, API keys, dictionary, surfaces, shortcuts and vocabulary. |
-| **Vocabulary book** | Click ☆ in the popup to save a word. Open, export to CSV or remove entries. |
+| **Settings sidebar** | Everything in one panel in the Activity Bar: shortcuts with a sample page to try them, provider and model lists, API keys, vocabulary and dictionary. |
+| **Markdown as preview** | One click in the sidebar makes `.md` files open as a rendered preview by default, which is easier to read and translate. **Open as text again** undoes it. |
+| **Vocabulary book** | Click ☆ in the popup to save a word or sentence. The sidebar shows your latest entries; open, export to CSV or remove them. |
 | **Your language** | 20 target languages; the UI follows your VS Code display language. |
 
 | Dictionary | AI translation |
@@ -30,7 +31,7 @@ Text editors are never touched. The extension does nothing while you edit code.
 
 ### Supported surfaces
 
-Each surface can be switched off in the sidebar or with `translateAnywhere.surfaces`:
+Each surface can be switched off with `translateAnywhere.surfaces` (sidebar footer → **Where to translate…**):
 
 - Markdown preview
 - Release Notes
@@ -45,8 +46,8 @@ Each surface can be switched off in the sidebar or with `translateAnywhere.surfa
 1. Install the extension.
 2. Click **Enable…** in the welcome notification, or click **Enable / Repair** in the Translate Anywhere sidebar. Read the disclosure, then confirm.
 3. Reload the window when prompted.
-4. Select some text in Chat or a Markdown preview, then hover the red dot.
-5. Pick an AI provider in the sidebar. With **VS Code language models** (the default), the first AI translation asks for permission to use a model. If you dismissed that prompt, click **Test AI** in the sidebar.
+4. Click **Try it on a sample page** in the sidebar, or select some text in Chat or a Markdown preview, then hover the red dot.
+5. AI engine: with **VS Code language models** (the default), the extension picks the first lightweight model from its recommended list that you have and have not hidden in VS Code's **Language Models** view. If none matches, the sidebar asks you to choose one. The first AI translation asks for permission to use the model; if you dismissed that prompt, click **Allow access** next to the model in the sidebar.
 
 ## Settings sidebar
 
@@ -55,16 +56,16 @@ Each surface can be switched off in the sidebar or with `translateAnywhere.surfa
 Click the **文A** icon in the Activity Bar. The sidebar shows:
 
 - **Integration status**, with **Enable / Repair** and **Disable & Restore**.
+- **Shortcuts & how to use**: what select, **Alt+Z** and **Alt+W** do. Click a key and press a new combination to change it; Backspace turns it off. **Try it on a sample page** opens a practice page, and a card offers to open Markdown files as a preview by default.
 - **Translation**: target language, full-page display mode, automatic AI.
 - **AI engine**:
   - provider list;
-  - model list (with an optional speed test for VS Code models, or **Fetch list** for API providers);
+  - model list: recommended lightweight models first, models hidden in VS Code's **Language Models** view left out, and **Auto** as an explicit choice. **Speed test** warms up each model once and times three runs; the median is shown, with **Use it** for the fastest. It never runs by itself. API providers get **Fetch list** instead;
   - API key status with a link to the provider's key page;
   - an optional base URL.
-- **Dictionary**: status, Download, Choose file, Use default.
-- **Surfaces**: on/off per page type.
-- **Shortcuts**: click a field and press the new key combination; Backspace clears it.
-- **Vocabulary**: open, export, remove.
+- **Vocabulary**: your latest saved entries; open, export, remove.
+- **Offline dictionary**: status, Download, Choose file, Use default.
+- Footer: **Where to translate…** (per-surface switches), all settings, log.
 
 All values are ordinary VS Code settings, so they also appear in **Settings → Extensions → Translate Anywhere** and sync with Settings Sync. API keys are the exception: they never leave VS Code's Secret Storage.
 
@@ -74,7 +75,7 @@ All values are ordinary VS Code settings, so they also appear in **Settings → 
 
 | Provider | API | Default (lightweight) model | Get a key |
 | --- | --- | --- | --- |
-| **VS Code language models** *(default)* | VS Code Language Model API | auto: prefers mini / flash / haiku models | none; uses e.g. your GitHub Copilot subscription |
+| **VS Code language models** *(default)* | VS Code Language Model API | first visible model from a lightweight list (GPT luna, Claude Haiku, Gemini Flash, GPT mini…) | none; uses e.g. your GitHub Copilot subscription |
 | OpenAI | OpenAI | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com/api-keys) |
 | Anthropic Claude | Anthropic Messages | `claude-haiku-4-5` | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | Google Gemini | OpenAI-compatible | `gemini-2.5-flash-lite` | [aistudio.google.com](https://aistudio.google.com/apikey) |
@@ -138,7 +139,7 @@ Safeguards:
 | `translateAnywhere.fullPage.mode` | `translationOnly` | `translationOnly` or `bilingual`. |
 | `translateAnywhere.ai.autoTranslate` | `true` | Use AI automatically when the dictionary has no entry. |
 | `translateAnywhere.ai.provider` | `vscode` | AI provider (see the table above). |
-| `translateAnywhere.ai.modelId` | *(empty)* | VS Code language model ID. Empty means auto, preferring lightweight models. |
+| `translateAnywhere.ai.modelId` | *(empty)* | VS Code language model ID. Filled in automatically with the first visible recommended lightweight model; `@auto` always uses that one. |
 | `translateAnywhere.ai.apiModel` | *(empty)* | Model for API providers. Empty means the provider's default. |
 | `translateAnywhere.ai.baseUrl` | *(empty)* | Endpoint override for API providers. |
 | `translateAnywhere.dictionary.autoDownload` | `true` | Download the dictionary on first use. |
@@ -163,6 +164,7 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 | Enable / Repair Integration · Disable and Restore VS Code | Apply, repair or remove the UI integration. |
 | Select AI Provider · Select AI Model · Set API Key · Authorize AI Model | Configure the AI engine. |
 | Download Dictionary · Use Local Dictionary File… · Use Default Dictionary | Manage the offline dictionaries. |
+| Try It on a Sample Page · Open Markdown Files as Preview by Default · Open Markdown Files as Text by Default · Choose Where to Translate | Getting started and reading comfort. |
 | Open Vocabulary · Export Vocabulary to CSV · Remove Vocabulary Entries | Manage saved words. |
 | Open Settings · Show Status · Show Log | Settings and diagnostics. |
 
@@ -200,8 +202,9 @@ Issues and pull requests are welcome at [github.com/MusingZone/vscode-translate-
 ## Credits
 
 - English → Chinese dictionary: [ECDICT](https://github.com/skywind3000/ECDICT) by skywind3000, MIT License.
-- Other bundled data and its licenses: see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- German → Chinese dictionary: derived from [HanDeDict](https://handedict.zydeo.net/), CC BY-SA 3.0.
+- See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## License
 
-Extension code: [MIT](LICENSE.txt). Dictionary data keeps its own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Extension code: [MIT](LICENSE.txt). The German–Chinese dictionary data (`data/dictionary-de.json.gz`) is licensed under [CC BY-SA 3.0](data/HanDeDict-LICENSE.txt).

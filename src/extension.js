@@ -12,6 +12,7 @@ const { applyPatch, restorePatch, withPatchLock } = require('./patcher');
 const ui = require('./ui');
 const { elevatedMaintenance, readOnlyInstallReason } = require('./elevation');
 const { Vocabulary } = require('./vocabulary');
+const models = require('./models');
 
 const SECTION = 'translateAnywhere';
 // Settings and state of the pre-release build that was published under a different name.
@@ -87,87 +88,171 @@ async function activate(context) {
     return LANGUAGES[code] ? code : 'zh-CN';
   };
   const AUTHORIZE_HINT = () => L(
-    'First use needs your permission: run "Translate Anywhere: Authorize AI Model" from the Command Palette in this window and click Allow.',
-    '首次使用需授权：在命令面板中运行「Translate Anywhere: Authorize AI Model」并点击允许。',
-    'Beim ersten Mal ist Ihre Zustimmung nötig: Führen Sie in diesem Fenster über die Befehlspalette "Translate Anywhere: Authorize AI Model" aus und klicken Sie auf "Zulassen".'
+    'First use needs your permission: click "Allow access" under AI engine in the Translate Anywhere sidebar (or run "Translate Anywhere: Authorize AI Model") and confirm.',
+    '首次使用需授权：在 Translate Anywhere 侧边栏「AI 引擎」中点击「授权使用」（或在命令面板运行「Translate Anywhere: Authorize AI Model」）并确认。',
+    'Beim ersten Mal ist Ihre Zustimmung nötig: In der Translate Anywhere-Seitenleiste unter KI-Engine auf "Zugriff erlauben" klicken (oder "Translate Anywhere: Authorize AI Model" ausführen) und bestätigen.'
   );
-  const lightweightRank = model => {
-    const name = `${model.id} ${model.family} ${model.name}`.toLowerCase();
-    if (name.includes('luna')) return 0;
-    if (/mini|flash|haiku|lite|nano|small/.test(name)) return 1;
-    return 2;
-  };
-  const sortedModels = async () => (await vscode.lm.selectChatModels({}))
-    .sort((a, b) => lightweightRank(a) - lightweightRank(b));
-  // Speed-test results for this session (milliseconds, 'unauthorized' or 'failed'), shared by the sidebar and the model picker.
-  const modelTimings = new Map();
-  const speedRank = model => typeof modelTimings.get(model.id) === 'number' ? modelTimings.get(model.id) : Number.MAX_SAFE_INTEGER;
-  // Only measures models this extension may already use, so no consent dialog pops up per provider.
-  async function measureModels(models, onProgress, token) {
-    let done = 0;
-    await Promise.all(models.map(async model => {
-      if (context.languageModelAccessInformation.canSendRequest(model) !== true) {
-        modelTimings.set(model.id, 'unauthorized');
-      } else {
-        const started = Date.now();
+  // Models the user hid in VS Code's "Language Models" view are left out, like in the Chat model picker. The
+  // extension API does not expose that flag, so it is read from this profile's state database (read-only).
+  let hiddenCache = { at: 0, set: new Set() };
+  let hiddenWarned = false;
+  function hiddenModels() {
+    if (Date.now() - hiddenCache.at < 5000) return hiddenCache.set;
+    let set = new Set();
+    try {
+      const file = path.join(path.dirname(stateFolder), 'state.vscdb');
+      if (fs.existsSync(file)) {
+        const { DatabaseSync } = require('node:sqlite');
+        const db = new DatabaseSync(file, { readOnly: true });
         try {
-          await runModel(model, 'resilience', 15000, undefined, undefined, token);
-          modelTimings.set(model.id, Date.now() - started);
-        } catch {
-          if (!token?.isCancellationRequested) modelTimings.set(model.id, 'failed');
-        }
+          const query = db.prepare('SELECT value FROM ItemTable WHERE key = ?');
+          const read = key => {
+            const value = query.get(key)?.value;
+            return value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value;
+          };
+          set = models.parseHiddenModels({ visibility: read('chatModelVisibility'), pickerPreferences: read('chatModelPickerPreferences') });
+        } finally { db.close(); }
       }
-      onProgress(++done, models.length);
-    }));
+    } catch (error) {
+      if (!hiddenWarned) output.appendLine(`Model visibility unavailable (${errorText(error)}); listing all models.`);
+      hiddenWarned = true;
+    }
+    hiddenCache = { at: Date.now(), set };
+    return set;
+  }
+  // Visible VS Code models, recommended lightweight ones first.
+  const visibleModels = async () => {
+    const hidden = hiddenModels();
+    return models.sortByPreference((await vscode.lm.selectChatModels({})).filter(model => !models.isHidden(model, hidden)));
+  };
+  const noModelsError = () => new Error(L('No VS Code language model is available. Sign in to GitHub Copilot or configure a model provider first.',
+    '没有可用的 VS Code 语言模型。请先登录 Copilot 或配置模型提供程序。',
+    'Kein VS Code-Sprachmodell verfügbar. Melden Sie sich zuerst bei GitHub Copilot an oder konfigurieren Sie einen Modellanbieter.'));
+  // Speed-test results ({status, median, first, min, max, runs}), kept across sessions for the sidebar and the model picker.
+  const modelTimings = new Map(Object.entries(context.globalState.get('modelTimings', {})));
+  const speedRank = model => models.timingRank(modelTimings.get(model.id));
+  // A realistic UI sentence; one word measured mostly network noise and let large models look fast.
+  const BENCHMARK_TEXT = 'This update makes search results appear faster and fixes a crash when you open very large files.';
+  // Measures only models this extension may already use, so no consent dialog pops up per provider. Each model gets
+  // an untimed warm-up and three timed runs (median), at most two requests at a time.
+  async function measureModels(list, onProgress, token) {
+    const results = await models.benchmark(list, async model => {
+      const started = performance.now();
+      let first;
+      await runModel(model, BENCHMARK_TEXT, 20000, () => { first ??= performance.now() - started; }, undefined, token);
+      const total = performance.now() - started;
+      return { total, first: first ?? total };
+    }, {
+      runs: 3, concurrency: 2, warmupConcurrency: 4,
+      canRun: model => context.languageModelAccessInformation.canSendRequest(model) === true,
+      onProgress, isCancelled: () => !!token?.isCancellationRequested
+    });
+    if (token?.isCancellationRequested) return;
+    for (const [id, result] of results) modelTimings.set(id, result);
+    for (const [id, result] of results) {
+      output.appendLine(`Speed ${id}: ${result.status === 'ok' ? `median ${result.median} ms, first words ${result.first} ms, ${result.min}–${result.max} ms` : result.status}`);
+    }
+    await context.globalState.update('modelTimings', Object.fromEntries(modelTimings));
+  }
+  // Opens the sidebar with the model list focused.
+  async function focusModelPicker() {
+    await vscode.commands.executeCommand(`${SettingsPanel.viewType}.focus`);
+    panel?.focus('modelId');
+  }
+  let chooseNoticeShown = false;
+  async function suggestChoosingModel() {
+    if (chooseNoticeShown) return;
+    chooseNoticeShown = true;
+    const action = L('Choose model', '选择模型', 'Modell auswählen');
+    const choice = await vscode.window.showInformationMessage(L(
+      'Translate Anywhere: choose the AI model for translating phrases and paragraphs. A small, fast model works best.',
+      'Translate Anywhere：请选择用于翻译句子和段落的 AI 模型，推荐小而快的模型。',
+      'Translate Anywhere: Wählen Sie das KI-Modell für die Übersetzung von Sätzen und Absätzen. Ein kleines, schnelles Modell eignet sich am besten.'), action);
+    if (choice === action) await focusModelPicker();
+  }
+  // Fresh installs get the best recommended model among the visible ones; nothing is benchmarked automatically.
+  // Model providers register one after another, so "no recommended model" is only concluded after a grace period.
+  const activatedAt = Date.now();
+  let defaultTimer;
+  function scheduleDefaultModel(delay = 2000) {
+    clearTimeout(defaultTimer);
+    defaultTimer = setTimeout(() => ensureDefaultModel().catch(logError), delay);
+  }
+  context.subscriptions.push({ dispose: () => clearTimeout(defaultTimer) });
+  async function ensureDefaultModel() {
+    if (aiProvider() !== 'vscode' || config().get('ai.modelId', '')) return;
+    const visible = await visibleModels();
+    if (!visible.length) return;
+    const best = models.pickPreferred(visible);
+    if (best) {
+      await config().update('ai.modelId', best.id, vscode.ConfigurationTarget.Global);
+      output.appendLine(`Translation model set to ${best.name} (${best.id}), the first recommended lightweight model you have.`);
+      return;
+    }
+    if (Date.now() - activatedAt < 15000) return scheduleDefaultModel(15000 - (Date.now() - activatedAt));
+    if (context.globalState.get('modelChoiceSuggested')) return;
+    await context.globalState.update('modelChoiceSuggested', true);
+    await suggestChoosingModel();
   }
   async function resolveModel() {
     const modelId = config().get('ai.modelId', '');
-    if (modelId) {
+    if (modelId && modelId !== models.AUTO_MODEL) {
+      // An explicit choice is honoured even if the model was hidden later.
       const [configured] = await vscode.lm.selectChatModels({ id: modelId });
       if (configured) return configured;
+      suggestChoosingModel().catch(logError);
+      throw new Error(L(`The translation model "${modelId}" is no longer available. Choose another one in the Translate Anywhere sidebar.`,
+        `翻译模型「${modelId}」已不可用，请在 Translate Anywhere 侧边栏中重新选择。`,
+        `Das Übersetzungsmodell "${modelId}" ist nicht mehr verfügbar. Wählen Sie in der Translate Anywhere-Seitenleiste ein anderes aus.`));
     }
-    const [lightest] = await sortedModels();
-    if (!lightest) {
-      throw new Error(L('No VS Code language model is available. Sign in to GitHub Copilot or configure a model provider first.',
-        '没有可用的 VS Code 语言模型。请先登录 Copilot 或配置模型提供程序。',
-        'Kein VS Code-Sprachmodell verfügbar. Melden Sie sich zuerst bei GitHub Copilot an oder konfigurieren Sie einen Modellanbieter.'));
+    const visible = await visibleModels();
+    if (!visible.length) throw noModelsError();
+    if (modelId === models.AUTO_MODEL) {
+      const measured = [...visible].sort((a, b) => speedRank(a) - speedRank(b))[0];
+      return models.pickPreferred(visible) || (speedRank(measured) < Number.MAX_SAFE_INTEGER ? measured : visible[0]);
     }
-    return lightest;
+    const best = models.pickPreferred(visible);
+    if (best) {
+      await config().update('ai.modelId', best.id, vscode.ConfigurationTarget.Global);
+      return best;
+    }
+    suggestChoosingModel().catch(logError);
+    throw new Error(L('No translation model chosen yet. Pick one in the Translate Anywhere sidebar (AI engine → Model).',
+      '尚未选择翻译模型。请在 Translate Anywhere 侧边栏的「AI 引擎 → 模型」中选择。',
+      'Noch kein Übersetzungsmodell ausgewählt. Wählen Sie eines in der Translate Anywhere-Seitenleiste (KI-Engine → Modell).'));
   }
   // The list opens immediately; benchmarking is opt-in through the title-bar button.
   async function chooseModel() {
-    const models = await sortedModels();
-    if (!models.length) {
-      throw new Error(L('No VS Code language model is available. Configure a model provider first.', '没有可用的 VS Code 模型。请先配置模型提供程序。',
-        'Kein VS Code-Sprachmodell verfügbar. Konfigurieren Sie zuerst einen Modellanbieter.'));
-    }
+    const list = await visibleModels();
+    if (!list.length) throw noModelsError();
     const current = config().get('ai.modelId', '');
     const picker = vscode.window.createQuickPick();
     picker.title = L('Translate Anywhere: AI translation model', 'Translate Anywhere：选择 AI 翻译模型', 'Translate Anywhere: KI-Übersetzungsmodell');
-    picker.placeholder = L('Lightweight models are listed first. Click the speed button to benchmark authorized models.',
-      '轻量模型排在前面。可点击右上角测速按钮实测已授权模型的翻译耗时。',
-      'Leichte Modelle stehen oben. Klicken Sie auf die Tempo-Schaltfläche, um autorisierte Modelle zu messen.');
+    picker.placeholder = L('Recommended lightweight models are listed first. The speed button benchmarks authorized models (about a minute).',
+      '推荐的轻量模型排在前面。点击测速按钮可测量已授权模型的速度（约一分钟）。',
+      'Empfohlene leichte Modelle stehen oben. Die Tempo-Schaltfläche misst autorisierte Modelle (etwa eine Minute).');
     picker.matchOnDescription = picker.matchOnDetail = true;
     const measure = { iconPath: new vscode.ThemeIcon('dashboard'), tooltip: L('Measure translation speed', '测速', 'Übersetzungstempo messen') };
     picker.buttons = [measure];
-    const auto = { label: `$(sparkle) ${L('Auto (prefer a lightweight model)', '自动（优先轻量模型）', 'Automatisch (leichtes Modell bevorzugen)')}`, model: null };
+    const auto = { label: `$(sparkle) ${L('Auto', '自动', 'Automatisch')}`, detail: L('Uses the first recommended lightweight model you have',
+      '自动使用你可用的首个推荐轻量模型', 'Verwendet das erste empfohlene leichte Modell, das Sie haben'), id: models.AUTO_MODEL };
+    const recommended = new Set(list.filter(model => models.preferredRank(model) >= 0).map(model => model.id));
     const speed = model => {
       const timing = modelTimings.get(model.id);
-      if (timing === undefined) return '';
-      if (typeof timing === 'number') return `${(timing / 1000).toFixed(1)}s · `;
-      return timing === 'unauthorized' ? L('not authorized yet · ', '未授权 · ', 'noch nicht autorisiert · ') : L('failed · ', '失败 · ', 'fehlgeschlagen · ');
+      if (!timing) return '';
+      if (timing.status === 'ok') return `${(timing.median / 1000).toFixed(1)}s · `;
+      return timing.status === 'unauthorized' ? L('not authorized yet · ', '未授权 · ', 'noch nicht autorisiert · ') : L('failed · ', '失败 · ', 'fehlgeschlagen · ');
     };
     const render = () => {
-      const ordered = [...models].sort((a, b) => speedRank(a) - speedRank(b) || lightweightRank(a) - lightweightRank(b));
-      auto.description = current ? '' : L('current', '当前', 'aktuell');
-      const items = [auto, ...ordered.map(model => ({
+      auto.description = current === models.AUTO_MODEL ? L('current', '当前', 'aktuell') : '';
+      const items = [...list.map(model => ({
         label: model.name,
-        description: `${speed(model)}${model.vendor} · ${model.family}${model.id === current ? L(' · current', ' · 当前', ' · aktuell') : ''}`,
-        detail: model.id, model
-      }))];
-      const active = picker.activeItems[0]?.model?.id ?? current;
+        description: `${speed(model)}${recommended.has(model.id) ? L('recommended · ', '推荐 · ', 'empfohlen · ') : ''}${model.vendor} · ${model.family}${model.id === current ? L(' · current', ' · 当前', ' · aktuell') : ''}`,
+        detail: model.id, id: model.id
+      })), auto];
+      const active = picker.activeItems[0]?.id ?? current;
       picker.items = items;
-      picker.activeItems = [items.find(item => (item.model?.id || '') === active) || auto];
+      picker.activeItems = [items.find(item => item.id === active) || items[0]];
     };
     render();
     const cancel = new vscode.CancellationTokenSource();
@@ -176,7 +261,9 @@ async function activate(context) {
       picker.onDidTriggerButton(async () => {
         picker.busy = true;
         picker.buttons = [];
-        await measureModels(models, () => { if (!cancel.token.isCancellationRequested) render(); }, cancel.token);
+        await measureModels(list, () => {}, cancel.token);
+        if (cancel.token.isCancellationRequested) return;
+        render();
         picker.busy = false;
         picker.buttons = [measure];
         panel?.refresh();
@@ -186,8 +273,8 @@ async function activate(context) {
         if (!item) return;
         accepted = true;
         picker.hide();
-        await config().update('ai.modelId', item.model ? item.model.id : undefined, vscode.ConfigurationTarget.Global);
-        resolve(item.model || await resolveModel());
+        await config().update('ai.modelId', item.id, vscode.ConfigurationTarget.Global);
+        resolve(await resolveModel());
       });
       picker.onDidHide(() => {
         cancel.cancel();
@@ -612,9 +699,99 @@ async function activate(context) {
       shortcuts: {
         paragraph: typeof shortcuts.paragraph === 'string' ? shortcuts.paragraph : 'Alt+Z',
         fullPage: typeof shortcuts.fullPage === 'string' ? shortcuts.fullPage : 'Alt+W'
-      }
+      },
+      tip: tipActive()
     };
   };
+  // One-time hint in the translation popup that paragraph / page shortcuts exist: shown after a long selection,
+  // at most three times, never twice within ten minutes, and never again once dismissed or a shortcut was used.
+  const TIP_KEY = 'paragraphTip';
+  function tipActive() {
+    const tip = context.globalState.get(TIP_KEY, { shown: 0, last: 0, done: false });
+    const shortcuts = config().get('shortcuts', {}) || {};
+    if (shortcuts.paragraph === '' && shortcuts.fullPage === '') return false;
+    return !tip.done && tip.shown < 3 && Date.now() - tip.last > 10 * 60 * 1000;
+  }
+  async function recordTip(action) {
+    const tip = context.globalState.get(TIP_KEY, { shown: 0, last: 0, done: false });
+    if (action === 'shown') await context.globalState.update(TIP_KEY, { ...tip, shown: tip.shown + 1, last: Date.now() });
+    else if (['dismissed', 'used', 'tried'].includes(action)) await context.globalState.update(TIP_KEY, { ...tip, done: true });
+  }
+  // Markdown files open in the text editor by default; the preview is where reading and translating happen.
+  const MARKDOWN_PREVIEW = 'vscode.markdown.preview.editor';
+  const isMarkdownGlob = glob => /^(\*\*\/)?\*\.(md|markdown)$/i.test(glob);
+  function markdownPreviewIsDefault() {
+    const associations = vscode.workspace.getConfiguration('workbench').get('editorAssociations') || {};
+    return Object.entries(associations).some(([glob, editor]) => editor === MARKDOWN_PREVIEW && isMarkdownGlob(glob));
+  }
+  async function setMarkdownPreviewDefault(on) {
+    const workbench = vscode.workspace.getConfiguration('workbench');
+    const associations = { ...(workbench.inspect('editorAssociations')?.globalValue || {}) };
+    for (const glob of Object.keys(associations)) if (isMarkdownGlob(glob) && associations[glob] === MARKDOWN_PREVIEW) delete associations[glob];
+    if (on) associations['*.md'] = MARKDOWN_PREVIEW;
+    await workbench.update('editorAssociations', Object.keys(associations).length ? associations : undefined, vscode.ConfigurationTarget.Global);
+    panel?.refresh();
+    if (!on) return;
+    // Files already open in a text editor keep it; offer to switch the current one right away.
+    const editor = vscode.window.activeTextEditor;
+    const reopen = L('Show preview now', '立即切换到预览', 'Vorschau jetzt anzeigen');
+    const undo = L('Undo', '撤销', 'Rückgängig');
+    const choice = await vscode.window.showInformationMessage(L(
+      'Markdown files now open as a preview. To edit one, click "Show Source" in the editor title bar, or right-click its tab → Reopen Editor With… → Text Editor.',
+      'Markdown 文件现在默认以预览方式打开。需要编辑时，点击编辑器右上角的“显示源”，或右键标签页 →“重新打开编辑器的方式…”→“文本编辑器”。',
+      'Markdown-Dateien werden jetzt als Vorschau geöffnet. Zum Bearbeiten in der Titelleiste des Editors auf "Quelle anzeigen" klicken oder per Rechtsklick auf die Registerkarte → "Editor erneut öffnen mit…" → "Text-Editor".'),
+      ...(editor?.document.languageId === 'markdown' ? [reopen] : []), undo);
+    if (choice === reopen) await vscode.commands.executeCommand('vscode.openWith', editor.document.uri, MARKDOWN_PREVIEW);
+    if (choice === undo) await setMarkdownPreviewDefault(false);
+  }
+  // Asked once, the first time a Markdown file opens as text while Markdown-preview translation is on.
+  async function offerMarkdownPreview(editor) {
+    const document = editor?.document;
+    if (!document || document.languageId !== 'markdown' || document.uri.scheme !== 'file') return;
+    if (context.globalState.get('markdownPreviewOffered') || markdownPreviewIsDefault()) return;
+    if (!config().get('integration.enabled', false) || !runtimeSettings().surfaces.markdownPreview) return;
+    if (path.dirname(document.uri.fsPath) === stateFolder) return;
+    await context.globalState.update('markdownPreviewOffered', true);
+    const always = L('Always open as preview', '总是以预览打开', 'Immer als Vorschau öffnen');
+    const once = L('Preview this file', '预览此文件', 'Diese Datei als Vorschau');
+    const choice = await vscode.window.showInformationMessage(L(
+      'Reading Markdown? In the preview you can translate it: select text, or press {0} on a paragraph. Open .md files as a preview by default?',
+      '在读 Markdown？预览模式下可以直接翻译：划词，或在段落上按 {0}。要让 .md 文件默认以预览方式打开吗？',
+      'Markdown lesen? In der Vorschau können Sie übersetzen: Text markieren oder auf einem Absatz {0} drücken. .md-Dateien standardmäßig als Vorschau öffnen?')
+      .replace('{0}', runtimeSettings().shortcuts.paragraph || 'Alt+Z'), always, once);
+    if (choice === always) await setMarkdownPreviewDefault(true);
+    if (choice === once) await vscode.commands.executeCommand('markdown.showPreview', document.uri);
+  }
+  // A short practice page in the Markdown preview, written in the interface language around English sample text.
+  async function openPractice() {
+    if (!config().get('integration.enabled', false)) {
+      await enable();
+      if (!config().get('integration.enabled', false)) return;
+    }
+    const { paragraph, fullPage } = runtimeSettings().shortcuts;
+    const key = value => value ? `**${value}**` : L('(no shortcut set)', '（未设置快捷键）', '(keine Tastenkombination)');
+    const sample = [
+      'Visual Studio Code is a lightweight but powerful source code editor which runs on your desktop.',
+      'It comes with built-in support for JavaScript, TypeScript and Node.js and has a rich ecosystem of extensions for other languages and runtimes.',
+      'Extensions let you add languages, debuggers, and tools to your installation to support your development workflow.'
+    ];
+    const text = [
+      `# ${L('Try Translate Anywhere', '试用 Translate Anywhere', 'Translate Anywhere ausprobieren')}`, '',
+      `1. ${L('**Select** a few words below, then point at the small red dot.', '**划选**下面的几个词，再把鼠标移到出现的小红点上。',
+        'Ein paar Wörter unten **markieren** und dann auf den kleinen roten Punkt zeigen.')}`,
+      `2. ${L(`Point at a paragraph and press ${key(paragraph)}: its translation appears in place. Press again to restore.`,
+        `鼠标指向一个段落按 ${key(paragraph)}：译文直接出现在原处，再按一次恢复原文。`,
+        `Auf einen Absatz zeigen und ${key(paragraph)} drücken: Die Übersetzung erscheint an Ort und Stelle. Erneut drücken stellt das Original wieder her.`)}`,
+      `3. ${L(`Press ${key(fullPage)} to translate the whole page, and again to switch back.`,
+        `按 ${key(fullPage)} 翻译整页，再按一次切回原文。`, `${key(fullPage)} übersetzt die ganze Seite, erneut drücken schaltet zurück.`)}`, '',
+      L('The same works in Chat, Release Notes, Settings and extension pages.', 'Chat、Release Notes、设置页和扩展详情页中同样可用。',
+        'Das funktioniert genauso in Chat, Release Notes, Einstellungen und auf Erweiterungsseiten.'), '',
+      '---', '', '## Getting Started', '', ...sample.flatMap(line => [line, ''])
+    ].join('\n');
+    const file = vscode.Uri.file(path.join(stateFolder, 'try-translate-anywhere.md'));
+    fs.writeFileSync(file.fsPath, text, 'utf8');
+    await vscode.commands.executeCommand('markdown.showPreview', file);
+  }
   // Another window may be busy starting up (e.g. after a crash restores several windows), so retry before giving up.
   async function probeSharedBridge() {
     let lastError;
@@ -650,6 +827,7 @@ async function activate(context) {
     try {
       server = await createBridge({
         token, dictionary: { lookup: lookupAny }, translate, vocabulary,
+        onTip: action => recordTip(action).catch(logError),
         isEnabled: () => config().get('integration.enabled', false),
         getStatus: () => ({ version, settings: runtimeSettings() }),
         onError: logError
@@ -854,6 +1032,11 @@ async function activate(context) {
       config().update('dictionary.path', undefined, vscode.ConfigurationTarget.Global))),
     vscode.commands.registerCommand('translateAnywhere.showLog', () => output.show(true)),
     vscode.commands.registerCommand('translateAnywhere.authorizeAI', guarded(authorizeModel)),
+    vscode.commands.registerCommand('translateAnywhere.tryIt', guarded(openPractice)),
+    vscode.commands.registerCommand('translateAnywhere.openMarkdownAsPreview', guarded(() => setMarkdownPreviewDefault(true))),
+    vscode.commands.registerCommand('translateAnywhere.openMarkdownAsText', guarded(() => setMarkdownPreviewDefault(false))),
+    vscode.commands.registerCommand('translateAnywhere.openSurfaceSettings', () =>
+      vscode.commands.executeCommand('workbench.action.openSettings', `${SECTION}.surfaces`)),
     vscode.commands.registerCommand('translateAnywhere.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${context.extension.id}`)),
     vscode.commands.registerCommand('translateAnywhere.openVocabulary', guarded(async () => {
@@ -903,13 +1086,32 @@ async function activate(context) {
   async function panelState() {
     const providerId = aiProvider();
     const preset = PROVIDERS[providerId];
+    const modelId = config().get('ai.modelId', '');
     let vscodeModels = [];
+    let modelAuthorized = true;
     if (providerId === 'vscode') {
       try {
-        vscodeModels = (await sortedModels()).sort((a, b) => speedRank(a) - speedRank(b))
-          .map(model => ({ id: model.id, name: model.name, detail: `${model.vendor} · ${model.family}`, timing: modelTimings.get(model.id) ?? null }));
+        const describe = (model, extra = {}) => ({
+          id: model.id, name: model.name, detail: `${model.vendor} · ${model.family}`,
+          recommended: models.preferredRank(model) >= 0, timing: modelTimings.get(model.id) ?? null, ...extra
+        });
+        const visible = await visibleModels();
+        vscodeModels = visible.map(model => describe(model));
+        // A model chosen earlier and hidden since stays listed so the selection does not silently change.
+        if (modelId && modelId !== models.AUTO_MODEL && !visible.some(model => model.id === modelId)) {
+          const [chosen] = await vscode.lm.selectChatModels({ id: modelId });
+          vscodeModels.push(chosen ? describe(chosen, { hidden: true }) : { id: modelId, name: modelId, detail: '', missing: true, timing: null });
+        }
+        if (modelId && modelId !== models.AUTO_MODEL) {
+          const [chosen] = await vscode.lm.selectChatModels({ id: modelId });
+          modelAuthorized = !chosen || context.languageModelAccessInformation.canSendRequest(chosen) === true;
+        }
       } catch (error) { logError(error); }
     }
+    const recent = vocabulary.list().slice(0, 5).map(entry => ({
+      text: entry.text.slice(0, 80), phonetic: (entry.phonetic || '').slice(0, 40),
+      translation: (entry.translation || '').replace(/\s+/g, ' ').slice(0, 120)
+    }));
     return {
       version, uiLanguage: uiLanguage(),
       integration: { enabled: config().get('integration.enabled', false), status: patchStatus },
@@ -920,7 +1122,7 @@ async function activate(context) {
       provider: providerId,
       providers: [{ id: 'vscode', label: L('VS Code language models (Copilot…)', 'VS Code 语言模型（Copilot 等）', 'VS Code-Sprachmodelle (Copilot…)') },
         ...Object.entries(PROVIDERS).map(([id, item]) => ({ id, label: item.label }))],
-      vscodeModels, modelId: config().get('ai.modelId', ''), benchmark,
+      vscodeModels, modelId, modelAuthorized, benchmark,
       apiModel: config().get('ai.apiModel', ''), baseUrl: config().get('ai.baseUrl', ''),
       providerDefaults: preset ? { model: preset.model, baseUrl: preset.baseUrl, keyUrl: preset.keyUrl || '', keyOptional: !!preset.keyOptional } : null,
       hasKey: preset ? !!await context.secrets.get(secretKey(providerId)) : false,
@@ -928,18 +1130,19 @@ async function activate(context) {
       germanDictionary: { ...germanState, enabled: config().get('dictionary.german', true) },
       surfaces: runtimeSettings().surfaces,
       shortcuts: runtimeSettings().shortcuts,
-      vocabularyCount: vocabulary.list().length
+      markdownPreviewDefault: markdownPreviewIsDefault(),
+      vocabularyCount: vocabulary.list().length, vocabularyRecent: recent
     };
   }
   // Sidebar speed test: progress and results reach the panel through its state, so they survive the view being hidden.
   let benchmark = null;
   async function benchmarkModels() {
     if (benchmark) return;
-    const models = await sortedModels();
-    benchmark = { done: 0, total: models.length };
+    const list = await visibleModels();
+    benchmark = { done: 0, total: 0 };
     panel.refresh();
     try {
-      await measureModels(models, done => { benchmark.done = done; panel.refresh(); });
+      await measureModels(list, (done, total) => { benchmark = { done, total }; panel.refresh(); });
     } finally {
       benchmark = null;
       panel.refresh();
@@ -976,11 +1179,18 @@ async function activate(context) {
       if (!event.affectsConfiguration(SECTION)) return;
       if (event.affectsConfiguration(`${SECTION}.dictionary.path`)) reloadDictionary();
       if (event.affectsConfiguration(`${SECTION}.ai`) || event.affectsConfiguration(`${SECTION}.targetLanguage`)) aiCache.clear();
+      if (event.affectsConfiguration(`${SECTION}.ai.provider`) || event.affectsConfiguration(`${SECTION}.ai.modelId`)) scheduleDefaultModel();
       panel.refresh();
     }),
     context.secrets.onDidChange(() => panel.refresh()),
-    vscode.lm.onDidChangeChatModels(() => panel.refresh())
+    context.languageModelAccessInformation.onDidChange(() => panel.refresh()),
+    vscode.lm.onDidChangeChatModels(() => { hiddenCache.at = 0; panel.refresh(); scheduleDefaultModel(); }),
+    vscode.window.onDidChangeActiveTextEditor(editor => offerMarkdownPreview(editor).catch(logError)),
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('workbench.editorAssociations')) panel.refresh();
+    })
   );
+  scheduleDefaultModel(3000);
   try {
     await startBridge();
     if (config().get('integration.enabled', false)) {

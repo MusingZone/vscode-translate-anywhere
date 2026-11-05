@@ -10,12 +10,15 @@ function immersiveUI(config) {
   // User settings arrive from the extension through /status (polled), so changes apply without a reload.
   const DEFAULTS = {
     targetLanguage: 'zh-CN', uiLanguage: 'en', fullPageMode: 'translationOnly', autoAI: true,
-    surfaces: {}, shortcuts: { paragraph: 'Alt+Z', fullPage: 'Alt+W' }
+    surfaces: {}, shortcuts: { paragraph: 'Alt+Z', fullPage: 'Alt+W' }, tip: false
   };
   let settings = DEFAULTS;
   // Identifies this page (workbench or one webview) in the bridge's shared "last mouse press" record.
   const pageId = Math.random().toString(36).slice(2);
   let staleWarned = false;
+  // The paragraph-shortcut hint appears at most once per page runtime; the extension limits it further.
+  let tipShown = false;
+  let tipUsedReported = false;
   const toasters = [];
   const statusListeners = [];
   const STRINGS = {
@@ -31,6 +34,8 @@ function immersiveUI(config) {
       translating: 'Translating…', paraFailed: '(Translation failed: {0})',
       fullOn: 'Page translation on ({0}). Press {1} again to restore the original.', fullOff: 'Page translation off. Original text restored.',
       modeOnly: 'translation only', modeBilingual: 'bilingual',
+      tipLead: 'Tip: ', tipParagraph: 'point at a paragraph and press {0} to translate it in place', tipPage: 'press {0} for the whole page',
+      tipJoin: '; ', tipEnd: '.', tipTry: 'Translate this paragraph', tipDismiss: 'Got it',
       stale: 'Translate Anywhere was updated. Run "Developer: Reload Window" to load the new version.'
     },
     zh: {
@@ -44,6 +49,8 @@ function immersiveUI(config) {
       translating: '翻译中…', paraFailed: '（翻译失败：{0}）',
       fullOn: '全文翻译（{0}）：已开启，再按 {1} 恢复原文', fullOff: '全文翻译：已关闭，已恢复原文',
       modeOnly: '仅译文', modeBilingual: '双语对照',
+      tipLead: '小提示：', tipParagraph: '鼠标指向段落按 {0}，译文直接显示在原处', tipPage: '按 {0} 翻译整页',
+      tipJoin: '；', tipEnd: '。', tipTry: '翻译此段落', tipDismiss: '知道了',
       stale: 'Translate Anywhere 已更新，请运行“Developer: Reload Window”重载窗口以使用新版本。'
     },
     de: {
@@ -58,6 +65,8 @@ function immersiveUI(config) {
       translating: 'Wird übersetzt…', paraFailed: '(Übersetzung fehlgeschlagen: {0})',
       fullOn: 'Seitenübersetzung an ({0}). Erneut {1} drücken, um das Original wiederherzustellen.', fullOff: 'Seitenübersetzung aus. Original wiederhergestellt.',
       modeOnly: 'nur Übersetzung', modeBilingual: 'zweisprachig',
+      tipLead: 'Tipp: ', tipParagraph: 'auf einen Absatz zeigen und {0} drücken übersetzt ihn an Ort und Stelle', tipPage: '{0} übersetzt die ganze Seite',
+      tipJoin: '; ', tipEnd: '.', tipTry: 'Diesen Absatz übersetzen', tipDismiss: 'Verstanden',
       stale: 'Translate Anywhere wurde aktualisiert. Führen Sie "Developer: Reload Window" aus, um die neue Version zu laden.'
     }
   };
@@ -241,6 +250,11 @@ function immersiveUI(config) {
       .imt-ai:disabled{opacity:.5!important;cursor:default!important}
       .imt-trans{display:block!important;margin:4px 0 2px!important;opacity:.82!important;white-space:pre-wrap!important;font-weight:normal!important}
       .imt-trans.imt-loading{opacity:.45!important;font-style:italic!important}
+      .imt-tip{margin-top:8px!important;padding:6px 8px!important;border-radius:6px!important;background:var(--vscode-textBlockQuote-background,#7f7f7f1f)!important;border-left:3px solid var(--vscode-textLink-foreground,#4daafc)!important;font:12px/1.5 var(--vscode-font-family,system-ui)!important;white-space:normal!important;user-select:none!important}
+      .imt-tip kbd{padding:0 4px!important;border:1px solid var(--vscode-keybindingLabel-border,#7f7f7f80)!important;border-bottom-width:2px!important;border-radius:3px!important;background:var(--vscode-keybindingLabel-background,#7f7f7f26)!important;font:600 11px var(--vscode-editor-font-family,monospace)!important}
+      .imt-tip-actions{display:flex!important;gap:12px!important;justify-content:flex-end!important;margin-top:4px!important}
+      .imt-tip-actions button{padding:0!important;margin:0!important;border:0!important;background:transparent!important;color:var(--vscode-textLink-foreground,#4daafc)!important;font:12px/1.5 var(--vscode-font-family,system-ui)!important;cursor:pointer!important}
+      .imt-tip-actions button:hover{text-decoration:underline!important}
       .imt-only{font-size:0!important;line-height:0!important}
       .imt-only::marker{font-size:var(--imt-fs)!important}
       .imt-only>:not(.imt-trans):not(:is(${NESTED_CSS})){display:none!important}
@@ -309,7 +323,20 @@ function immersiveUI(config) {
     ai.type = 'button';
     ai.className = 'imt-ai';
     foot.append(source, ai);
-    panel.append(head, phonetic, result, foot);
+    // One-time hint that long text is quicker with the paragraph / page shortcuts.
+    const tip = doc.createElement('div');
+    tip.className = 'imt-tip';
+    tip.hidden = true;
+    const tipText = doc.createElement('div');
+    const tipActions = doc.createElement('div');
+    tipActions.className = 'imt-tip-actions';
+    const tipTry = doc.createElement('button');
+    tipTry.type = 'button';
+    const tipDismiss = doc.createElement('button');
+    tipDismiss.type = 'button';
+    tipActions.append(tipTry, tipDismiss);
+    tip.append(tipText, tipActions);
+    panel.append(head, phonetic, result, foot, tip);
     doc.body.append(dot, panel);
     // Labels follow the current UI language, which can change while the page is open.
     function applyLabels() {
@@ -329,6 +356,7 @@ function immersiveUI(config) {
       star.setAttribute('aria-label', star.title);
     }
     let selected = '';
+    let selectedStart = null;
     let revision = 0;
     let pointerDownInPanel = false;
     // While the user is still drag-selecting, the dot stays hidden (it would otherwise chase the mouse and
@@ -404,7 +432,7 @@ function immersiveUI(config) {
       const text = selection.toString().trim();
       if (!eligible(start) || !eligible(end) || !text || text.length > 1200 || inTarget(text)) return null;
       if (regionOf(start).root !== regionOf(end).root) return null;
-      return { text, point: edgePoint(selection, range) };
+      return { text, point: edgePoint(selection, range), start };
     }
     function position(element, x, y) {
       element.hidden = false;
@@ -461,6 +489,8 @@ function immersiveUI(config) {
       hide();
       applyLabels();
       selected = value.text;
+      selectedStart = value.start;
+      tip.hidden = true;
       heading.textContent = selected;
       heading.title = selected;
       phonetic.textContent = '';
@@ -495,6 +525,7 @@ function immersiveUI(config) {
       if (!selected || disabled) return;
       const id = revision;
       openPanel();
+      maybeTip();
       if (aiStartedFor === id) return;
       try {
         const data = await lookupPromise;
@@ -650,6 +681,48 @@ function immersiveUI(config) {
         star.disabled = false;
       }
     });
+
+    // ---- Onboarding hint after a long selection: paragraph / page shortcuts are faster for whole passages. ----
+    function withKey(template, key) {
+      const [before, after = ''] = template.split('{0}');
+      const kbd = doc.createElement('kbd');
+      kbd.textContent = key;
+      return [before, kbd, after];
+    }
+    function maybeTip() {
+      const { paragraph, fullPage } = settings.shortcuts;
+      if (tipShown || !settings.tip || (!paragraph && !fullPage)) return;
+      // Long sentences or passages only (about 13+ words): short phrases are what the red dot is for.
+      if (selected.length < 80 || (selected.match(/\s+/g) || []).length < 12) return;
+      tipShown = true;
+      const parts = [];
+      if (paragraph) parts.push(withKey(uiStrings().tipParagraph ?? STRINGS.en.tipParagraph, paragraph));
+      if (fullPage) parts.push(withKey(uiStrings().tipPage ?? STRINGS.en.tipPage, fullPage));
+      tipText.replaceChildren('💡 ' + t('tipLead'), ...parts.flatMap((nodes, index) => index ? [t('tipJoin'), ...nodes] : nodes), t('tipEnd'));
+      const block = paragraph ? blockAt(selectedStart) : null;
+      tipTry.hidden = !block || !translatable(block);
+      tipTry.textContent = t('tipTry');
+      tipDismiss.textContent = t('tipDismiss');
+      tip.hidden = false;
+      placePanel();
+      request('/tip', { action: 'shown' }).catch(() => {});
+    }
+    tipTry.addEventListener('click', () => {
+      const block = blockAt(selectedStart);
+      hide();
+      if (block && translatable(block)) enqueue(block, true);
+      request('/tip', { action: 'tried' }).catch(() => {});
+    });
+    tipDismiss.addEventListener('click', () => {
+      tip.hidden = true;
+      placePanel();
+      request('/tip', { action: 'dismissed' }).catch(() => {});
+    });
+    const shortcutUsed = () => {
+      if (tipUsedReported) return;
+      tipUsedReported = true;
+      request('/tip', { action: 'used' }).catch(() => {});
+    };
 
     // ---- Paragraph translation (default keys match Chrome Immersive Translate):
     //      the page shortcut toggles the whole surface, the paragraph shortcut the paragraph under the mouse. ----
@@ -911,7 +984,7 @@ function immersiveUI(config) {
         event.preventDefault();
         event.stopImmediatePropagation();
         if (transOf(block) || jobs.has(block) || block.classList.contains('imt-only')) removeTranslation(block);
-        else if (translatable(block)) enqueue(block, true);
+        else if (translatable(block)) { enqueue(block, true); shortcutUsed(); }
         else toast(t('noNeed'));
         return;
       }
@@ -921,6 +994,7 @@ function immersiveUI(config) {
       if (!surface) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (!fullSurfaces.has(surface)) shortcutUsed();
       setFullMode(surface, !fullSurfaces.has(surface));
     }, true);
   }

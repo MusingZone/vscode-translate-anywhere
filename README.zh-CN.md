@@ -18,11 +18,12 @@
 | 功能 | 用法 |
 | --- | --- |
 | **划词悬停翻译** | 划选文字后把鼠标移到红点上。单词查离线词典（英 → 中）；更长的内容或其他目标语言自动使用 AI。 |
-| **段落翻译** | 鼠标停在段落上按 **Alt+Z**，再按一次移除译文。 |
+| **段落翻译** | 鼠标停在段落上按 **Alt+Z**，再按一次移除译文。划选一大段文字时，弹窗里会用一行小字提示这个快捷键（最多提示几次）。 |
 | **全文翻译** | 按 **Alt+W** 翻译当前所在的 Chat 对话、预览或页面，再按一次恢复原文。可选"仅译文"（默认）或"原文译文对照"。 |
 | **多家 AI 服务商** | VS Code 语言模型（GitHub Copilot，无需 Key）、OpenAI、Anthropic Claude、Google Gemini、DeepSeek、通义千问、Kimi、智谱 GLM、硅基流动、OpenRouter、Groq、Mistral、Ollama，或任何 OpenAI 兼容接口。 |
-| **设置侧边栏** | 活动栏中一个面板集中管理：服务商与模型下拉列表、API Key、词典、翻译范围、快捷键、生词本。 |
-| **生词本** | 点击弹窗中的 ☆ 收藏单词，可打开、导出 CSV 或删除。 |
+| **设置侧边栏** | 活动栏中一个面板集中管理：快捷键（附示例页面可直接试用）、服务商与模型下拉列表、API Key、生词本、词典。 |
+| **Markdown 默认预览** | 在侧边栏一键把 `.md` 文件改为默认以渲染后的预览打开，阅读和翻译都更方便；点 **恢复为源码打开** 即可撤销。 |
+| **生词本** | 点击弹窗中的 ☆ 收藏单词或句子。侧边栏显示最近收藏的条目，可打开、导出 CSV 或删除。 |
 | **多语言** | 20 种目标语言；界面语言跟随 VS Code 显示语言。 |
 
 | 词典释义 | AI 翻译 |
@@ -33,7 +34,7 @@
 
 ### 支持的页面
 
-每类页面都可以在侧边栏或 `translateAnywhere.surfaces` 中单独关闭：
+每类页面都可以通过 `translateAnywhere.surfaces` 单独关闭（侧边栏底部 → **翻译范围…**）：
 
 - Markdown 预览
 - Release Notes（更新说明）
@@ -48,8 +49,8 @@
 1. 安装扩展。
 2. 启用界面集成：在欢迎通知中点击 **启用…**，或在 Translate Anywhere 侧边栏点击 **启用 / 修复**。阅读说明后确认。
 3. 按提示重新加载窗口。
-4. 在 Chat 或 Markdown 预览中划选文字，把鼠标移到红点上。
-5. 在侧边栏选择 AI 服务商。默认使用 **VS Code 语言模型**，第一次 AI 翻译时会请求模型使用授权；如果错过了授权提示，在侧边栏点击 **测试 AI** 即可重新触发。
+4. 点击侧边栏中的 **在示例页面上试一试**，或者在 Chat、Markdown 预览中划选文字，把鼠标移到红点上。
+5. AI 引擎：默认使用 **VS Code 语言模型**。扩展会从内置的轻量模型推荐列表中，选出你可用、且没有在 VS Code **语言模型** 视图中隐藏的第一个模型；都不匹配时，侧边栏会引导你手动选择。第一次 AI 翻译时会请求模型使用授权；如果错过了授权提示，点击侧边栏模型下方的 **授权使用** 即可。
 
 ## 设置侧边栏
 
@@ -58,16 +59,16 @@
 点击活动栏中的 **文A** 图标打开侧边栏，包含以下内容：
 
 - **界面集成**：显示状态，提供"启用 / 修复"和"禁用并恢复"。
+- **快捷键与用法**：说明划词、**Alt+Z**、**Alt+W** 分别做什么。点击按键框后按下新的组合键即可修改，退格键关闭。**在示例页面上试一试** 会打开一个练习页面；下方卡片可一键把 Markdown 文件改为默认以预览打开。
 - **翻译**：目标语言、全文翻译显示方式、自动 AI。
 - **AI 引擎**：
   - 服务商下拉列表；
-  - 模型下拉列表（VS Code 模型可选择测速，API 服务商可点击"获取列表"）；
+  - 模型下拉列表：推荐的轻量模型排在最前，在 VS Code **语言模型** 视图中隐藏的模型不会列出，**自动** 需要你主动选择。**测速** 会让每个模型先预热一次、再计时三次并显示中位数，最快的模型旁有 **改用此模型**；测速只在你点击时运行。API 服务商则提供"获取列表"；
   - API Key 状态及获取 Key 的链接；
   - 可选的 API 地址。
+- **生词本**：显示最近收藏的条目，可打开、导出、删除。
 - **离线词典**：状态，以及"下载"、"选择文件"、"恢复默认"。
-- **翻译范围**：按页面类型开关。
-- **快捷键**：点击输入框后直接按下新的组合键，退格键清空。
-- **生词本**：打开、导出、删除。
+- 底部：**翻译范围…**（按页面类型开关）、全部设置、查看日志。
 
 除 API Key 外，所有选项都是普通的 VS Code 设置，在 **设置 → 扩展 → Translate Anywhere** 中同样可见，也会随设置同步。API Key 只保存在 VS Code 的 Secret Storage 中。
 
@@ -77,7 +78,7 @@
 
 | 服务商 | 接口 | 默认（轻量）模型 | 获取 Key |
 | --- | --- | --- | --- |
-| **VS Code 语言模型**（默认） | VS Code Language Model API | 自动：优先 mini / flash / haiku 类模型 | 无需 Key，例如使用你的 GitHub Copilot 订阅 |
+| **VS Code 语言模型**（默认） | VS Code Language Model API | 轻量推荐列表中第一个可见的模型（GPT luna、Claude Haiku、Gemini Flash、GPT mini 等） | 无需 Key，例如使用你的 GitHub Copilot 订阅 |
 | OpenAI | OpenAI | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com/api-keys) |
 | Anthropic Claude | Anthropic Messages | `claude-haiku-4-5` | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | Google Gemini | OpenAI 兼容 | `gemini-2.5-flash-lite` | [aistudio.google.com](https://aistudio.google.com/apikey) |
@@ -141,7 +142,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 | `translateAnywhere.fullPage.mode` | `translationOnly` | `translationOnly`（仅译文）或 `bilingual`（对照）。 |
 | `translateAnywhere.ai.autoTranslate` | `true` | 词典未收录时自动使用 AI。 |
 | `translateAnywhere.ai.provider` | `vscode` | AI 服务商（见上表）。 |
-| `translateAnywhere.ai.modelId` | （空） | VS Code 语言模型 ID，留空则自动选择并优先轻量模型。 |
+| `translateAnywhere.ai.modelId` | （空） | VS Code 语言模型 ID。自动填入第一个可见的推荐轻量模型；`@auto` 表示始终使用该模型。 |
 | `translateAnywhere.ai.apiModel` | （空） | API 服务商的模型名，留空使用默认模型。 |
 | `translateAnywhere.ai.baseUrl` | （空） | API 服务商的接口地址覆盖。 |
 | `translateAnywhere.dictionary.autoDownload` | `true` | 首次使用时自动下载词典。 |
@@ -166,6 +167,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 | 启用 / 修复界面集成 · 禁用并恢复 VS Code 原文件 | 应用、修复或移除界面集成。 |
 | 选择 AI 服务商 · 选择 AI 模型 · 设置 API Key · 授权 AI 模型 | 配置 AI 引擎。 |
 | 下载词典 · 使用本地词典文件… · 使用默认词典 | 管理离线词典。 |
+| 在示例页面上试用 · 默认以预览方式打开 Markdown 文件 · 默认以文本方式打开 Markdown 文件 · 选择翻译范围 | 上手与阅读体验。 |
 | 打开生词本 · 导出生词本为 CSV · 删除生词本条目 | 管理收藏的单词。 |
 | 打开设置 · 显示状态 · 显示日志 | 设置与诊断。 |
 
@@ -206,8 +208,9 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 ## 致谢
 
 - 英汉词典：[ECDICT](https://github.com/skywind3000/ECDICT)（skywind3000，MIT 许可证）。
-- 其他随附数据及其许可：详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+- 德汉词典：基于 [HanDeDict](https://handedict.zydeo.net/)（CC BY-SA 3.0）。
+- 详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
 ## 许可证
 
-扩展代码：[MIT](LICENSE.txt)。词典数据沿用各自的许可，详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+扩展代码：[MIT](LICENSE.txt)。德汉词典数据（`data/dictionary-de.json.gz`）采用 [CC BY-SA 3.0](data/HanDeDict-LICENSE.txt) 许可。
