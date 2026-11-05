@@ -120,9 +120,17 @@ VS Code still asks users to trust a third-party publisher the first time they in
 
 ### Publisher website
 
-The GitHub Pages landing page is `docs/index.html`; `docs/CNAME` specifies `musingzone.com`. Configure Pages to deploy from the `main` branch's `/docs` folder. Before directing DNS to GitHub, verify the domain in the MusingZone GitHub account and configure the custom domain in Pages. Keep the GitHub verification TXT record in DNS, and check whether changing the existing domain records would disrupt another service.
+The GitHub Pages landing page is `docs/index.html`; `docs/CNAME` specifies `vta.musingzone.com`. Configure Pages to deploy from the `main` branch's `/docs` folder. A Pages site has only one custom domain, so two separate repositories provide client-side redirects to `https://vta.musingzone.com`, preserving the path, query, and hash:
 
-Use GitHub's [custom domain configuration guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) for the current DNS records and HTTPS setup. Once DNS and the certificate have propagated, confirm that `curl.exe -I https://musingzone.com` returns HTTP 200 from a network that can reach the site.
+| Domain | Repository | DNS |
+| --- | --- | --- |
+| `vta.musingzone.com` (primary) | this repository, `/docs` | `vta` CNAME → `musingzone.github.io` |
+| `musingzone.com` (+ `www`) | [`MusingZone/musingzone.com-redirect`](https://github.com/MusingZone/musingzone.com-redirect) | `@` A → GitHub Pages IPs; `www` CNAME → `musingzone.github.io` |
+| `vta.musing.zone` | [`MusingZone/vta.musing.zone-redirect`](https://github.com/MusingZone/vta.musing.zone-redirect) | `vta` CNAME → `musingzone.github.io` |
+
+The Marketplace publisher domain must be the root domain (`https://musingzone.com`). The redirect page returns HTTP 200, as Marketplace requires. Both `musingzone.com` and `musing.zone` are verified in the MusingZone GitHub account; keep their `_github-pages-challenge-MusingZone` TXT records. The DNSPod free plan allows only two A records per host, so the root uses two of GitHub's four Pages IPs.
+
+Use GitHub's [custom domain configuration guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) for the current DNS records and HTTPS setup. After the certificates are issued, enable **Enforce HTTPS** in each repository. If a certificate stalls, remove the custom domain and add it again. Confirm that `curl.exe -I https://musingzone.com` returns HTTP 200 from a network that can reach the site.
 
 ## 5. Pre-flight checklist (every release)
 
