@@ -176,6 +176,8 @@ async function activate(context) {
       } catch (error) {
         output.appendLine(`Model recommendation skipped (${errorText(error)}).`);
       }
+    } else {
+      output.appendLine('Model recommendation skipped: no lightweight model was measured, and larger models are not asked to save cost.');
     }
     if (token?.isCancellationRequested) return;
     await context.globalState.update('modelAdvice', { ids, by: advisor?.id || '', at: Date.now() });

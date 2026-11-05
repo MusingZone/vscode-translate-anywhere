@@ -2,6 +2,11 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.2] - Cheaper recommendations
+
+### Fixed
+- After a speed test, the **Recommended** group is only judged by a lightweight model (mini, haiku, flash, luna…). If none of your models is lightweight, nothing is asked and no Recommended group is shown, instead of falling back to the fastest model, which may be a premium one.
+
 ## [0.6.1] - Sidebar polish
 
 ### Added

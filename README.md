@@ -60,7 +60,7 @@ Click the **文A** icon in the Activity Bar. The sidebar shows:
 - **Translation**: target language, full-page display mode, automatic AI.
 - **AI engine**:
   - provider list;
-  - model list: the models VS Code's model picker shows you, in its order, and **Auto** as an explicit choice. **Speed test** warms up each model once and times three runs and shows the median;   then the fastest lightweight model among them picks the ones suited to translation, which appear as **Recommended**, with **Use it**. It never runs by itself; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view. API providers get **Fetch list** instead;
+  - model list: the models VS Code's model picker shows you, in its order, and **Auto** as an explicit choice. **Speed test** warms up each model once and times three runs and shows the median; then the fastest lightweight model among them picks the ones suited to translation, which appear as **Recommended**, with **Use it** (with no lightweight model, nothing is asked and there is no Recommended group). It never runs by itself; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view. API providers get **Fetch list** instead;
   - API key status with a link to the provider's key page;
   - an optional base URL.
   - **Vocabulary**: your five latest entries; **Show N more** unfolds the rest in place (the full list opens in an editor); open, export, remove.

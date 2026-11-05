@@ -195,10 +195,10 @@ function advicePrompt(list) {
 }
 
 // Model asked for the advice above: a lightweight one, since flagship models can cost many premium requests.
-// The fastest measured model that looks lightweight by name; else the fastest one (fast models are usually small).
+// The fastest measured model that looks lightweight by name. Without one there is no advisor (and no advice):
+// speed says nothing about price, so a fast flagship model is never asked.
 function pickAdvisor(measured, speedRank) {
-  const bySpeed = [...measured].sort((a, b) => speedRank(a) - speedRank(b));
-  return bySpeed.find(model => preferredRank(model) >= 0) || bySpeed[0];
+  return [...measured].sort((a, b) => speedRank(a) - speedRank(b)).find(model => preferredRank(model) >= 0);
 }
 
 // The ids from a model's answer that really are in `ids`; undefined when the answer is not a JSON array.
