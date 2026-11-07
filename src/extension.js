@@ -94,11 +94,12 @@ async function activate(context) {
   );
   // Models the user hid in VS Code's "Language Models" view are left out, like in the Chat model picker. The
   // extension API does not expose that flag, so it is read from this profile's state database (read-only).
-  let hiddenCache = { at: 0, set: new Set() };
+  let hiddenCache = { at: 0, set: new Set(), excluded: new Set() };
   let hiddenWarned = false;
   function hiddenModels() {
     if (Date.now() - hiddenCache.at < 5000) return hiddenCache.set;
     let set = new Set();
+    let excluded = new Set();
     try {
       const file = path.join(path.dirname(stateFolder), 'state.vscdb');
       if (fs.existsSync(file)) {
@@ -110,9 +111,11 @@ async function activate(context) {
             const value = query.get(key)?.value;
             return value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value;
           };
+          const cached = read('chat.cachedLanguageModels.v2');
+          excluded = models.parseExcludedModels(cached);
           set = models.parseHiddenModels({
             visibility: read('chatModelVisibility'), pickerPreferences: read('chatModelPickerPreferences'),
-            cached: read('chat.cachedLanguageModels.v2')
+            cached
           });
         } finally { db.close(); }
       }
@@ -120,13 +123,19 @@ async function activate(context) {
       if (!hiddenWarned) output.appendLine(`Model visibility unavailable (${errorText(error)}); listing all models.`);
       hiddenWarned = true;
     }
-    hiddenCache = { at: Date.now(), set };
+    hiddenCache = { at: Date.now(), set, excluded };
     return set;
   }
   // Visible VS Code models, in VS Code's own order.
   const visibleModels = async () => {
+    const list = await vscode.lm.selectChatModels({});
     const hidden = hiddenModels();
-    return (await vscode.lm.selectChatModels({})).filter(model => !models.isHidden(model, hidden));
+    return list.filter(model => !models.isHidden(model, hidden));
+  };
+  const selectableModel = async modelId => {
+    const list = await vscode.lm.selectChatModels({ id: modelId });
+    hiddenModels();
+    return list.find(model => !models.isHidden(model, hiddenCache.excluded));
   };
   const noModelsError = () => new Error(L('No VS Code language model is available. Sign in to GitHub Copilot or configure a model provider first.',
     '没有可用的 VS Code 语言模型。请先登录 Copilot 或配置模型提供程序。',
@@ -255,7 +264,7 @@ async function activate(context) {
     const modelId = config().get('ai.modelId', '');
     if (modelId && modelId !== models.AUTO_MODEL) {
       // An explicit choice is honoured even if the model was hidden later.
-      const [configured] = await vscode.lm.selectChatModels({ id: modelId });
+      const configured = await selectableModel(modelId);
       if (configured) return configured;
       suggestChoosingModel().catch(logError);
       throw new Error(L(`The translation model "${modelId}" is no longer available. Choose another one in the Translate Anywhere sidebar.`,
@@ -1237,11 +1246,11 @@ async function activate(context) {
         vscodeModels = visible.map(model => describe(model));
         // A model chosen earlier and hidden since stays listed so the selection does not silently change.
         if (modelId && modelId !== models.AUTO_MODEL && !visible.some(model => model.id === modelId)) {
-          const [chosen] = await vscode.lm.selectChatModels({ id: modelId });
+          const chosen = await selectableModel(modelId);
           vscodeModels.push(chosen ? describe(chosen, { hidden: true }) : { id: modelId, name: modelId, detail: '', missing: true, timing: null });
         }
         if (modelId && modelId !== models.AUTO_MODEL) {
-          const [chosen] = await vscode.lm.selectChatModels({ id: modelId });
+          const chosen = await selectableModel(modelId);
           modelAuthorized = !chosen || context.languageModelAccessInformation.canSendRequest(chosen) === true;
         }
       } catch (error) { logError(error); }

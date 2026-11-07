@@ -686,9 +686,74 @@ test('model preference ranks lightweight models, skips hidden ones and never pic
   assert.ok(visible.some(m => m.id === 'gpt-5.6-luna'), 'a hidden model of another vendor does not hide this one');
   assert.ok(models.isHidden({ vendor: 'customendpoint', id: 'gpt-5.6-luna' }, hidden));
   assert.equal(models.pickPreferred(visible).id, 'gpt-5.6-luna');
-  // Legacy {identifier: visible} format and garbage input.
+  // Legacy {identifier: visible} format and malformed input.
   assert.deepEqual([...models.parseHiddenModels({ pickerPreferences: '{"copilot/a":false,"copilot/b":true}' })], ['copilot/a']);
-  assert.equal(models.parseHiddenModels({ visibility: 'not json' }).size, 0);
+  assert.throws(() => models.parseHiddenModels({ visibility: 'not json' }), SyntaxError);
+});
+
+test('translation picker excludes session-only models and respects colon visibility identifiers', () => {
+  const cached = [
+    { identifier: 'copilot/native', metadata: { vendor: 'copilot', id: 'native', isUserSelectable: true } },
+    { identifier: 'agent-host-copilotcli:native', metadata: {
+      vendor: 'agent-host-copilotcli', id: 'native', isUserSelectable: true, targetChatSessionType: 'agent-host-copilotcli'
+    } },
+    { identifier: 'copilotcli/auto', metadata: {
+      vendor: 'copilotcli', id: 'auto', isUserSelectable: true, targetChatSessionType: 'copilotcli'
+    } },
+    { identifier: 'copilot/helper', metadata: { vendor: 'copilot', id: 'helper', isUserSelectable: false } }
+  ];
+  const hidden = models.parseHiddenModels({
+    cached: JSON.stringify(cached),
+    visibility: { hiddenModels: ['customendpoint:another', 'copilot/user-hidden'] }
+  });
+  const excluded = models.parseExcludedModels(cached);
+  assert.deepEqual(cached.map(item => item.metadata).filter(model => !models.isHidden(model, hidden)).map(model => model.id), ['native']);
+  assert.ok(models.isHidden({ vendor: 'customendpoint', id: 'another' }, hidden));
+  assert.ok(!models.isHidden({ vendor: 'copilot', id: 'another' }, hidden));
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'helper' }, excluded), 'internal models cannot be restored as an explicit choice');
+  assert.ok(!models.isHidden({ vendor: 'copilot', id: 'user-hidden' }, excluded), 'explicit user-hidden choices remain usable');
+  assert.equal(models.parseExcludedModels(undefined).size, 0);
+  assert.throws(() => models.parseExcludedModels('not json'), SyntaxError);
+});
+
+test('sidebar retains unavailable saved models only as disabled options', () => {
+  const Module = require('node:module');
+  const load = Module._load;
+  Module._load = (request, ...rest) => request === 'vscode' ? {} : load(request, ...rest);
+  let html;
+  try {
+    const { SettingsPanel, STRINGS } = require('../src/panel');
+    html = SettingsPanel.prototype.html.call({}, STRINGS.en);
+  } finally { Module._load = load; }
+  const start = html.indexOf('function fillModels(s) {');
+  const end = html.indexOf('// Speed-test progress', start);
+  assert.ok(start >= 0 && end > start);
+  const createElement = () => ({
+    children: [],
+    append(...nodes) { this.children.push(...nodes); },
+    replaceChildren(...nodes) { this.children = nodes; }
+  });
+  const select = createElement();
+  const option = (value, label) => ({ value, textContent: label, disabled: false });
+  const fill = new Function('document', 'option', '$', 'AUTO', 'S', 'measured', 'seconds',
+    `${html.slice(start, end)}; return fillModels;`)(
+    { createElement }, option, () => select, models.AUTO_MODEL,
+    { missingModel: 'not available', hiddenModel: 'hidden', model: 'Model', autoModel: 'Auto' },
+    () => false, () => ''
+  );
+  fill({
+    modelId: 'removed',
+    vscodeModels: [
+      { id: 'native', name: 'Native' },
+      { id: 'hidden', name: 'Hidden', hidden: true },
+      { id: 'removed', name: 'removed', missing: true }
+    ]
+  });
+  const options = select.children.flatMap(node => node.children || [node]);
+  assert.deepEqual(options.map(node => node.value), ['native', 'hidden', 'removed', models.AUTO_MODEL]);
+  assert.deepEqual(options.map(node => node.disabled), [false, false, true, false]);
+  assert.equal(select.value, 'removed', 'rendering must not silently change the saved selection');
+  assert.match(options[2].textContent, /not available/);
 });
 
 test('internal Copilot helpers are hidden, size words are a generic fallback, and AI advice is parsed strictly', () => {

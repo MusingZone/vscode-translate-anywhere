@@ -421,7 +421,11 @@ function fillModels(s) {
   const group = (title, list) => {
     const g = document.createElement('optgroup');
     g.label = title;
-    g.append(...list.map(m => option(m.id, label(m))));
+    g.append(...list.map(m => {
+      const o = option(m.id, label(m));
+      o.disabled = !!m.missing;
+      return o;
+    }));
     return g;
   };
   const nodes = [];

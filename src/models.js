@@ -67,26 +67,35 @@ function pickPreferred(models) {
  * internal helper models that are not user-selectable (e.g. Copilot's "copilot-dictation-cleanup-nano"),
  * which the extension API still returns. Newer VS Code stores {"hiddenModels": [...]} under
  * "chatModelVisibility"; older builds stored {identifier: visible} under "chatModelPickerPreferences".
- * "chat.cachedLanguageModels.v2" lists [{identifier, metadata: {isUserSelectable}}].
+ * "chat.cachedLanguageModels.v2" lists [{identifier, metadata: {isUserSelectable, targetChatSessionType}}].
  */
-function parseHiddenModels({ visibility, pickerPreferences, cached } = {}) {
-  const hidden = new Set();
-  const parse = value => {
-    if (!value) return undefined;
-    try { return typeof value === 'string' ? JSON.parse(value) : value; } catch { return undefined; }
-  };
-  const models = parse(cached);
-  if (Array.isArray(models)) {
-    for (const item of models) {
-      if (typeof item?.identifier === 'string' && item.metadata?.isUserSelectable === false) hidden.add(item.identifier);
-    }
+function parseStoredModels(value) {
+  if (!value) return undefined;
+  return typeof value === 'string' ? JSON.parse(value) : value;
+}
+
+// Session-specific models belong to their own Chat picker, not the extension translation picker.
+function parseExcludedModels(cached) {
+  const excluded = new Set();
+  const list = parseStoredModels(cached);
+  if (!Array.isArray(list)) return excluded;
+  for (const item of list) {
+    if (item?.metadata?.isUserSelectable !== false && !item?.metadata?.targetChatSessionType) continue;
+    if (typeof item.identifier === 'string') excluded.add(item.identifier);
+    const { vendor, id } = item.metadata;
+    if (typeof vendor === 'string' && typeof id === 'string') excluded.add(`${vendor}/${id}`);
   }
-  const current = parse(visibility);
+  return excluded;
+}
+
+function parseHiddenModels({ visibility, pickerPreferences, cached } = {}) {
+  const hidden = parseExcludedModels(cached);
+  const current = parseStoredModels(visibility);
   if (Array.isArray(current?.hiddenModels)) {
     for (const id of current.hiddenModels) if (typeof id === 'string') hidden.add(id);
     return hidden;
   }
-  const legacy = parse(pickerPreferences);
+  const legacy = parseStoredModels(pickerPreferences);
   if (legacy && typeof legacy === 'object') {
     for (const [id, visible] of Object.entries(legacy)) if (visible === false) hidden.add(id);
   }
@@ -98,7 +107,7 @@ function isHidden(model, hidden) {
   if (!hidden?.size) return false;
   const vendor = `${model.vendor}/`;
   const id = String(model.id);
-  if (hidden.has(vendor + id) || hidden.has(id)) return true;
+  if (hidden.has(vendor + id) || hidden.has(`${model.vendor}:${id}`) || hidden.has(id)) return true;
   for (const entry of hidden) {
     if (entry.startsWith(vendor) && entry.endsWith(`/${id}`)) return true;
   }
@@ -214,5 +223,5 @@ function parseAdvice(text, ids) {
 
 module.exports = {
   AUTO_MODEL, PREFERRED_MODELS, preferredRank, sortByPreference, pickPreferred,
-  parseHiddenModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
+  parseHiddenModels, parseExcludedModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
 };

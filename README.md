@@ -8,7 +8,7 @@ Text editors are never touched. The extension does nothing while you edit code.
 
 <picture><img src="docs/images/en/demo.gif" alt="Select, hover, Alt+Z and Alt+W" width="100%"></picture>
 
-> Inspired by the reading experience of browser "immersive translation" extensions. Not affiliated with or endorsed by any of them. The screenshots are rendered from the extension's real UI on demo pages.
+> Inspired by the reading experience of browser "Immersive Translate" extension. Not affiliated with or endorsed by any of them. The screenshots are rendered from the extension's real UI on demo pages.
 
 ## Features
 
@@ -60,7 +60,7 @@ Click the **文A** icon in the Activity Bar. The sidebar shows:
 - **Translation**: target language, full-page display mode, automatic AI.
 - **AI engine**:
   - provider list;
-  - model list: the models VS Code's model picker shows you, in its order, and **Auto** as an explicit choice. **Speed test** warms up each model once and times three runs and shows the median; then the fastest lightweight model among them picks the ones suited to translation, which appear as **Recommended**, with **Use it** (with no lightweight model, nothing is asked and there is no Recommended group). It never runs by itself; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view. API providers get **Fetch list** instead;
+  - model list: user-selectable VS Code language models available for translation, in VS Code's order, and **Auto** as an explicit choice. Internal helpers and models restricted to other Chat session types are excluded. A saved model that is no longer selectable is shown as **not available**, disabled until you choose another model. **Speed test** warms up each model once and times three runs and shows the median; then the fastest lightweight model among them picks the ones suited to translation, which appear as **Recommended**, with **Use it** (with no lightweight model, nothing is asked and there is no Recommended group). It never runs by itself; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view. API providers get **Fetch list** instead;
   - API key status with a link to the provider's key page;
   - an optional base URL.
   - **Vocabulary**: your five latest entries; **Show N more** unfolds the rest in place (the full list opens in an editor); open, export, remove.

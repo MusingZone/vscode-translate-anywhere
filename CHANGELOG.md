@@ -2,6 +2,15 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.3] - Model picker fixes
+
+### Fixed
+- Exclude session-only Chat models from the translation model picker and recognize their colon-separated visibility identifiers.
+- Internal helper models can no longer be restored as configured translation choices; unavailable saved models are marked and disabled in the sidebar.
+
+### Changed
+- Clarified the README's reference to the browser Immersive Translate extension.
+
 ## [0.6.2] - Cheaper recommendations
 
 ### Fixed
