@@ -2,6 +2,22 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - Token-free online translation
+
+### Added
+- Translation engine selector: existing AI, token-free online translation, or offline dictionary only. Existing users retain AI; dictionary hits stay local.
+- Google Translate (experimental unofficial endpoint) and MyMemory (documented anonymous API, 5,000 characters/day), shared by selection, paragraph and full-page translation.
+- Per-service local consent/revocation, source-language selection, explicit privacy/quota warnings and no automatic fallback to another service or AI.
+- UTF-8-safe request splitting, abortable bounded concurrency/queue, isolated case-sensitive cache and explicit network/quota/response errors.
+- Research, setup and privacy guide in `docs/ONLINE-TRANSLATION.md`.
+- Choosing **Online** (or switching service) immediately asks for that service's permission in the focused window; service, source language and permission now sit directly under the engine picker.
+- Without any Copilot / VS Code language model, AI mode offers once per session to switch to free online translation, configure an AI API, or keep the dictionary only. Nothing is sent before the user confirms.
+
+### Fixed
+- After an update, a window still running an older version could keep owning the shared local bridge and answer every window's translations with its old code (for example, still using AI after **Online** was selected). A newer window now takes over the bridge through an authenticated `/handover` request; owners too old to support it trigger a warning and a sidebar notice to reload the other windows.
+- MyMemory no longer refuses the default **Detect language** source; it uses MyMemory's `Autodetect` language pair.
+- Google's intermittent HTTP 429/503 refusals (seen through shared corporate proxy exits) are retried up to twice on the same service with a short, cancellable backoff. All waits share one 3-second budget; a `Retry-After` longer than what remains ends the attempt instead of retrying early. Persistent refusals suggest switching to MyMemory; there is still no automatic fallback to another service or AI.
+
 ## [0.6.5] - No more Auto model
 
 ### Removed

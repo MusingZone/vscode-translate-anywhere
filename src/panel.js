@@ -18,7 +18,13 @@ const STRINGS = {
     mdOff: 'Markdown files open as source text. Open them as a preview to read and translate them comfortably.',
     mdOn: 'Markdown files open as a preview.', mdSet: 'Open Markdown as preview', mdUndo: 'Open as text again',
     translation: 'Translation', target: 'Target language', pageMode: 'Whole-page translation shows', translationOnly: 'Translation only',
-    bilingual: 'Bilingual (original + translation)', autoAI: 'Use AI automatically for phrases and sentences',
+    bilingual: 'Bilingual (original + translation)', autoAI: 'Automatically translate dictionary misses with the selected engine',
+    engine: 'Translation engine', engineAI: 'AI (existing models / API)', engineOnline: 'Online (no API key)', engineOffline: 'Offline dictionary only',
+    online: 'Online translation', sourceLanguage: 'Source language', detectLanguage: 'Detect automatically',
+    googleOnline: 'Google Translate (experimental)', mymemoryOnline: 'MyMemory (5,000 characters/day)',
+    onlineHint: 'Dictionary hits stay offline. Other text is sent directly to the chosen service, never to a fallback. Do not send confidential text or code. Google is unofficial and may stop working. If Google refuses requests (frequent behind corporate proxies), switch to MyMemory. MyMemory may retain text and share it with translation partners. Full-page translation can quickly exhaust its quota.',
+    onlineAllow: 'Allow this service', onlineRevoke: 'Revoke permission', onlineAllowed: 'Allowed on this device', onlineBlocked: 'Not allowed yet: nothing is translated online until you click "Allow this service"',
+    staleBridge: 'Another VS Code window still runs the older version {0} and answers translations for all windows, so the engine selected here is not used yet. Reload the other windows (Developer: Reload Window) or restart VS Code.',
     ai: 'AI engine', provider: 'Provider', model: 'Model', chooseModel: '— Choose a model —', recommended: 'Recommended (light & fast)',
     otherModels: 'Other models', hiddenModel: 'hidden in Language Models', missingModel: 'not available',
     noModelChosen: 'Choose the model for phrases and paragraphs. A small, fast one works best.',
@@ -33,7 +39,7 @@ const STRINGS = {
     vocabulary: 'Vocabulary', vocabEmpty: 'Click ☆ in the translation popup to collect words and sentences here.', vocabMore: '{0} more in the full list →', vocabShowMore: 'Show {0} more ▾', vocabShowLess: 'Show less ▴',
     open: 'Open', export: 'Export CSV', remove: 'Remove…',
     dictionary: 'Offline dictionary', dictReady: 'Ready · {0} entries · {1}', dictLoading: 'Loading…', dictDownloading: 'Downloading… {0}',
-    dictMissing: 'Not installed. Lookups fall back to AI.', dictError: 'Error: {0}', dictIdle: 'Loads on first lookup',
+    dictMissing: 'Not installed. Choose an AI or online engine for dictionary misses.', dictError: 'Error: {0}', dictIdle: 'Loads on first lookup',
     germanDictionary: 'German → Chinese (HanDeDict)', germanIdle: 'Downloads automatically (about 3 MB) on the first German word', germanOff: 'Off',
     dictShared: 'Served by another VS Code window', bundled: 'bundled', downloaded: 'downloaded', custom: 'custom file',
     download: 'Download', choose: 'Choose file…', useDefault: 'Use default',
@@ -54,7 +60,13 @@ const STRINGS = {
     mdOff: 'Markdown 文件默认以源码打开。改为默认预览，阅读和翻译都更方便。',
     mdOn: 'Markdown 文件默认以预览方式打开。', mdSet: '默认以预览打开 Markdown', mdUndo: '恢复为源码打开',
     translation: '翻译', target: '目标语言', pageMode: '全文翻译显示方式', translationOnly: '仅译文', bilingual: '原文译文对照',
-    autoAI: '短语、句子自动使用 AI 翻译',
+    autoAI: '词典未命中时自动使用所选引擎翻译',
+    engine: '翻译引擎', engineAI: 'AI（已有模型 / API）', engineOnline: '在线翻译（无需 API Key）', engineOffline: '仅离线词典',
+    online: '在线翻译', sourceLanguage: '源语言', detectLanguage: '自动检测',
+    googleOnline: 'Google 翻译（实验性）', mymemoryOnline: 'MyMemory（每天 5,000 字符）',
+    onlineHint: '词典命中仍在本地处理；其他文本直接发送给所选服务，不自动回退。请勿发送机密文本或代码。Google 是非正式接口，可能失效。若 Google 拒绝请求（公司代理网络下常见），请改用 MyMemory。MyMemory 可能保留文本并与翻译合作方共享；全文翻译可能迅速耗尽其额度。',
+    onlineAllow: '允许此服务', onlineRevoke: '撤销授权', onlineAllowed: '已在本机授权', onlineBlocked: '尚未授权：点击「允许此服务」之前不会进行任何在线翻译',
+    staleBridge: '另一个 VS Code 窗口仍在运行旧版本 {0}，并为所有窗口处理翻译，因此这里选择的翻译引擎暂未生效。请重载其他窗口（Developer: Reload Window）或重启 VS Code。',
     ai: 'AI 引擎', provider: '服务商', model: '模型', chooseModel: '— 请选择模型 —', recommended: '推荐（轻量、快速）',
     otherModels: '其他模型', hiddenModel: '已在“语言模型”中隐藏', missingModel: '不可用',
     noModelChosen: '请选择用于翻译句子和段落的模型，推荐小而快的模型。',
@@ -69,7 +81,7 @@ const STRINGS = {
     vocabulary: '生词本', vocabEmpty: '在翻译弹窗中点击 ☆，即可把单词和句子收藏到这里。', vocabMore: '另有 {0} 条，查看完整列表 →', vocabShowMore: '展开其余 {0} 条 ▾', vocabShowLess: '收起 ▴',
     open: '打开', export: '导出 CSV', remove: '删除…',
     dictionary: '离线词典', dictReady: '可用 · {0} 词条 · {1}', dictLoading: '加载中…', dictDownloading: '下载中… {0}',
-    dictMissing: '未安装，查词将回退到 AI。', dictError: '错误：{0}', dictIdle: '首次查词时加载',
+    dictMissing: '未安装。词典未命中时可选择 AI 或在线翻译引擎。', dictError: '错误：{0}', dictIdle: '首次查词时加载',
     germanDictionary: '德译中（HanDeDict）', germanIdle: '首次选中德语单词时自动下载（约 3 MB）', germanOff: '已关闭',
     dictShared: '由另一个 VS Code 窗口提供', bundled: '内置', downloaded: '已下载', custom: '自定义文件',
     download: '下载', choose: '选择文件…', useDefault: '恢复默认',
@@ -90,7 +102,13 @@ const STRINGS = {
     mdOff: 'Markdown-Dateien öffnen als Quelltext. Als Vorschau lassen sie sich bequemer lesen und übersetzen.',
     mdOn: 'Markdown-Dateien öffnen als Vorschau.', mdSet: 'Markdown als Vorschau öffnen', mdUndo: 'Wieder als Text öffnen',
     translation: 'Übersetzung', target: 'Zielsprache', pageMode: 'Seitenübersetzung zeigt', translationOnly: 'Nur Übersetzung',
-    bilingual: 'Zweisprachig (Original + Übersetzung)', autoAI: 'KI automatisch für Ausdrücke und Sätze verwenden',
+    bilingual: 'Zweisprachig (Original + Übersetzung)', autoAI: 'Wörterbuchlücken automatisch mit der gewählten Engine übersetzen',
+    engine: 'Übersetzungsengine', engineAI: 'KI (Modelle / API)', engineOnline: 'Online (ohne API-Schlüssel)', engineOffline: 'Nur Offline-Wörterbuch',
+    online: 'Online-Übersetzung', sourceLanguage: 'Quellsprache', detectLanguage: 'Automatisch erkennen',
+    googleOnline: 'Google Translate (experimentell)', mymemoryOnline: 'MyMemory (5.000 Zeichen/Tag)',
+    onlineHint: 'Wörterbuchtreffer bleiben offline. Andere Texte gehen direkt an den gewählten Dienst, ohne Ausweichdienst. Keine vertraulichen Texte oder Code senden. Google ist inoffiziell und kann ausfallen. Lehnt Google Anfragen ab (häufig hinter Firmen-Proxys), zu MyMemory wechseln. MyMemory kann Texte speichern und mit Übersetzungspartnern teilen. Seitenübersetzungen können das Kontingent schnell aufbrauchen.',
+    onlineAllow: 'Diesen Dienst erlauben', onlineRevoke: 'Berechtigung widerrufen', onlineAllowed: 'Auf diesem Gerät erlaubt', onlineBlocked: 'Noch nicht erlaubt: Ohne "Diesen Dienst erlauben" wird nichts online übersetzt',
+    staleBridge: 'Ein anderes VS Code-Fenster führt noch die ältere Version {0} aus und übernimmt die Übersetzungen aller Fenster; die hier gewählte Engine wird daher noch nicht verwendet. Andere Fenster neu laden (Developer: Reload Window) oder VS Code neu starten.',
     ai: 'KI-Engine', provider: 'Anbieter', model: 'Modell', chooseModel: '— Modell auswählen —', recommended: 'Empfohlen (leicht & schnell)',
     otherModels: 'Weitere Modelle', hiddenModel: 'in Sprachmodelle ausgeblendet', missingModel: 'nicht verfügbar',
     noModelChosen: 'Wählen Sie das Modell für Sätze und Absätze. Ein kleines, schnelles eignet sich am besten.',
@@ -107,7 +125,7 @@ const STRINGS = {
     vocabulary: 'Vokabelliste', vocabEmpty: 'Im Übersetzungsfenster auf ☆ klicken, um Wörter und Sätze hier zu sammeln.', vocabMore: '{0} weitere in der vollständigen Liste →', vocabShowMore: '{0} weitere anzeigen ▾', vocabShowLess: 'Weniger anzeigen ▴',
     open: 'Öffnen', export: 'CSV exportieren', remove: 'Entfernen…',
     dictionary: 'Offline-Wörterbuch', dictReady: 'Bereit · {0} Einträge · {1}', dictLoading: 'Wird geladen…', dictDownloading: 'Wird heruntergeladen… {0}',
-    dictMissing: 'Nicht installiert. Nachschlagen erfolgt per KI.', dictError: 'Fehler: {0}', dictIdle: 'Wird beim ersten Nachschlagen geladen',
+    dictMissing: 'Nicht installiert. Für Wörterbuchlücken KI oder Online wählen.', dictError: 'Fehler: {0}', dictIdle: 'Wird beim ersten Nachschlagen geladen',
     germanDictionary: 'Deutsch → Chinesisch (HanDeDict)', germanIdle: 'Wird beim ersten deutschen Wort automatisch heruntergeladen (ca. 3 MB)', germanOff: 'Aus',
     dictShared: 'Wird von einem anderen VS Code-Fenster bereitgestellt', bundled: 'mitgeliefert', downloaded: 'heruntergeladen', custom: 'eigene Datei',
     download: 'Herunterladen', choose: 'Datei auswählen…', useDefault: 'Standard verwenden',
@@ -293,6 +311,7 @@ class SettingsPanel {
   .vocabfoot a[hidden] { display: none; }
 </style></head><body>
 <div class="banner" id="banner" role="alert" hidden><span id="bannerText"></span><button class="icon" id="bannerClose" title="${s.close}" aria-label="${s.close}">×</button></div>
+<div class="card error" id="staleCard" role="alert" hidden></div>
 <details class="sec" data-sec="integration" open>
   <summary>${s.integration}</summary>
   <div class="status"><span class="dot" id="intDot"></span><span id="intText"></span></div>
@@ -346,12 +365,23 @@ class SettingsPanel {
 </details>
 <details class="sec" data-sec="translation" open>
   <summary>${s.translation}</summary>
+  <label class="row" for="translationEngine">${s.engine}</label>
+  <select id="translationEngine" data-key="translation.engine"><option value="ai">${s.engineAI}</option><option value="online">${s.engineOnline}</option><option value="offline">${s.engineOffline}</option></select>
+  <div class="card" id="onlineSection" hidden>
+    <label class="row" for="onlineProvider">${s.online}</label>
+    <select id="onlineProvider" data-key="online.provider"><option value="google">${s.googleOnline}</option><option value="mymemory">${s.mymemoryOnline}</option></select>
+    <label class="row" for="onlineSourceLanguage">${s.sourceLanguage}</label><select id="onlineSourceLanguage" data-key="online.sourceLanguage"></select>
+    <div class="muted" id="onlinePermission"></div>
+    <div class="buttons"><button class="primary" id="onlineAllow" data-command="translateAnywhere.authorizeOnline">${s.onlineAllow}</button>
+      <button id="onlineRevoke" data-command="translateAnywhere.revokeOnline" hidden>${s.onlineRevoke}</button></div>
+    <div class="muted">${s.onlineHint}</div>
+  </div>
   <label class="row" for="targetLanguage">${s.target}</label><select id="targetLanguage" data-key="targetLanguage"></select>
   <label class="row" for="fullPageMode">${s.pageMode}</label>
   <select id="fullPageMode" data-key="fullPage.mode"><option value="translationOnly">${s.translationOnly}</option><option value="bilingual">${s.bilingual}</option></select>
   <label class="check"><input type="checkbox" id="autoAI" data-key="ai.autoTranslate">${s.autoAI}</label>
 </details>
-<details class="sec" data-sec="ai" open>
+<details class="sec" data-sec="ai" id="aiSection" open>
   <summary>${s.ai}</summary>
   <label class="row" for="provider">${s.provider}</label><select id="provider" data-key="ai.provider"></select>
   <div id="vscodeAI">
@@ -530,6 +560,20 @@ function render() {
   fill($('targetLanguage'), s.languages.map(l => [l.code, l.label]), s.targetLanguage);
   $('fullPageMode').value = s.fullPageMode;
   $('autoAI').checked = s.autoAI;
+  const engine = s.translationEngine || 'ai';
+  $('translationEngine').value = engine;
+  $('autoAI').disabled = engine === 'offline';
+  $('onlineSection').hidden = engine !== 'online';
+  $('aiSection').hidden = engine !== 'ai';
+  $('onlineProvider').value = s.onlineProvider || 'google';
+  fill($('onlineSourceLanguage'), [['auto', S.detectLanguage], ...s.languages.map(l => [l.code, l.label])], s.onlineSourceLanguage || 'auto');
+  $('onlinePermission').textContent = s.onlineAuthorized ? S.onlineAllowed : S.onlineBlocked;
+  $('onlinePermission').classList.toggle('ok', !!s.onlineAuthorized);
+  $('onlinePermission').classList.toggle('error', !s.onlineAuthorized);
+  $('staleCard').hidden = !s.staleBridge;
+  $('staleCard').textContent = s.staleBridge ? fmt(S.staleBridge, s.staleBridge) : '';
+  $('onlineAllow').hidden = !!s.onlineAuthorized;
+  $('onlineRevoke').hidden = !s.onlineAuthorized;
   fill($('provider'), s.providers.map(p => [p.id, p.label]), s.provider);
   const vs = s.provider === 'vscode';
   $('vscodeAI').hidden = !vs;

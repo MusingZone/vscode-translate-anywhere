@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test test/core.test.js
+      - run: npm test
       - run: npm install --no-package-lock --prefix test/integration
       # Downloads the current VS Code Stable and patches/restores it for real (including a sudo run on macOS/Linux).
       - name: Integration test (real VS Code)

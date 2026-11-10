@@ -41,6 +41,7 @@ Then run **Developer: Reload Window**.
 | `src/bridge.js` | Local HTTP bridge between the injected UI and the extension (127.0.0.1, token and origin checks). |
 | `src/patcher.js`, `src/elevation.js` | Applying, verifying and restoring the VS Code UI integration. |
 | `src/providers.js` | AI provider presets, prompts and streaming clients. |
+| `src/online.js` | Token-free translation clients, UTF-8 segmentation, bounded queue and memory-only cache. |
 | `src/dictionary.js`, `src/dictionary-store.js` | Offline dictionaries (lookup, German stemming) and the verified download with mirrors. |
 | `src/vocabulary.js` | The vocabulary book. |
 | `data/` | Dictionary metadata and licenses. The `.json.gz` dictionaries are excluded from the Marketplace build. |

@@ -20,6 +20,12 @@ You should receive a response within 7 days.
   - API keys are stored only in VS Code's Secret Storage (the OS keychain). They are never written to settings or logs, and they are sent only to the configured provider's base URL.
   - Selected text is sent to that provider. Changing `translateAnywhere.ai.baseUrl` redirects both the text and the key, so only use endpoints you trust.
 - **Dictionary download.** The dictionary is downloaded over HTTPS and verified against a SHA-256 hash shipped in the extension before it is used. A custom `dictionary.downloadUrl` must serve the identical file.
+- **Token-free online translation.**
+  - Disabled unless the online engine is explicitly selected and the chosen service is separately authorized in this local VS Code profile. Syncing settings does not grant consent. Offline-only mode never calls online or AI translation.
+  - Selected text and paragraph/page content go directly to the chosen service's fixed HTTPS endpoint; no cookies, API keys, redirects, extension-owned relay or silent fallback. Source text is in query parameters and may appear in service/proxy logs.
+  - Google uses an unofficial experimental endpoint with no availability guarantee. MyMemory's terms permit long-term segment retention and sharing with translation partners. Do not send confidential text, code or credentials.
+  - Revoking permission cancels unfinished online work and clears its memory-only cache; already-transmitted text cannot be recalled. Engine, source, provider and target changes cancel online jobs too.
+  - Online service output is rendered as text, never trusted HTML. Input, queue, concurrency, timeout and output limits apply.
 - **Sidebar webview.**
   - Runs with a nonce-based Content Security Policy and no remote resources.
   - Accepts only an allow-list of setting keys and this extension's own commands.

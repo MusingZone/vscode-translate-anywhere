@@ -6,8 +6,9 @@ const crypto = require('node:crypto');
 const { Dictionary } = require('./dictionary');
 const { DEFAULT_MIRRORS, GERMAN_MIRRORS, RELEASE_TAG, locateDictionary, downloadDictionary } = require('./dictionary-store');
 const { PROVIDERS, buildPrompt, resolveProvider, translateWithProvider, listProviderModels } = require('./providers');
+const { ONLINE_PROVIDERS, ONLINE_LANGUAGES, OnlineTranslator } = require('./online');
 const { SettingsPanel } = require('./panel');
-const { createBridge, PORT } = require('./bridge');
+const { compareVersions, createBridge, PORT } = require('./bridge');
 const { applyPatch, restorePatch, withPatchLock } = require('./patcher');
 const ui = require('./ui');
 const { elevatedMaintenance, readOnlyInstallReason } = require('./elevation');
@@ -83,6 +84,50 @@ async function activate(context) {
   let patchStatus = 'Not applied';
   let aiInFlight = 0;
   const aiCache = new Map();
+  const onlineTranslator = new OnlineTranslator();
+  const onlineRequests = new Set();
+  const cancelOnline = () => {
+    for (const controller of onlineRequests) controller.abort(new Error('Online translation cancelled: permission or settings changed.'));
+    onlineTranslator.cache.clear();
+  };
+  context.subscriptions.push({ dispose: cancelOnline });
+  const translationEngine = () => config().get('translation.engine', 'ai');
+  const onlineProvider = () => config().get('online.provider', 'google');
+  const onlineConsentKey = id => `onlineConsent.v1.${id}`;
+  const onlineAuthorized = id => context.globalState.get(onlineConsentKey(id), false) === true;
+  async function revokeOnline(id) {
+    if (!Object.hasOwn(ONLINE_PROVIDERS, id)) throw new Error('Unknown online translation provider.');
+    cancelOnline();
+    await context.globalState.update(onlineConsentKey(id), undefined);
+    panel?.refresh();
+  }
+  // One dialog at a time, even if both the sidebar and a settings change ask for it.
+  let consentPrompt;
+  function authorizeOnline() {
+    consentPrompt ||= askOnlineConsent().finally(() => { consentPrompt = undefined; });
+    return consentPrompt;
+  }
+  // Choosing Online (or another service) asks right away instead of failing later in the popup. Settings changes
+  // reach every window, so only the focused one asks.
+  function promptOnlineIfNeeded() {
+    if (translationEngine() !== 'online' || onlineAuthorized(onlineProvider()) || !vscode.window.state.focused) return;
+    authorizeOnline().catch(logError);
+  }
+  async function askOnlineConsent() {
+    const id = onlineProvider();
+    const provider = Object.hasOwn(ONLINE_PROVIDERS, id) ? ONLINE_PROVIDERS[id] : undefined;
+    if (!provider) throw new Error('Unknown online translation provider.');
+    const allow = L('Allow this service', '允许此服务', 'Diesen Dienst erlauben');
+    const choice = await vscode.window.showWarningMessage(
+      L(`Allow online translation with ${provider.label}?`, `允许使用 ${provider.label} 在线翻译？`, `Online-Übersetzung mit ${provider.label} erlauben?`),
+      { modal: true, detail: L(
+        'Selected text and paragraphs sent by automatic, paragraph or full-page translation leave your computer and go directly to this service. Do not send confidential text, code or credentials. Google uses an unofficial endpoint with no availability guarantee. MyMemory may retain submitted text long-term and share it with translation partners; anonymous use is limited to 5,000 characters/day. There is no automatic fallback to another service or AI. Permission is local to this VS Code profile and can be revoked in the sidebar.',
+        '自动翻译、段落翻译及全文翻译会将相应文本直接发送给所选服务。请勿发送机密文本、代码或凭据。Google 使用非正式接口，不保证可用性。MyMemory 可能长期保存提交的文本并与翻译合作方共享；匿名额度为每天 5,000 字符。失败不会自动切换其他服务或 AI。授权仅保存在本机 VS Code 配置档中，可在侧边栏撤销。',
+        'Automatische, Absatz- und Seitenübersetzungen senden den jeweiligen Text direkt an diesen Dienst. Keine vertraulichen Texte, Code oder Zugangsdaten senden. Google nutzt einen inoffiziellen Endpunkt ohne Verfügbarkeitsgarantie. MyMemory kann Texte langfristig speichern und mit Übersetzungspartnern teilen; anonym sind 5.000 Zeichen/Tag erlaubt. Kein automatischer Wechsel zu anderen Diensten oder KI. Die lokale Profilberechtigung kann in der Seitenleiste widerrufen werden.')
+      }, allow);
+    if (choice === allow) await context.globalState.update(onlineConsentKey(id), true);
+    panel?.refresh();
+  }
   const targetLanguage = () => {
     const code = config().get('targetLanguage', 'zh-CN');
     return LANGUAGES[code] ? code : 'zh-CN';
@@ -231,6 +276,30 @@ async function activate(context) {
       'Translate Anywhere: Wählen Sie das KI-Modell für die Übersetzung von Sätzen und Absätzen. Ein kleines, schnelles Modell eignet sich am besten.'), action);
     if (choice === action) await focusModelPicker();
   }
+  // Without Copilot (or another VS Code model provider) AI mode cannot work at all; instead of failing on every
+  // translation, offer the alternatives once per session: free online services, an API key, or the dictionary only.
+  let engineChoiceShown = false;
+  async function suggestEngineChoice() {
+    if (engineChoiceShown || translationEngine() !== 'ai' || aiProvider() !== 'vscode') return;
+    engineChoiceShown = true;
+    await context.globalState.update('engineChoiceSuggested', true);
+    const useOnline = L('Use free online translation', '使用免费在线翻译', 'Kostenlose Online-Übersetzung');
+    const useApi = L('Configure AI API…', '配置 AI API…', 'KI-API einrichten…');
+    const useOffline = L('Dictionary only', '仅用离线词典', 'Nur Wörterbuch');
+    const choice = await vscode.window.showInformationMessage(L(
+      'Translate Anywhere: no Copilot / VS Code language model is available for translating sentences and pages. Use a free online service (Google or MyMemory, no API key), configure your own AI API, or keep only the offline dictionary?',
+      'Translate Anywhere：没有可用的 Copilot / VS Code 语言模型，无法用 AI 翻译句子和整页。要改用免费在线翻译（Google 或 MyMemory，无需 API Key）、配置自己的 AI API，还是只用离线词典？',
+      'Translate Anywhere: Kein Copilot- bzw. VS Code-Sprachmodell für Sätze und Seiten verfügbar. Kostenlosen Online-Dienst nutzen (Google oder MyMemory, ohne API-Schlüssel), eigene KI-API einrichten oder nur das Offline-Wörterbuch verwenden?'),
+    useOnline, useApi, useOffline);
+    if (choice === useOnline) {
+      await config().update('translation.engine', 'online', vscode.ConfigurationTarget.Global);
+      await authorizeOnline();
+    } else if (choice === useApi) {
+      await openSidebar('provider');
+    } else if (choice === useOffline) {
+      await config().update('translation.engine', 'offline', vscode.ConfigurationTarget.Global);
+    }
+  }
   // Fresh installs get the best recommended model among the visible ones; nothing is benchmarked automatically.
   // Model providers register one after another, so "no recommended model" is only concluded after a grace period.
   const activatedAt = Date.now();
@@ -241,13 +310,18 @@ async function activate(context) {
   }
   context.subscriptions.push({ dispose: () => clearTimeout(defaultTimer) });
   async function ensureDefaultModel() {
+    if (translationEngine() !== 'ai') return;
     if (config().get('ai.modelId', '') === models.LEGACY_AUTO_MODEL) {
       await config().update('ai.modelId', undefined, vscode.ConfigurationTarget.Global);
       output.appendLine('The "Auto" translation model choice was removed; a visible model is chosen instead.');
     }
     if (aiProvider() !== 'vscode' || configuredModelId()) return;
     const visible = await visibleModels();
-    if (!visible.length) return;
+    if (!visible.length) {
+      if (Date.now() - activatedAt < 15000) return scheduleDefaultModel(15000 - (Date.now() - activatedAt));
+      if (!context.globalState.get('engineChoiceSuggested') && vscode.window.state.focused) await suggestEngineChoice();
+      return;
+    }
     const best = models.pickPreferred(visible);
     if (best) {
       await config().update('ai.modelId', best.id, vscode.ConfigurationTarget.Global);
@@ -271,7 +345,10 @@ async function activate(context) {
         `Das Übersetzungsmodell "${modelId}" ist nicht mehr verfügbar. Wählen Sie in der Translate Anywhere-Seitenleiste ein anderes aus.`));
     }
     const visible = await visibleModels();
-    if (!visible.length) throw noModelsError();
+    if (!visible.length) {
+      suggestEngineChoice().catch(logError);
+      throw noModelsError();
+    }
     const best = models.pickPreferred(visible);
     if (best) {
       await config().update('ai.modelId', best.id, vscode.ConfigurationTarget.Global);
@@ -402,6 +479,32 @@ async function activate(context) {
     baseUrl: config().get('ai.baseUrl', ''), model: config().get('ai.apiModel', '')
   });
   async function translate(text, onDelta, signal, mode = 'selection') {
+    const selectedEngine = translationEngine();
+    if (selectedEngine === 'offline') throw new Error(L(
+      'Offline-only mode supports dictionary words, not paragraph/page translation. Choose Online or AI in the sidebar.',
+      '仅离线模式只支持词典查词，不支持段落或全文翻译。请在侧边栏选择在线翻译或 AI。',
+      'Der Offline-Modus unterstützt nur Wörterbuchabfragen. Für Absätze/Seiten Online oder KI in der Seitenleiste wählen.'));
+    if (selectedEngine === 'online') {
+      const id = onlineProvider();
+      if (!onlineAuthorized(id)) throw new Error(L(
+        'Online translation needs permission. Click "Allow this service" in the Translate Anywhere sidebar.',
+        '在线翻译尚未授权。请在 Translate Anywhere 侧边栏点击“允许此服务”。',
+        'Online-Übersetzung benötigt Ihre Zustimmung. In der Translate Anywhere-Seitenleiste auf "Diesen Dienst erlauben" klicken.'));
+      const started = Date.now();
+      const controller = new AbortController();
+      onlineRequests.add(controller);
+      let translation;
+      try {
+        translation = await onlineTranslator.translate({
+          provider: id, text, source: config().get('online.sourceLanguage', 'auto'), target: targetLanguage(),
+          signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, onDelta
+        });
+      } finally { onlineRequests.delete(controller); }
+      const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+      output.appendLine(`Online ${id}: ${elapsed}s for ${text.length} chars (${mode})`);
+      return { translation, source: `${ONLINE_PROVIDERS[id].label} · ${elapsed}s` };
+    }
+    if (selectedEngine !== 'ai') throw new Error(`Unknown translation engine: ${selectedEngine}`);
     const providerId = aiProvider();
     const model = providerId === 'vscode' ? await resolveModel() : undefined;
     const provider = providerId === 'vscode' ? undefined : httpProvider();
@@ -760,6 +863,10 @@ async function activate(context) {
       uiLanguage: uiLanguage(),
       fullPageMode: config().get('fullPage.mode', 'translationOnly'),
       autoAI: config().get('ai.autoTranslate', true),
+      translationEngine: translationEngine(),
+      onlineProvider: onlineProvider(),
+      onlineSourceLanguage: config().get('online.sourceLanguage', 'auto'),
+      onlineAuthorized: onlineAuthorized(onlineProvider()),
       surfaces: Object.fromEntries(SURFACES.map(key => [key, surfaces[key] !== false])),
       shortcuts: {
         paragraph: typeof shortcuts.paragraph === 'string' ? shortcuts.paragraph : 'Alt+Z',
@@ -947,9 +1054,40 @@ async function activate(context) {
       if (!response.ok || status.service !== 'immersive-translate-vscode') {
         throw Object.assign(new Error(`Port ${PORT} is used by another program; it was left untouched.`), { foreign: true });
       }
-      return;
+      return status;
     }
     throw lastError;
+  }
+  // The owner answers translations for every window, so an older owner would ignore settings it does not know.
+  async function requestHandover() {
+    const response = await fetch(`http://127.0.0.1:${PORT}/handover`, {
+      method: 'POST',
+      headers: { Origin: 'vscode-file://vscode-app', 'X-Immersive-Token': token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version }), signal: AbortSignal.timeout(5000)
+    });
+    if (response.status === 404) return 'unsupported';
+    const result = await response.json().catch(() => ({}));
+    return response.ok && result.handover === true ? 'accepted' : 'refused';
+  }
+  function handOver(requester) {
+    if (!server || compareVersions(requester, version) <= 0) return false;
+    const old = server;
+    server = undefined;
+    sharedBridge = true;
+    output.appendLine(`Handing the local bridge to a window running version ${requester}.`);
+    // Let the reply leave first; running translations finish on their open connections.
+    setTimeout(() => { old.close(); old.closeIdleConnections?.(); panel?.refresh(); }, 50);
+    return true;
+  }
+  let staleOwner = '';
+  async function warnStaleOwner(ownerVersion) {
+    if (staleOwner === ownerVersion) return;
+    staleOwner = ownerVersion;
+    panel?.refresh();
+    await vscode.window.showWarningMessage(L(
+      `Translate Anywhere: another VS Code window is still running the older version ${ownerVersion}, and it currently handles translations for all windows, so new settings such as the translation engine do not take effect yet. Reload every other VS Code window (Developer: Reload Window) or restart VS Code.`,
+      `Translate Anywhere：另一个 VS Code 窗口仍在运行旧版本 ${ownerVersion}，目前由它为所有窗口处理翻译，所以翻译引擎等新设置暂时不会生效。请在其他每个 VS Code 窗口执行「Developer: Reload Window」，或直接重启 VS Code。`,
+      `Translate Anywhere: Ein anderes VS Code-Fenster führt noch die ältere Version ${ownerVersion} aus und übernimmt die Übersetzungen für alle Fenster; neue Einstellungen wie die Übersetzungsengine wirken daher noch nicht. Laden Sie alle anderen VS Code-Fenster neu (Developer: Reload Window) oder starten Sie VS Code neu.`));
   }
   let bridgeStarting;
   let reuseLogged = false;
@@ -958,32 +1096,56 @@ async function activate(context) {
     bridgeStarting ||= startBridgeOnce().finally(() => { bridgeStarting = undefined; });
     return bridgeStarting;
   }
+  const listen = () => createBridge({
+    token, dictionary: { lookup: lookupAny }, translate, vocabulary,
+    onRevokeOnline: revokeOnline,
+    onHandover: handOver,
+    onTip: action => recordTip(action).catch(logError),
+    isEnabled: () => config().get('integration.enabled', false),
+    getStatus: () => ({ version, settings: runtimeSettings() }),
+    onError: logError
+  });
   async function startBridgeOnce() {
     try {
-      server = await createBridge({
-        token, dictionary: { lookup: lookupAny }, translate, vocabulary,
-        onTip: action => recordTip(action).catch(logError),
-        isEnabled: () => config().get('integration.enabled', false),
-        getStatus: () => ({ version, settings: runtimeSettings() }),
-        onError: logError
-      });
+      server = await listen();
     } catch (error) {
       if (error.code !== 'EADDRINUSE') throw error;
       // Heartbeat keeps retrying and takes over the port if the owning window goes away.
       sharedBridge = true;
+      let status;
       try {
-        await probeSharedBridge();
-        if (!reuseLogged) output.appendLine('Reusing the authenticated local bridge from another VS Code window.');
-        reuseLogged = true;
+        status = await probeSharedBridge();
       } catch (probeError) {
         if (probeError.foreign) { sharedBridge = false; throw probeError; }
         output.appendLine(`Shared bridge not responding yet (${errorText(probeError)}); will retry in background.`);
+        return;
       }
-      return;
+      const ownerVersion = typeof status?.version === 'string' ? status.version : '';
+      if (ownerVersion && compareVersions(version, ownerVersion) > 0) {
+        const outcome = await requestHandover().catch(() => 'refused');
+        if (outcome === 'accepted') {
+          for (let attempt = 0; attempt < 10 && !server; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            try { server = await listen(); } catch (listenError) { if (listenError.code !== 'EADDRINUSE') throw listenError; }
+          }
+        } else if (outcome === 'unsupported') {
+          output.appendLine(`The bridge-owning window runs older version ${ownerVersion} without handover support.`);
+          warnStaleOwner(ownerVersion).catch(logError);
+        }
+        if (!server) return;
+        output.appendLine(`Took over the local bridge from version ${ownerVersion}.`);
+      } else {
+        if (staleOwner) { staleOwner = ''; panel?.refresh(); }
+        if (!reuseLogged) output.appendLine('Reusing the authenticated local bridge from another VS Code window.');
+        reuseLogged = true;
+        return;
+      }
     }
     sharedBridge = false;
+    if (staleOwner) { staleOwner = ''; panel?.refresh(); }
     loadDictionary().catch(logError);
-    context.subscriptions.push({ dispose: () => server.close() });
+    const owned = server;
+    context.subscriptions.push({ dispose: () => owned.close() });
     output.appendLine(`Local bridge listening on 127.0.0.1:${PORT}`);
   }
   async function maintain(mode) {
@@ -1108,6 +1270,19 @@ async function activate(context) {
   };
   context.subscriptions.push(
     vscode.commands.registerCommand('translateAnywhere.enable', guarded(enable)),
+    vscode.commands.registerCommand('translateAnywhere.authorizeOnline', guarded(authorizeOnline)),
+    vscode.commands.registerCommand('translateAnywhere.revokeOnline', guarded(async () => {
+      const id = onlineProvider();
+      await revokeOnline(id);
+      if (sharedBridge) {
+        const response = await fetch(`http://127.0.0.1:${PORT}/online/revoke`, {
+          method: 'POST',
+          headers: { Origin: 'vscode-file://vscode-app', 'X-Immersive-Token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: id }), signal: AbortSignal.timeout(5000)
+        });
+        if (!response.ok) throw new Error(`Could not confirm revocation in the bridge-owning window (HTTP ${response.status}).`);
+      }
+    })),
     vscode.commands.registerCommand('translateAnywhere.disable', guarded(async () => {
       await config().update('integration.enabled', false, vscode.ConfigurationTarget.Global);
       const restored = (await maintain('restore')).changed;
@@ -1238,7 +1413,7 @@ async function activate(context) {
     const modelId = configuredModelId();
     let vscodeModels = [];
     let modelAuthorized = true;
-    if (providerId === 'vscode') {
+    if (translationEngine() === 'ai' && providerId === 'vscode') {
       try {
         const advice = modelAdvice();
         const describe = (model, extra = {}) => ({
@@ -1264,12 +1439,16 @@ async function activate(context) {
       translation: (entry.translation || '').replace(/\s+/g, ' ').slice(0, 120)
     }));
     return {
-      version, uiLanguage: uiLanguage(),
+      version, uiLanguage: uiLanguage(), staleBridge: staleOwner,
       integration: { enabled: config().get('integration.enabled', false), status: patchStatus },
       targetLanguage: targetLanguage(),
       languages: Object.keys(LANGUAGES).map((code, index) => ({ code, label: languageLabels[index] || code })),
       fullPageMode: config().get('fullPage.mode', 'translationOnly'),
       autoAI: config().get('ai.autoTranslate', true),
+      translationEngine: translationEngine(),
+      onlineProvider: onlineProvider(),
+      onlineSourceLanguage: config().get('online.sourceLanguage', 'auto'),
+      onlineAuthorized: onlineAuthorized(onlineProvider()),
       provider: providerId,
       providers: [{ id: 'vscode', label: L('VS Code language models (Copilot…)', 'VS Code 语言模型（Copilot 等）', 'VS Code-Sprachmodelle (Copilot…)') },
         ...Object.entries(PROVIDERS).map(([id, item]) => ({ id, label: item.label }))],
@@ -1300,11 +1479,14 @@ async function activate(context) {
       panel.refresh();
     }
   }
-  const PANEL_KEYS = /^(targetLanguage|fullPage\.mode|ai\.(autoTranslate|provider|modelId|apiModel|baseUrl)|surfaces\.\w+|shortcuts\.(paragraph|fullPage)|dot\.(size|color|borderWidth|borderColor|opacity|shape))$/;
+  const PANEL_KEYS = /^(targetLanguage|translation\.engine|online\.(provider|sourceLanguage)|fullPage\.mode|ai\.(autoTranslate|provider|modelId|apiModel|baseUrl)|surfaces\.\w+|shortcuts\.(paragraph|fullPage)|dot\.(size|color|borderWidth|borderColor|opacity|shape))$/;
   panel = new SettingsPanel(context, {
     state: panelState,
     update: async (key, value) => {
       if (!PANEL_KEYS.test(key)) throw new Error(`Unsupported setting: ${key}`);
+      const choices = { 'translation.engine': ['ai', 'online', 'offline'], 'online.provider': Object.keys(ONLINE_PROVIDERS),
+        'online.sourceLanguage': ['auto', ...ONLINE_LANGUAGES] };
+      if (choices[key] && !choices[key].includes(value)) throw new Error(`Invalid value for ${key}`);
       if (key === 'ai.provider') return switchProvider(value);
       if (key.startsWith('dot.')) {
         const name = key.slice(4);
@@ -1344,9 +1526,11 @@ async function activate(context) {
     vscode.window.registerWebviewViewProvider(SettingsPanel.viewType, panel),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (!event.affectsConfiguration(SECTION)) return;
+      if (['translation.engine', 'online', 'targetLanguage'].some(key => event.affectsConfiguration(`${SECTION}.${key}`))) cancelOnline();
       if (event.affectsConfiguration(`${SECTION}.dictionary.path`)) reloadDictionary();
       if (event.affectsConfiguration(`${SECTION}.ai`) || event.affectsConfiguration(`${SECTION}.targetLanguage`)) aiCache.clear();
-      if (event.affectsConfiguration(`${SECTION}.ai.provider`) || event.affectsConfiguration(`${SECTION}.ai.modelId`)) scheduleDefaultModel();
+      if (['ai.provider', 'ai.modelId', 'translation.engine'].some(key => event.affectsConfiguration(`${SECTION}.${key}`))) scheduleDefaultModel();
+      if (['translation.engine', 'online.provider'].some(key => event.affectsConfiguration(`${SECTION}.${key}`))) promptOnlineIfNeeded();
       panel.refresh();
     }),
     context.secrets.onDidChange(() => panel.refresh()),

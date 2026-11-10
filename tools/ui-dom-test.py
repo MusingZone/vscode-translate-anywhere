@@ -374,6 +374,8 @@ def main():
         route.fulfill(status=200, content_type="application/json", body=json.dumps(data, ensure_ascii=False))
 
     def select(page, element_id, pattern=None):
+        # A pending scroll event hides an unopened dot, including in the unchanged baseline runtime.
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
         page.evaluate("""([id, pattern]) => {
           const el = document.getElementById(id);
           const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -585,6 +587,46 @@ def main():
         results["settings"] = settings_test(browser, handle, ui, status)
         results["webviews"] = webview_test(browser, handle, ui)
         results["cross_page_dismiss"] = cross_page_test(browser, handle, ui, select)
+        # New pages get the selected engine from /status; the same flow serves online and AI.
+        status["translationEngine"] = "online"
+        online_page = browser.new_page(viewport={"width": 900, "height": 700})
+        online_page.route(ORIGIN + "/**", handle)
+        online_page.goto(ORIGIN + "/page")
+        online_page.add_script_tag(content=f"({ui})({json.dumps({'endpoint': ORIGIN, 'token': 't'})});")
+        online_page.wait_for_timeout(300)
+        before = sum(1 for c in calls if c[0] == "/ai")
+        select(online_page, "p1", "performance")
+        online_page.locator(".imt-dot").hover()
+        online_page.wait_for_function("document.querySelector('.imt-panel p').textContent.includes('性能')")
+        assert online_page.locator(".imt-ai").inner_text() == "在线翻译"
+        assert sum(1 for c in calls if c[0] == "/ai") == before
+        online_page.keyboard.press("Escape")
+        select(online_page, "p2")
+        online_page.locator(".imt-dot").hover()
+        online_page.wait_for_function("document.querySelector('.imt-panel p').textContent.startsWith('译(selection)')")
+        assert sum(1 for c in calls if c[0] == "/ai") == before + 1
+        online_page.keyboard.press("Escape")
+        online_page.evaluate("getSelection().removeAllRanges()")
+        box = online_page.locator("#p2").bounding_box()
+        online_page.mouse.move(box["x"] + 5, box["y"] + 5)
+        online_page.keyboard.press("Alt+z")
+        online_page.wait_for_function("document.querySelector('#p2 > .imt-trans').textContent.startsWith('译(paragraph)')")
+        online_page.keyboard.press("Alt+z")
+        online_page.wait_for_function("!document.querySelector('#p2 > .imt-trans')")
+        online_page.keyboard.press("Alt+w")
+        online_page.wait_for_function("document.querySelector('#p1 > .imt-trans:not(.imt-loading)')")
+        assert online_page.locator("#p1").evaluate("el => el.classList.contains('imt-only')") is False
+        status["translationEngine"] = "offline"
+        online_page.wait_for_timeout(2300)
+        online_page.wait_for_function("!document.querySelector('.imt-trans')")
+        before = sum(1 for c in calls if c[0] == "/ai")
+        select(online_page, "p2")
+        online_page.locator(".imt-dot").hover()
+        online_page.wait_for_function("document.querySelector('.imt-panel p').textContent.includes('侧边栏')")
+        assert not online_page.is_visible(".imt-ai")
+        assert sum(1 for c in calls if c[0] == "/ai") == before
+        online_page.close()
+        results["online_and_offline_engines"] = "ok"
         browser.close()
     print(json.dumps(results))
     print("UI DOM TEST PASSED")

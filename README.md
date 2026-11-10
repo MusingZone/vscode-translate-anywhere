@@ -6,15 +6,18 @@ Select text in VS Code's **Chat**, **Markdown preview**, **Release Notes**, **Se
 
 Text editors are never touched. The extension does nothing while you edit code.
 
+**New in 0.7.0:** no Copilot and no API key? Choose **Online (no API key)** as the **Translation engine** in the sidebar. It uses Google Translate (experimental) or MyMemory, after a one-time permission for each service. Without a Copilot / VS Code model, AI mode offers this switch itself. Dictionary hits stay local; everything else uses only the engine you selected. Existing installations keep AI. See [setup, research, privacy and limitations](docs/ONLINE-TRANSLATION.md).
+
 <picture><img src="docs/images/en/demo.gif" alt="Select, hover, Alt+Z and Alt+W" width="100%"></picture>
 
-> Inspired by the reading experience of browser "Immersive Translate" extension. Not affiliated with or endorsed by any of them. The screenshots are rendered from the extension's real UI on demo pages.
+> Inspired by the reading experience of the [Immersive Translate](https://chromewebstore.google.com/detail/immersive-translate-ai-we/bpoadfkcbjbfhfodiogcnhhhpibjhbnh) browser extension. Not affiliated with or endorsed by it. The screenshots are rendered from the extension's real UI on demo pages.
 
 ## Features
 
 | Feature | How |
 | --- | --- |
-| **Select & hover translation** | Select text, then hover the red dot. Words use the offline dictionary (English → Chinese). Anything longer, or other target languages, uses AI automatically. |
+| **Select & hover translation** | Select text, then hover the red dot. Words use the offline dictionary (English → Chinese). Dictionary misses use the selected AI or online engine; offline-only mode never sends them. |
+| **Token-free online translation** | Google Translate (experimental, unofficial) or MyMemory (documented, 5,000 characters/day). Separate permission, no automatic service fallback. |
 | **Paragraph translation** | Hover a paragraph and press **Alt+Z**. Press again to remove the translation. When you select a long passage, the popup shows a one-line hint about this shortcut (a few times at most). |
 | **Full-page translation** | Press **Alt+W** to translate the Chat conversation, preview or page you are working in. Press again to restore. "Translation only" (default) or "bilingual" display. |
 | **Many AI providers** | VS Code language models (GitHub Copilot, no key needed), OpenAI, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Kimi, GLM, SiliconFlow, OpenRouter, Groq, Mistral, Ollama, or any OpenAI-compatible endpoint. |
@@ -57,7 +60,8 @@ Click the **文A** icon in the Activity Bar. The sidebar shows:
 
 - **Integration status**, with **Enable / Repair** and **Disable & Restore**.
 - **Shortcuts & how to use**: what select, **Alt+Z** and **Alt+W** do. Click the dot to customize it: size, color, border, opacity, shape, or your own image (PNG, JPG, GIF, WebP, SVG), with a live preview. Click a key and press a new combination to change it; Backspace turns it off. **Try it on a sample page** opens a practice page, and a card offers to open Markdown files as a preview by default.
-- **Translation**: target language, full-page display mode, automatic AI.
+- **Translation**: engine (AI / online / offline only), target language, full-page display mode, automatic dictionary-miss translation.
+- **Online translation** (when selected): service, source language, privacy disclosure, local permission and revocation. Source language defaults to automatic detection for both services. Google is experimental, not its supported Cloud API. Never send confidential text or code.
 - **AI engine**:
   - provider list;
   - model list: user-selectable VS Code language models available for translation, in VS Code's order. There is no Auto choice: Copilot's own Auto router is excluded too, because it can route to models you hid. Copilot SDK models use the current Chat session's visibility and their callable Copilot or custom-provider equivalents; internal helpers and session-only proxies are excluded. Visibility changes refresh while the sidebar is open. An explicitly saved model hidden later remains selected and is marked **hidden**; a saved model that is no longer selectable is shown as **not available**, disabled until you choose another model. **Speed test** warms up each model once and times three runs and shows the median; then the fastest lightweight model among them picks the ones suited to translation, which appear as **Recommended**, with **Use it** (with no lightweight model, nothing is asked and there is no Recommended group). It never runs by itself; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view. API providers get **Fetch list** instead;
@@ -67,7 +71,7 @@ Click the **文A** icon in the Activity Bar. The sidebar shows:
 - **Offline dictionary**: status, Download, Choose file, Use default.
 - Footer: **Where to translate…** (per-surface switches), all settings, log.
 
-All values are ordinary VS Code settings, so they also appear in **Settings → Extensions → Translate Anywhere** and sync with Settings Sync; links there jump to the matching control in the sidebar. API keys are the exception: they never leave VS Code's Secret Storage.
+Configuration values appear in **Settings → Extensions → Translate Anywhere** and sync with Settings Sync; links there jump to the matching control in the sidebar. API keys stay in VS Code's Secret Storage. Online-service permissions are separate local profile state, not synchronized settings.
 
 <br clear="right">
 
@@ -138,7 +142,10 @@ Safeguards:
 | `translateAnywhere.shortcuts.fullPage` | `Alt+W` | Full-page shortcut. Empty disables it. |
 | `translateAnywhere.dot.size` / `color` / `borderWidth` / `borderColor` / `opacity` / `shape` | `7` / `#e5484d` / `1` / `#ffffff` / `0.85` / `circle` | Look of the selection dot. Easier from the sidebar: click the dot. |
 | `translateAnywhere.fullPage.mode` | `translationOnly` | `translationOnly` or `bilingual`. |
-| `translateAnywhere.ai.autoTranslate` | `true` | Use AI automatically when the dictionary has no entry. |
+| `translateAnywhere.translation.engine` | `ai` | `ai`, `online`, or `offline`. Dictionary hits stay local. |
+| `translateAnywhere.online.provider` | `google` | Experimental `google` or documented anonymous `mymemory`; separate local permission required. |
+| `translateAnywhere.online.sourceLanguage` | `auto` | Automatic detection (both services) or an explicit source language. |
+| `translateAnywhere.ai.autoTranslate` | `true` | Use the selected engine automatically when the dictionary has no entry; ignored in offline-only mode. |
 | `translateAnywhere.ai.provider` | `vscode` | AI provider (see the table above). |
 | `translateAnywhere.ai.modelId` | *(empty)* | VS Code language model ID. Filled in with a visible lightweight model on first use. Run **Speed test** in the sidebar for AI-recommended models. |
 | `translateAnywhere.ai.apiModel` | *(empty)* | Model for API providers. Empty means the provider's default. |
@@ -164,6 +171,7 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 | --- | --- |
 | Enable / Repair Integration · Disable and Restore VS Code | Apply, repair or remove the UI integration. |
 | Select AI Provider · Select AI Model · Set API Key · Authorize AI Model | Configure the AI engine. |
+| Allow Online Translation Service · Revoke Online Translation Permission | Manage local permission for the selected online service. |
 | Download Dictionary · Use Local Dictionary File… · Use Default Dictionary | Manage the offline dictionaries. |
 | Try It on a Sample Page · Open Markdown Files as Preview by Default · Open Markdown Files as Text by Default · Choose Where to Translate | Getting started and reading comfort. |
 | Open Vocabulary · Export Vocabulary to CSV · Remove Vocabulary Entries | Manage saved words. |
@@ -177,7 +185,9 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
   - VS Code language models are called through VS Code's Language Model API, and that provider's terms apply (for example GitHub Copilot's).
   - API providers are called directly over HTTPS with your key, and their terms and data policies apply.
   - Ollama and other local endpoints keep everything on your machine.
-  - Turn off `translateAnywhere.ai.autoTranslate` if you want AI to run only when you click **AI translate**.
+  - Turn off `translateAnywhere.ai.autoTranslate` to require the popup's translate button on dictionary misses. Paragraph/page shortcuts still explicitly request translation.
+- **Online translation** sends text directly to the chosen service only after local per-service consent. Google is unofficial/experimental. MyMemory allows 5,000 anonymous characters/day and may retain submitted text and share it with translation partners. HTTPS query parameters can appear in service/proxy logs. Never send confidential text or code; revocation cannot recall text already sent. No silent fallback to other services or AI.
+- **Offline dictionary only** disables AI and online translation; dictionary downloads are still governed separately by the dictionary settings.
 - The UI talks to the extension through an HTTP bridge bound to `127.0.0.1` only. It is protected by a random per-installation token and checks the request origin.
 - Your vocabulary is stored locally in VS Code's global storage folder for this extension.
 
@@ -190,7 +200,8 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 - Requires write access to the VS Code installation folder. For system-wide installs this means administrator confirmation.
 - The bridge uses local port `17865`. If several users of the same computer run VS Code at the same time, only the first one gets translations.
 - VS Code UI changes in future releases can break individual surfaces until the extension is updated.
-- Offline dictionary lookups translate into Chinese only. Other target languages always use AI.
+- Offline dictionary lookups translate into Chinese only. Other target languages require the selected AI or online engine.
+- Online providers may be blocked or rate-limited on your network. Google has no supported anonymous API contract; MyMemory's small quota is unsuitable for heavy full-page use.
 
 ## Uninstalling
 

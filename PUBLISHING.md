@@ -135,7 +135,7 @@ Use GitHub's [custom domain configuration guide](https://docs.github.com/en/page
 ## 5. Pre-flight checklist (every release)
 
 - [ ] `version` in `package.json` is bumped (SemVer), and `CHANGELOG.md` has a matching section.
-- [ ] Unit tests pass: `npm test` (20 tests: patcher, bridge, providers, dictionary download, German lookup, vocabulary, string-table parity).
+- [ ] Unit tests pass: `npm test` (55 tests: patcher, bridge, providers, online services, engine routing/consent, dictionary download, German lookup, vocabulary, string-table parity).
 - [ ] UI tests pass (optional, need Playwright and Chrome):
   - `python tools/ui-dom-test.py`, which tests the injected runtime;
   - `python tools/panel-test.py` with no flag, `--zh` and `--de`, which test the sidebar under its CSP.

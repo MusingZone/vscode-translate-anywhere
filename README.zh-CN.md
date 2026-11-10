@@ -9,15 +9,18 @@
 
 代码编辑器中**不会**启用翻译，写代码时完全不打扰。
 
+**0.7.0 新增：**没有 Copilot、也不想配 API Key？在侧边栏把「翻译引擎」选为「在线翻译（无需 API Key）」即可，可用 Google 翻译（实验性、非正式接口）或 MyMemory（正式免密接口，每天 5,000 字符），每个服务首次使用时授权一次。没有可用的 Copilot / VS Code 模型时，AI 模式会主动询问是否改用免费在线翻译、配置 AI API 或仅用离线词典。词典命中仍在本地处理；其余内容只使用所选引擎，不自动跨服务回退。已有安装仍默认使用 AI。详见[调研、试用步骤、隐私与限制](docs/ONLINE-TRANSLATION.md)。
+
 <picture><img src="docs/images/zh-CN/demo.gif" alt="划词、悬停、Alt+Z 与 Alt+W" width="100%"></picture>
 
-> 灵感来自浏览器"沉浸式翻译"类扩展的阅读体验，与它们没有任何关联，也未获其认可。截图由扩展的真实界面在演示页面上渲染生成。
+> 灵感来自浏览器扩展[沉浸式翻译](https://chromewebstore.google.com/detail/immersive-translate-ai-we/bpoadfkcbjbfhfodiogcnhhhpibjhbnh)的阅读体验，与其没有任何关联，也未获其认可。截图由扩展的真实界面在演示页面上渲染生成。
 
 ## 功能
 
 | 功能 | 用法 |
 | --- | --- |
-| **划词悬停翻译** | 划选文字后把鼠标移到红点上。单词查离线词典（英 → 中）；更长的内容或其他目标语言自动使用 AI。 |
+| **划词悬停翻译** | 划选文字后把鼠标移到红点上。单词查离线词典（英 → 中）；词典未命中时使用所选 AI 或在线翻译引擎；仅离线模式不发送文本。 |
+| **免 Token 在线翻译** | Google 翻译（实验性、非正式接口）或 MyMemory（正式免密接口，每天 5,000 字符）。分别授权，不自动回退其他服务。 |
 | **段落翻译** | 鼠标停在段落上按 **Alt+Z**，再按一次移除译文。划选一大段文字时，弹窗里会用一行小字提示这个快捷键（最多提示几次）。 |
 | **全文翻译** | 按 **Alt+W** 翻译当前所在的 Chat 对话、预览或页面，再按一次恢复原文。可选"仅译文"（默认）或"原文译文对照"。 |
 | **多家 AI 服务商** | VS Code 语言模型（GitHub Copilot，无需 Key）、OpenAI、Anthropic Claude、Google Gemini、DeepSeek、通义千问、Kimi、智谱 GLM、硅基流动、OpenRouter、Groq、Mistral、Ollama，或任何 OpenAI 兼容接口。 |
@@ -60,7 +63,8 @@
 
 - **界面集成**：显示状态，提供"启用 / 修复"和"禁用并恢复"。
 - **快捷键与用法**：说明划词、**Alt+Z**、**Alt+W** 分别做什么。点击小圆点可自定义它的大小、颜色、边框、不透明度、形状，也可以换成自己的图片（PNG、JPG、GIF、WebP、SVG），并实时预览。点击按键框后按下新的组合键即可修改，退格键关闭。**在示例页面上试一试** 会打开一个练习页面；下方卡片可一键把 Markdown 文件改为默认以预览打开。
-- **翻译**：目标语言、全文翻译显示方式、自动 AI。
+- **翻译**：引擎（AI / 在线翻译 / 仅离线词典）、目标语言、全文翻译显示方式、词典未命中时自动翻译。
+- **在线翻译**（选中后显示）：服务商、源语言、隐私说明、本机授权及撤销。源语言默认由两个服务自动检测；Google 为实验性接口，并非正式 Cloud API。请勿发送机密文本或代码。
 - **AI 引擎**：
   - 服务商下拉列表；
   - 模型下拉列表：只列出可供翻译使用、允许用户选择的 VS Code 语言模型，保持其原有顺序。Copilot SDK 模型遵循当前 Chat 会话的可见性，并对应到可调用的 Copilot 或自定义服务商模型；不列出内部辅助模型和仅限会话的代理模型。侧边栏打开时会自动刷新可见性。明确保存过、之后才隐藏的模型仍保留选中并标为 **已隐藏**；已保存但不再可选的模型会标为 **不可用** 并禁用，需手动选择其他模型；不提供“自动”选项，Copilot 自带的 Auto 路由模型也不列出，因为它可能转到你已隐藏的模型。**测速** 会让每个模型先预热一次、再计时三次并显示中位数，随后由其中最快的轻量模型判断哪些适合翻译，列为 **推荐**，旁边有 **改用此模型**（没有轻量模型时不做判断，也不显示推荐）；测速只在你点击时运行。对高级模型的请求会计入 Copilot 高级请求额度，不用的模型可在 VS Code 的 **语言模型** 视图中隐藏。API 服务商则提供"获取列表"；
@@ -70,7 +74,7 @@
 - **离线词典**：状态，以及"下载"、"选择文件"、"恢复默认"。
 - 底部：**翻译范围…**（按页面类型开关）、全部设置、查看日志。
 
-除 API Key 外，所有选项都是普通的 VS Code 设置，在 **设置 → 扩展 → Translate Anywhere** 中同样可见，也会随设置同步；那里的链接可直接跳到侧边栏中对应的控件。API Key 只保存在 VS Code 的 Secret Storage 中。
+配置项在 **设置 → 扩展 → Translate Anywhere** 中同样可见，并可随设置同步；那里的链接可直接跳到侧边栏中对应的控件。API Key 只保存在 VS Code 的 Secret Storage 中；在线服务授权属于本机配置档状态，不随设置同步。
 
 <br clear="right">
 
@@ -141,7 +145,10 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 | `translateAnywhere.shortcuts.fullPage` | `Alt+W` | 全文翻译快捷键，留空表示禁用。 |
 | `translateAnywhere.dot.size` / `color` / `borderWidth` / `borderColor` / `opacity` / `shape` | `7` / `#e5484d` / `1` / `#ffffff` / `0.85` / `circle` | 划词小圆点的样式。更方便的方式：在侧边栏点击小圆点。 |
 | `translateAnywhere.fullPage.mode` | `translationOnly` | `translationOnly`（仅译文）或 `bilingual`（对照）。 |
-| `translateAnywhere.ai.autoTranslate` | `true` | 词典未收录时自动使用 AI。 |
+| `translateAnywhere.translation.engine` | `ai` | `ai`、`online` 或 `offline`；词典命中仍在本地处理。 |
+| `translateAnywhere.online.provider` | `google` | 实验性 `google` 或正式匿名接口 `mymemory`，需分别在本机授权。 |
+| `translateAnywhere.online.sourceLanguage` | `auto` | 自动检测（两个服务均支持）或指定源语言。 |
+| `translateAnywhere.ai.autoTranslate` | `true` | 词典未收录时自动使用所选引擎；仅离线模式忽略此项。 |
 | `translateAnywhere.ai.provider` | `vscode` | AI 服务商（见上表）。 |
 | `translateAnywhere.ai.modelId` | （空） | VS Code 语言模型 ID。首次使用时自动填入一个可见的轻量模型。在侧边栏点击 **测速** 可获得 AI 推荐的模型。 |
 | `translateAnywhere.ai.apiModel` | （空） | API 服务商的模型名，留空使用默认模型。 |
@@ -167,6 +174,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 | --- | --- |
 | 启用 / 修复界面集成 · 禁用并恢复 VS Code 原文件 | 应用、修复或移除界面集成。 |
 | 选择 AI 服务商 · 选择 AI 模型 · 设置 API Key · 授权 AI 模型 | 配置 AI 引擎。 |
+| 允许在线翻译服务 · 撤销在线翻译授权 | 管理所选在线服务的本机授权。 |
 | 下载词典 · 使用本地词典文件… · 使用默认词典 | 管理离线词典。 |
 | 在示例页面上试用 · 默认以预览方式打开 Markdown 文件 · 默认以文本方式打开 Markdown 文件 · 选择翻译范围 | 上手与阅读体验。 |
 | 打开生词本 · 导出生词本为 CSV · 删除生词本条目 | 管理收藏的单词。 |
@@ -180,7 +188,9 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
   - VS Code 语言模型通过 VS Code 的 Language Model API 调用，适用相应提供方（如 GitHub Copilot）的条款。
   - API 服务商使用你的 Key 通过 HTTPS 直接调用，适用该服务商的条款与数据政策。
   - Ollama 等本地接口的数据不离开你的电脑。
-  - 如果只想在点击 **AI 翻译** 时才调用 AI，可关闭 `translateAnywhere.ai.autoTranslate`。
+  - 关闭 `translateAnywhere.ai.autoTranslate` 后，词典未命中需点击弹窗翻译按钮；段落/全文快捷键仍会显式请求翻译。
+- **在线翻译**：每家服务在本机单独授权后，文本才会直接发送给该服务。Google 为非正式实验性接口；MyMemory 匿名额度每天 5,000 字符，可能保留文本并与翻译合作方共享。HTTPS 查询参数可能出现在服务端/代理日志中。请勿发送机密文本或代码；撤销授权无法收回已发送文本。失败不自动切换其他服务或 AI。
+- **仅离线词典**：禁用 AI 和在线翻译；词典下载仍由独立的词典设置控制。
 - 界面与扩展之间通过只绑定 `127.0.0.1` 的 HTTP 桥通信，使用每次安装随机生成的令牌保护，并校验请求来源。
 - 生词本只保存在本机该扩展的 VS Code 全局存储目录中。
 
@@ -193,7 +203,8 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 - 需要对 VS Code 安装目录有写入权限；"所有用户"安装需要管理员确认。
 - 本地桥使用端口 `17865`。如果同一台电脑上有多个用户同时运行 VS Code，只有第一个用户能使用翻译。
 - VS Code 未来版本的界面改动可能导致个别页面暂时失效，需等待扩展更新。
-- 离线词典只提供中文释义，其他目标语言始终使用 AI。
+- 离线词典只提供中文释义，其他目标语言需使用所选 AI 或在线翻译引擎。
+- 在线服务可能受网络阻断或限流。Google 不提供正式匿名 API 契约；MyMemory 额度较小，不适合高强度全文翻译。
 
 ## 卸载
 

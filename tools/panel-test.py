@@ -57,6 +57,7 @@ def state(provider="vscode", lang="en"):
         "targetLanguage": "zh-CN",
         "languages": [{"code": "zh-CN", "label": "简体中文"}, {"code": "zh-TW", "label": "繁體中文"}, {"code": "ja", "label": "日本語"}, {"code": "en", "label": "English"}],
         "fullPageMode": "translationOnly", "autoAI": True,
+        "translationEngine": "ai", "onlineProvider": "google", "onlineSourceLanguage": "auto", "onlineAuthorized": False,
         "provider": provider,
         "providers": [{"id": "vscode", "label": {"zh": "VS Code 语言模型（Copilot 等）", "de": "VS Code-Sprachmodelle (Copilot…)"}.get(lang, "VS Code language models (Copilot…)")}]
         + [{"id": k, "label": v["label"]} for k, v in presets.items()],
@@ -342,6 +343,46 @@ def main():
         post({"type": "state", "state": s})
         wait("document.getElementById('dictText').textContent.includes('42%')")
         assert not page.is_visible("#dictDownload")
+
+        page.select_option("#translationEngine", "online")
+        assert posted() == [{"type": "update", "key": "translation.engine", "value": "online"}]
+        s["translationEngine"] = "online"
+        post({"type": "state", "state": s})
+        wait("!document.getElementById('onlineSection').hidden")
+        assert not page.is_visible("#aiSection")
+        # The service and its permission sit directly under the engine picker, not in a later section.
+        assert page.evaluate("""() => {
+            const engine = document.getElementById('translationEngine'), box = document.getElementById('onlineSection');
+            return box.closest('details') === engine.closest('details') && engine.nextElementSibling === box;
+        }""")
+        assert page.is_visible("#onlineAllow") and not page.is_visible("#onlineRevoke")
+        assert page.eval_on_selector("#onlinePermission", "e => e.classList.contains('error')")
+        assert page.locator("#onlineSection input[type=password]").count() == 0
+        page.select_option("#onlineProvider", "mymemory")
+        assert posted() == [{"type": "update", "key": "online.provider", "value": "mymemory"}]
+        s["onlineProvider"] = "mymemory"
+        s["onlineSourceLanguage"] = "en"
+        post({"type": "state", "state": s})
+        wait("document.getElementById('onlineSourceLanguage').value === 'en'")
+        assert not page.eval_on_selector("#onlineSourceLanguage", "s => s.options[0].disabled"), "MyMemory supports auto detection"
+        page.click("#onlineAllow")
+        assert posted() == [{"type": "command", "command": "translateAnywhere.authorizeOnline"}]
+        s["onlineAuthorized"] = True
+        post({"type": "state", "state": s})
+        wait("!document.getElementById('onlineRevoke').hidden")
+        assert page.eval_on_selector("#onlinePermission", "e => e.classList.contains('ok')")
+        page.click("#onlineRevoke")
+        assert posted() == [{"type": "command", "command": "translateAnywhere.revokeOnline"}]
+        assert not page.is_visible("#staleCard")
+        s["staleBridge"] = "0.6.5"
+        post({"type": "state", "state": s})
+        wait("!document.getElementById('staleCard').hidden")
+        assert "0.6.5" in page.text_content("#staleCard")
+        s["staleBridge"] = ""
+        s["translationEngine"] = "offline"
+        post({"type": "state", "state": s})
+        wait("document.getElementById('autoAI').disabled")
+        assert not page.is_visible("#onlineSection") and not page.is_visible("#aiSection")
         browser.close()
     assert not errors, errors
     print("PANEL TEST PASSED", lang)

@@ -1,6 +1,7 @@
 'use strict';
 const http = require('node:http');
 const { timingSafeEqual } = require('node:crypto');
+const { ONLINE_PROVIDERS } = require('./online');
 
 // Overridable only so integration tests can run next to an everyday VS Code window.
 const PORT = Number(process.env.TRANSLATE_ANYWHERE_PORT) || 17865;
@@ -9,7 +10,7 @@ function allowedOrigin(origin) {
     /^vscode-webview:\/\/[a-z0-9-]+$/i.test(origin || '');
 }
 
-function createBridge({ token, dictionary, translate, vocabulary, isEnabled, getStatus = () => ({}), onTip = () => {}, onError, port = PORT }) {
+function createBridge({ token, dictionary, translate, vocabulary, isEnabled, getStatus = () => ({}), onTip = () => {}, onRevokeOnline, onHandover, onError, port = PORT }) {
   // Last mouse press in any VS Code page (workbench or webview), so a popup open in one page closes on a click in another.
   let lastPointer = { time: 0, source: '' };
   const server = http.createServer(async (req, res) => {
@@ -40,11 +41,11 @@ function createBridge({ token, dictionary, translate, vocabulary, isEnabled, get
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
       return reply(401, { error: 'Invalid bridge token' });
     }
-    if (req.method !== 'POST' || !['/lookup', '/ai', '/status', '/vocab', '/pointer', '/tip'].includes(req.url)) {
+    if (req.method !== 'POST' || !['/lookup', '/ai', '/status', '/vocab', '/pointer', '/tip', '/online/revoke', '/handover'].includes(req.url)) {
       return reply(404, { error: 'Unknown route' });
     }
     if (req.url === '/status') return reply(200, { ...getStatus(), service: 'immersive-translate-vscode', enabled: isEnabled() });
-    if (!isEnabled()) return reply(409, { error: 'Translation integration is disabled' });
+    if (!isEnabled() && req.url !== '/online/revoke' && req.url !== '/handover') return reply(409, { error: 'Translation integration is disabled' });
     let size = 0;
     const chunks = [];
     try {
@@ -60,6 +61,19 @@ function createBridge({ token, dictionary, translate, vocabulary, isEnabled, get
       let body;
       try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { return reply(400, { error: 'Invalid JSON' }); }
+      if (req.url === '/online/revoke') {
+        if (!Object.hasOwn(ONLINE_PROVIDERS, body.provider)) return reply(400, { error: 'Unknown online translation provider' });
+        if (!onRevokeOnline) return reply(503, { error: 'Online permission management unavailable' });
+        await onRevokeOnline(body.provider);
+        return reply(200, { revoked: true });
+      }
+      // A window running a newer extension version asks the owner to release the port, so translations are not
+      // served by code that predates the settings the user is changing.
+      if (req.url === '/handover') {
+        if (typeof body.version !== 'string' || !/^\d+\.\d+\.\d+/.test(body.version)) return reply(400, { error: 'Invalid version' });
+        const accepted = onHandover ? !!onHandover(body.version) : false;
+        return reply(200, { handover: accepted });
+      }
       if (req.url === '/pointer') {
         if (body.action === 'down' && typeof body.source === 'string' && body.source) {
           lastPointer = { time: Date.now(), source: body.source.slice(0, 64) };
@@ -122,4 +136,11 @@ function createBridge({ token, dictionary, translate, vocabulary, isEnabled, get
     });
   });
 }
-module.exports = { PORT, allowedOrigin, createBridge };
+// Compares the numeric major.minor.patch part of two extension versions.
+function compareVersions(a, b) {
+  const parse = value => String(value || '').split('.').slice(0, 3).map(part => Number.parseInt(part, 10) || 0);
+  const [x, y] = [parse(a), parse(b)];
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0) ? 1 : -1;
+  return 0;
+}
+module.exports = { PORT, allowedOrigin, compareVersions, createBridge };

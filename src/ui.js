@@ -9,7 +9,7 @@ function immersiveUI(config) {
   const NESTED_CSS = 'p,ul,ol,pre,table,blockquote,div,dl,h1,h2,h3,h4,h5,h6';
   // User settings arrive from the extension through /status (polled), so changes apply without a reload.
   const DEFAULTS = {
-    targetLanguage: 'zh-CN', uiLanguage: 'en', fullPageMode: 'translationOnly', autoAI: true,
+    targetLanguage: 'zh-CN', uiLanguage: 'en', fullPageMode: 'translationOnly', autoAI: true, translationEngine: 'ai',
     surfaces: {}, shortcuts: { paragraph: 'Alt+Z', fullPage: 'Alt+W' }, tip: false
   };
   let settings = DEFAULTS;
@@ -29,6 +29,10 @@ function immersiveUI(config) {
       looking: 'Looking up the offline dictionary…', aiRunning: 'Translating with AI…', aiTimeout: 'AI translation timed out',
       aiFailed: 'AI translation failed: {0}', lookupFailed: 'Lookup failed: {0}. Run "Translate Anywhere: Show Status".',
       notFound: 'Not in the offline dictionary. Click "AI translate" to translate it.',
+      onlineButton: 'Online translate', onlineTitle: 'Translate with the selected online service', onlineRunning: 'Translating online…',
+      onlineFailed: 'Online translation failed: {0}', onlineTimeout: 'Online translation timed out',
+      onlineNotFound: 'Not in the offline dictionary. Click "Online translate" to translate it.',
+      offlineNotFound: 'Not in the offline dictionary. Choose Online or AI in the sidebar for this text.',
       saved: '★ Added to vocabulary: {0}', removed: 'Removed from vocabulary: {0}', vocabFailed: 'Vocabulary update failed: {0}',
       noParagraph: 'No translatable paragraph under the mouse', noNeed: 'This paragraph is already in the target language',
       translating: 'Translating…', paraFailed: '(Translation failed: {0})',
@@ -44,6 +48,10 @@ function immersiveUI(config) {
       looking: '正在查询离线词典…', aiRunning: '正在调用 AI 模型翻译…', aiTimeout: 'AI 翻译超时',
       aiFailed: 'AI 翻译失败：{0}', lookupFailed: '查询失败：{0}。请运行 Translate Anywhere: Show Status 检查扩展。',
       notFound: '离线词典未收录。点击“AI 翻译”进行翻译。',
+      onlineButton: '在线翻译', onlineTitle: '使用所选在线服务翻译', onlineRunning: '正在在线翻译…',
+      onlineFailed: '在线翻译失败：{0}', onlineTimeout: '在线翻译超时',
+      onlineNotFound: '离线词典未收录。点击“在线翻译”进行翻译。',
+      offlineNotFound: '离线词典未收录。请在侧边栏选择在线翻译或 AI 翻译此文本。',
       saved: '★ 已加入生词本：{0}', removed: '已移出生词本：{0}', vocabFailed: '生词本操作失败：{0}',
       noParagraph: '鼠标下没有可翻译的段落', noNeed: '该段落已是目标语言，无需翻译',
       translating: '翻译中…', paraFailed: '（翻译失败：{0}）',
@@ -60,6 +68,10 @@ function immersiveUI(config) {
       looking: 'Offline-Wörterbuch wird durchsucht…', aiRunning: 'Wird mit KI übersetzt…', aiTimeout: 'Zeitüberschreitung der KI-Übersetzung',
       aiFailed: 'KI-Übersetzung fehlgeschlagen: {0}', lookupFailed: 'Nachschlagen fehlgeschlagen: {0}. Führen Sie "Translate Anywhere: Show Status" aus.',
       notFound: 'Nicht im Offline-Wörterbuch. Klicken Sie auf "KI-Übersetzung".',
+      onlineButton: 'Online übersetzen', onlineTitle: 'Mit dem gewählten Online-Dienst übersetzen', onlineRunning: 'Wird online übersetzt…',
+      onlineFailed: 'Online-Übersetzung fehlgeschlagen: {0}', onlineTimeout: 'Zeitüberschreitung der Online-Übersetzung',
+      onlineNotFound: 'Nicht im Offline-Wörterbuch. Auf "Online übersetzen" klicken.',
+      offlineNotFound: 'Nicht im Offline-Wörterbuch. Online oder KI in der Seitenleiste wählen.',
       saved: '★ Zur Vokabelliste hinzugefügt: {0}', removed: 'Aus der Vokabelliste entfernt: {0}', vocabFailed: 'Vokabelliste konnte nicht aktualisiert werden: {0}',
       noParagraph: 'Kein übersetzbarer Absatz unter der Maus', noNeed: 'Dieser Absatz ist bereits in der Zielsprache',
       translating: 'Wird übersetzt…', paraFailed: '(Übersetzung fehlgeschlagen: {0})',
@@ -76,6 +88,9 @@ function immersiveUI(config) {
   };
   const t = (key, ...args) => (uiStrings()[key] ?? STRINGS.en[key])
     .replace(/\{(\d)\}/g, (_all, index) => String(args[index] ?? ''));
+  const engineText = key => t(settings.translationEngine === 'online' ? `online${key}` : `ai${key}`);
+  const engineIdentity = () => JSON.stringify([settings.translationEngine, settings.targetLanguage,
+    settings.onlineProvider, settings.onlineSourceLanguage, settings.onlineAuthorized]);
   // "Ctrl+Shift+Y" style shortcuts, matched on physical key codes so keyboard layouts do not matter.
   function parseShortcut(text) {
     if (typeof text !== 'string' || !text.trim()) return null;
@@ -187,7 +202,7 @@ function immersiveUI(config) {
         if (message.delta) onDelta(message.delta);
       }
     }
-    throw new Error('AI response ended unexpectedly');
+    throw new Error('Translation response ended unexpectedly');
   }
 
   // Webview documents are one surface each; the workbench document hosts several, told apart by container.
@@ -361,8 +376,9 @@ function immersiveUI(config) {
       panel.setAttribute('aria-label', t('panelLabel'));
       close.title = t('close');
       close.setAttribute('aria-label', close.title);
-      ai.textContent = t('aiButton');
-      ai.title = t('aiTitle');
+      ai.textContent = engineText('Button');
+      ai.title = engineText('Title');
+      ai.hidden = settings.translationEngine === 'offline';
       setStar(star.classList.contains('imt-on'));
     }
     function setStar(saved) {
@@ -514,7 +530,7 @@ function immersiveUI(config) {
       result.textContent = t('looking');
       source.textContent = '';
       ai.disabled = false;
-      ai.textContent = t('aiButton');
+      ai.textContent = engineText('Button');
       setStar(false);
       star.hidden = selected.length > 200;
       position(dot, value.point.x, value.point.y);
@@ -548,10 +564,11 @@ function immersiveUI(config) {
         const data = await lookupPromise;
         if (revision !== id || aiStartedFor === id) return;
         if (!data.found) {
-          // Phrases, sentences and paragraphs the offline dictionary cannot cover go straight to AI.
+          // Dictionary misses use only the engine selected by the user.
           phonetic.textContent = '';
-          if (settings.autoAI !== false) runAI();
-          else result.textContent = t('notFound');
+          if (settings.translationEngine === 'offline') result.textContent = t('offlineNotFound');
+          else if (settings.autoAI !== false) runAI();
+          else result.textContent = t(settings.translationEngine === 'online' ? 'onlineNotFound' : 'notFound');
           return;
         }
         result.textContent = data.translation.replace(/\\n/g, '\n');
@@ -649,14 +666,14 @@ function immersiveUI(config) {
     async function runAI() {
       const id = revision;
       const text = selected;
-      if (!text || ai.disabled) return;
+      if (!text || ai.disabled || settings.translationEngine === 'offline') return;
       aiStartedFor = id;
       haveTranslation = false;
       ai.disabled = true;
-      result.textContent = t('aiRunning');
+      result.textContent = engineText('Running');
       source.textContent = '';
       const controller = aiController = new AbortController();
-      const timer = setTimeout(() => controller.abort(new Error(t('aiTimeout'))), 35000);
+      const timer = setTimeout(() => controller.abort(new Error(engineText('Timeout'))), 35000);
       let streamed = '';
       try {
         const data = await streamAI(text, controller.signal, delta => {
@@ -670,7 +687,7 @@ function immersiveUI(config) {
         source.textContent = data.source;
         placePanel();
       } catch (error) {
-        if (revision === id) result.textContent = t('aiFailed', error.message);
+        if (revision === id) result.textContent = t(settings.translationEngine === 'online' ? 'onlineFailed' : 'aiFailed', error.message);
       } finally {
         clearTimeout(timer);
         if (aiController === controller) aiController = undefined;
@@ -967,7 +984,18 @@ function immersiveUI(config) {
       }
     }
     // When a surface is switched off in settings, drop its translations and its full-page mode.
+    let lastEngine = engineIdentity();
     statusListeners.push(() => {
+      const currentEngine = engineIdentity();
+      if (currentEngine !== lastEngine) {
+        lastEngine = currentEngine;
+        hide();
+        for (const key of [...fullSurfaces]) setFullMode(key, false);
+        for (const controller of jobs.values()) controller.abort();
+        queue.length = 0;
+        clearTranslations();
+        applyLabels();
+      }
       for (const key of [...fullSurfaces]) if (!surfaceOn(key)) setFullMode(key, false);
       if (disabled) hide();
     });

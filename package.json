@@ -2,7 +2,7 @@
   "name": "vscode-translate-anywhere",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.6.5",
+  "version": "0.7.0",
   "publisher": "MusingZone",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -52,7 +52,7 @@
   "main": "./src/extension.js",
   "scripts": {
     "vscode:uninstall": "node ./tools/uninstall.js",
-    "test": "node --test test/core.test.js",
+    "test": "node --test test/core.test.js test/online.test.js test/engine.test.js",
     "package": "node tools/package.js"
   },
   "activationEvents": [
@@ -69,6 +69,16 @@
   ],
   "contributes": {
     "commands": [
+      {
+        "command": "translateAnywhere.authorizeOnline",
+        "category": "Translate Anywhere",
+        "title": "%command.authorizeOnline%"
+      },
+      {
+        "command": "translateAnywhere.revokeOnline",
+        "category": "Translate Anywhere",
+        "title": "%command.revokeOnline%"
+      },
       {
         "command": "translateAnywhere.enable",
         "category": "Translate Anywhere",
@@ -185,6 +195,32 @@
     "configuration": {
       "title": "Translate Anywhere",
       "properties": {
+        "translateAnywhere.translation.engine": {
+          "type": "string",
+          "default": "ai",
+          "enum": ["ai", "online", "offline"],
+          "enumDescriptions": ["%config.engine.ai%", "%config.engine.online%", "%config.engine.offline%"],
+          "scope": "application",
+          "order": 0.1,
+          "markdownDescription": "%config.translation.engine%"
+        },
+        "translateAnywhere.online.provider": {
+          "type": "string",
+          "default": "google",
+          "enum": ["google", "mymemory"],
+          "enumItemLabels": ["Google Translate (experimental)", "MyMemory"],
+          "scope": "application",
+          "order": 0.2,
+          "markdownDescription": "%config.online.provider%"
+        },
+        "translateAnywhere.online.sourceLanguage": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "zh-CN", "zh-TW", "en", "ja", "ko", "fr", "de", "es", "pt", "it", "ru", "uk", "ar", "hi", "vi", "th", "id", "tr", "pl", "nl"],
+          "scope": "application",
+          "order": 0.3,
+          "markdownDescription": "%config.online.sourceLanguage%"
+        },
         "translateAnywhere.targetLanguage": {
           "type": "string",
           "default": "zh-CN",
