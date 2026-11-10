@@ -120,12 +120,17 @@ async function activate(context) {
   const visibleModels = async () => {
     const list = await vscode.lm.selectChatModels({});
     const hidden = hiddenModels();
-    return list.filter(model => !models.isHidden(model, hidden));
+    return list.filter(model => !models.isRouterModel(model) && !models.isHidden(model, hidden));
   };
   const selectableModel = async modelId => {
     const list = await vscode.lm.selectChatModels({ id: modelId });
     hiddenModels();
-    return list.find(model => !models.isHidden(model, hiddenCache.excluded));
+    return list.find(model => !models.isRouterModel(model) && !models.isHidden(model, hiddenCache.excluded));
+  };
+  // The saved model; the "Auto" choice of earlier versions counts as no choice.
+  const configuredModelId = () => {
+    const modelId = config().get('ai.modelId', '');
+    return modelId === models.LEGACY_AUTO_MODEL ? '' : modelId;
   };
   const noModelsError = () => new Error(L('No VS Code language model is available. Sign in to GitHub Copilot or configure a model provider first.',
     '没有可用的 VS Code 语言模型。请先登录 Copilot 或配置模型提供程序。',
@@ -236,7 +241,11 @@ async function activate(context) {
   }
   context.subscriptions.push({ dispose: () => clearTimeout(defaultTimer) });
   async function ensureDefaultModel() {
-    if (aiProvider() !== 'vscode' || config().get('ai.modelId', '')) return;
+    if (config().get('ai.modelId', '') === models.LEGACY_AUTO_MODEL) {
+      await config().update('ai.modelId', undefined, vscode.ConfigurationTarget.Global);
+      output.appendLine('The "Auto" translation model choice was removed; a visible model is chosen instead.');
+    }
+    if (aiProvider() !== 'vscode' || configuredModelId()) return;
     const visible = await visibleModels();
     if (!visible.length) return;
     const best = models.pickPreferred(visible);
@@ -251,8 +260,8 @@ async function activate(context) {
     await suggestChoosingModel();
   }
   async function resolveModel() {
-    const modelId = config().get('ai.modelId', '');
-    if (modelId && modelId !== models.AUTO_MODEL) {
+    const modelId = configuredModelId();
+    if (modelId) {
       // An explicit choice is honoured even if the model was hidden later.
       const configured = await selectableModel(modelId);
       if (configured) return configured;
@@ -263,11 +272,6 @@ async function activate(context) {
     }
     const visible = await visibleModels();
     if (!visible.length) throw noModelsError();
-    if (modelId === models.AUTO_MODEL) {
-      const measured = [...visible].sort((a, b) => speedRank(a) - speedRank(b))[0];
-      return recommendedModels(visible)[0] || models.pickPreferred(visible) ||
-        (speedRank(measured) < Number.MAX_SAFE_INTEGER ? measured : visible[0]);
-    }
     const best = models.pickPreferred(visible);
     if (best) {
       await config().update('ai.modelId', best.id, vscode.ConfigurationTarget.Global);
@@ -282,7 +286,7 @@ async function activate(context) {
   async function chooseModel() {
     const list = await visibleModels();
     if (!list.length) throw noModelsError();
-    const current = config().get('ai.modelId', '');
+    const current = configuredModelId();
     const picker = vscode.window.createQuickPick();
     picker.title = L('Translate Anywhere: AI translation model', 'Translate Anywhere：选择 AI 翻译模型', 'Translate Anywhere: KI-Übersetzungsmodell');
     picker.placeholder = L('Pick a small, fast model. The speed button measures your authorized models and marks the ones suited to translation (about a minute).',
@@ -291,8 +295,6 @@ async function activate(context) {
     picker.matchOnDescription = picker.matchOnDetail = true;
     const measure = { iconPath: new vscode.ThemeIcon('dashboard'), tooltip: L('Measure translation speed', '测速', 'Übersetzungstempo messen') };
     picker.buttons = [measure];
-    const auto = { label: `$(sparkle) ${L('Auto', '自动', 'Automatisch')}`, detail: L('Uses the fastest recommended model after a speed test, otherwise a lightweight model you have',
-      '测速后使用最快的推荐模型，否则使用你已有的轻量模型', 'Verwendet nach einer Tempomessung das schnellste empfohlene Modell, sonst ein leichtes Modell, das Sie haben'), id: models.AUTO_MODEL };
     const speed = model => {
       const timing = modelTimings.get(model.id);
       if (!timing) return '';
@@ -300,7 +302,6 @@ async function activate(context) {
       return timing.status === 'unauthorized' ? L('not authorized yet · ', '未授权 · ', 'noch nicht autorisiert · ') : L('failed · ', '失败 · ', 'fehlgeschlagen · ');
     };
     const render = () => {
-      auto.description = current === models.AUTO_MODEL ? L('current', '当前', 'aktuell') : '';
       const item = model => ({
         label: model.name,
         description: `${speed(model)}${model.vendor} · ${model.family}${model.id === current ? L(' · current', ' · 当前', ' · aktuell') : ''}`,
@@ -312,8 +313,8 @@ async function activate(context) {
       const separator = label => ({ label, kind: vscode.QuickPickItemKind.Separator });
       const items = recommended.length
         ? [separator(L('Recommended (light & fast)', '推荐（轻量、快速）', 'Empfohlen (leicht & schnell)')), ...recommended.map(item),
-          separator(L('Other models', '其他模型', 'Weitere Modelle')), ...list.filter(model => !ids.has(model.id)).map(item), auto]
-        : [...list.map(item), auto];
+          separator(L('Other models', '其他模型', 'Weitere Modelle')), ...list.filter(model => !ids.has(model.id)).map(item)]
+        : list.map(item);
       const active = picker.activeItems[0]?.id ?? current;
       picker.items = items;
       picker.activeItems = [items.find(entry => entry.id && entry.id === active) || items.find(entry => entry.id)];
@@ -1234,7 +1235,7 @@ async function activate(context) {
   async function panelState() {
     const providerId = aiProvider();
     const preset = PROVIDERS[providerId];
-    const modelId = config().get('ai.modelId', '');
+    const modelId = configuredModelId();
     let vscodeModels = [];
     let modelAuthorized = true;
     if (providerId === 'vscode') {
@@ -1247,11 +1248,11 @@ async function activate(context) {
         const visible = await visibleModels();
         vscodeModels = visible.map(model => describe(model));
         // A model chosen earlier and hidden since stays listed so the selection does not silently change.
-        if (modelId && modelId !== models.AUTO_MODEL && !visible.some(model => model.id === modelId)) {
+        if (modelId && !visible.some(model => model.id === modelId)) {
           const chosen = await selectableModel(modelId);
           vscodeModels.push(chosen ? describe(chosen, { hidden: true }) : { id: modelId, name: modelId, detail: '', missing: true, timing: null });
         }
-        if (modelId && modelId !== models.AUTO_MODEL) {
+        if (modelId) {
           const chosen = await selectableModel(modelId);
           modelAuthorized = !chosen || context.languageModelAccessInformation.canSendRequest(chosen) === true;
         }

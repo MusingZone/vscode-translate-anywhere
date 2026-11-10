@@ -20,7 +20,7 @@ const STRINGS = {
     translation: 'Translation', target: 'Target language', pageMode: 'Whole-page translation shows', translationOnly: 'Translation only',
     bilingual: 'Bilingual (original + translation)', autoAI: 'Use AI automatically for phrases and sentences',
     ai: 'AI engine', provider: 'Provider', model: 'Model', chooseModel: '— Choose a model —', recommended: 'Recommended (light & fast)',
-    otherModels: 'Other models', autoModel: 'Auto (a fast, lightweight model)', hiddenModel: 'hidden in Language Models', missingModel: 'not available',
+    otherModels: 'Other models', hiddenModel: 'hidden in Language Models', missingModel: 'not available',
     noModelChosen: 'Choose the model for phrases and paragraphs. A small, fast one works best.',
     needsAccess: 'Not authorized yet.', allowAccess: 'Allow access',
     speed: 'Test speed', testing: 'Testing… {0}%', advising: 'Picking recommendations…', unauthorized: 'not authorized', failed: 'failed',
@@ -56,7 +56,7 @@ const STRINGS = {
     translation: '翻译', target: '目标语言', pageMode: '全文翻译显示方式', translationOnly: '仅译文', bilingual: '原文译文对照',
     autoAI: '短语、句子自动使用 AI 翻译',
     ai: 'AI 引擎', provider: '服务商', model: '模型', chooseModel: '— 请选择模型 —', recommended: '推荐（轻量、快速）',
-    otherModels: '其他模型', autoModel: '自动（轻量快速模型）', hiddenModel: '已在“语言模型”中隐藏', missingModel: '不可用',
+    otherModels: '其他模型', hiddenModel: '已在“语言模型”中隐藏', missingModel: '不可用',
     noModelChosen: '请选择用于翻译句子和段落的模型，推荐小而快的模型。',
     needsAccess: '尚未授权。', allowAccess: '授权使用',
     speed: '测速', testing: '测速中… {0}%', advising: '正在挑选推荐模型…', unauthorized: '未授权', failed: '失败',
@@ -92,7 +92,7 @@ const STRINGS = {
     translation: 'Übersetzung', target: 'Zielsprache', pageMode: 'Seitenübersetzung zeigt', translationOnly: 'Nur Übersetzung',
     bilingual: 'Zweisprachig (Original + Übersetzung)', autoAI: 'KI automatisch für Ausdrücke und Sätze verwenden',
     ai: 'KI-Engine', provider: 'Anbieter', model: 'Modell', chooseModel: '— Modell auswählen —', recommended: 'Empfohlen (leicht & schnell)',
-    otherModels: 'Weitere Modelle', autoModel: 'Automatisch (leichtes, schnelles Modell)', hiddenModel: 'in Sprachmodelle ausgeblendet', missingModel: 'nicht verfügbar',
+    otherModels: 'Weitere Modelle', hiddenModel: 'in Sprachmodelle ausgeblendet', missingModel: 'nicht verfügbar',
     noModelChosen: 'Wählen Sie das Modell für Sätze und Absätze. Ein kleines, schnelles eignet sich am besten.',
     needsAccess: 'Noch nicht autorisiert.', allowAccess: 'Zugriff erlauben',
     speed: 'Tempo messen', testing: 'Wird gemessen… {0}%', advising: 'Empfehlungen werden ermittelt…', unauthorized: 'nicht autorisiert', failed: 'fehlgeschlagen',
@@ -400,7 +400,6 @@ class SettingsPanel {
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const S = ${JSON.stringify(s)};
-const AUTO = '@auto';
 const $ = id => document.getElementById(id);
 const fmt = (text, ...args) => text.replace(/\\{(\\d)\\}/g, (_, i) => args[i]);
 let state;
@@ -411,7 +410,7 @@ function fill(select, items, value) {
 }
 const seconds = ms => (ms / 1000).toFixed(1) + 's';
 const measured = m => m.timing && m.timing.status === 'ok';
-// Recommended models, then the rest, then Auto. Without a choice a disabled placeholder is shown instead of guessing.
+// Recommended models, then the rest. Without a choice a disabled placeholder is shown instead of guessing.
 function fillModels(s) {
   const label = m => {
     const name = m.missing ? m.id : m.name + (m.detail ? ' (' + m.detail + ')' : '');
@@ -438,7 +437,6 @@ function fillModels(s) {
   const other = s.vscodeModels.filter(m => !m.recommended);
   if (recommended.length) nodes.push(group(S.recommended, recommended));
   if (other.length) nodes.push(recommended.length ? group(S.otherModels, other) : group(S.model, other));
-  nodes.push(option(AUTO, S.autoModel));
   $('modelId').replaceChildren(...nodes);
   $('modelId').value = s.modelId;
 }
@@ -540,7 +538,7 @@ function render() {
     fillModels(s);
     $('noModels').hidden = s.vscodeModels.length > 0;
     $('chooseHint').hidden = !!s.modelId || !s.vscodeModels.length;
-    $('accessInfo').hidden = !s.modelId || s.modelId === AUTO || s.modelAuthorized !== false;
+    $('accessInfo').hidden = !s.modelId || s.modelAuthorized !== false;
     renderSpeed(s);
   } else {
     const d = s.providerDefaults;

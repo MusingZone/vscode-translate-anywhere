@@ -877,10 +877,10 @@ test('sidebar retains unavailable saved models only as disabled options', () => 
   });
   const select = createElement();
   const option = (value, label) => ({ value, textContent: label, disabled: false });
-  const fill = new Function('document', 'option', '$', 'AUTO', 'S', 'measured', 'seconds',
+  const fill = new Function('document', 'option', '$', 'S', 'measured', 'seconds',
     `${html.slice(start, end)}; return fillModels;`)(
-    { createElement }, option, () => select, models.AUTO_MODEL,
-    { missingModel: 'not available', hiddenModel: 'hidden', model: 'Model', autoModel: 'Auto' },
+    { createElement }, option, () => select,
+    { missingModel: 'not available', hiddenModel: 'hidden', model: 'Model' },
     () => false, () => ''
   );
   fill({
@@ -892,10 +892,22 @@ test('sidebar retains unavailable saved models only as disabled options', () => 
     ]
   });
   const options = select.children.flatMap(node => node.children || [node]);
-  assert.deepEqual(options.map(node => node.value), ['native', 'hidden', 'removed', models.AUTO_MODEL]);
-  assert.deepEqual(options.map(node => node.disabled), [false, false, true, false]);
+  assert.deepEqual(options.map(node => node.value), ['native', 'hidden', 'removed'], 'no Auto choice is offered');
+  assert.deepEqual(options.map(node => node.disabled), [false, false, true]);
   assert.equal(select.value, 'removed', 'rendering must not silently change the saved selection');
   assert.match(options[2].textContent, /not available/);
+  assert.ok(!/@auto|autoModel/.test(html), 'the sidebar no longer has an Auto choice');
+});
+
+test('router models are never listed, and a legacy Auto choice is recognized', () => {
+  assert.equal(models.LEGACY_AUTO_MODEL, '@auto');
+  // Copilot's router reports whichever model it last routed to as its family, even a hidden one.
+  assert.ok(models.isRouterModel({ id: 'auto', vendor: 'copilot', family: 'claude-fable-5.1', name: 'Auto' }));
+  assert.ok(models.isRouterModel({ id: 'Auto', vendor: 'copilotcli' }));
+  assert.ok(!models.isRouterModel({ id: 'gpt-6-luna', vendor: 'copilot' }));
+  assert.ok(!models.isRouterModel({ id: 'autoglm', vendor: 'byok' }));
+  assert.ok(!models.isRouterModel(undefined));
+  assert.equal(models.preferredRank({ id: 'auto', vendor: 'copilot', family: 'gpt-6-luna' }), -1);
 });
 
 test('internal Copilot helpers are hidden, size words are a generic fallback, and AI advice is parsed strictly', () => {

@@ -35,7 +35,7 @@
   "config.fullPage.mode.translationOnly": "仅译文：用译文替换原文（再按一次快捷键恢复原文）。",
   "config.fullPage.mode.bilingual": "双语对照：在原文下方显示译文。",
   "config.ai.autoTranslate": "离线词典未收录时（短语、句子、段落）自动调用 AI 模型翻译。关闭后需在弹窗中点击 **AI 翻译**。",
-  "config.ai.modelId": "当 **AI 服务商** 为 `VS Code Language Models` 时使用的语言模型。只列出在 VS Code **语言模型** 视图中可见的模型。首次安装时会自动选一个你可用的小而快的模型；找不到时侧边栏会请你手动选择。侧边栏中的 **测速** 会测量各模型速度，并请其中一个轻量模型判断哪些适合翻译，这些模型会显示为 *推荐*。`@auto` = 最快的推荐模型（测速前为一个轻量模型）。 [在侧边栏中设置](command:translateAnywhere.openSidebar?%5B%22modelId%22%5D)。",
+  "config.ai.modelId": "当 **AI 服务商** 为 `VS Code Language Models` 时使用的语言模型。只列出在 VS Code **语言模型** 视图中可见的模型。首次安装时会自动选一个你可用的小而快的模型；找不到时侧边栏会请你手动选择。侧边栏中的 **测速** 会测量各模型速度，并请其中一个轻量模型判断哪些适合翻译，这些模型会显示为 *推荐*。 [在侧边栏中设置](command:translateAnywhere.openSidebar?%5B%22modelId%22%5D)。",
   "config.integration.enabled": "同意向本机 VS Code 安装目录加入可还原的界面脚本（在 Chat、预览、设置页中翻译所必需）。运行 **Translate Anywhere: 禁用并恢复 VS Code 原文件** 可移除。",
   "config.integration.autoRepair": "VS Code 更新替换文件后自动重新集成。",
   "view.panel": "设置",

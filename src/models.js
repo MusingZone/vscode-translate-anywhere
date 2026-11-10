@@ -1,8 +1,11 @@
 'use strict';
 // Choosing and timing language models and reading profile visibility, without the VS Code API.
 
-// Explicit "Auto" choice in translateAnywhere.ai.modelId. Not "auto": Copilot has a real model with that id.
-const AUTO_MODEL = '@auto';
+// Value of translateAnywhere.ai.modelId written by versions before 0.6.5, which had an "Auto" choice.
+const LEGACY_AUTO_MODEL = '@auto';
+// Copilot's "auto" router (and SDK Chat's Copilot Fusion) picks a model per request, possibly one the user hid.
+// Its cached family names whichever model it last routed to, so it is not listed or measured.
+const isRouterModel = model => String(model?.id || '').toLowerCase() === 'auto';
 
 // Only used to pick the very first model on a fresh install, among the models the user can see; never shown.
 // Patterns name model tiers and size words, not versions, so newer releases still match. The last pattern
@@ -260,6 +263,6 @@ function parseAdvice(text, ids) {
 }
 
 module.exports = {
-  AUTO_MODEL, PREFERRED_MODELS, preferredRank, sortByPreference, pickPreferred,
+  LEGACY_AUTO_MODEL, isRouterModel, PREFERRED_MODELS, preferredRank, sortByPreference, pickPreferred,
   readStoredModels, parseHiddenModels, parseExcludedModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
 };

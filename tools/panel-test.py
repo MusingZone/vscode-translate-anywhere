@@ -135,8 +135,8 @@ def main():
         post({"type": "state", "state": state("vscode", lang)})
         wait("document.getElementById('version').textContent === 'v0.3.0'")
         assert page.is_visible("#vscodeAI") and not page.is_visible("#httpAI")
-        # Placeholder (no model chosen yet), two recommended, one other, then Auto as an explicit choice.
-        assert page.eval_on_selector("#modelId", "s => [...s.options].map(o => o.value)") == ["", "gpt-5-mini", "claude-haiku-4.5", "claude-opus-4.8", "@auto"]
+        # Placeholder (no model chosen yet), two recommended, one other; there is no Auto choice.
+        assert page.eval_on_selector("#modelId", "s => [...s.options].map(o => o.value)") == ["", "gpt-5-mini", "claude-haiku-4.5", "claude-opus-4.8"]
         assert page.eval_on_selector("#modelId", "s => s.value") == ""
         assert page.eval_on_selector_all("#modelId optgroup", "g => g.length") == 2
         assert page.is_visible("#chooseHint") and not page.is_visible("#accessInfo")

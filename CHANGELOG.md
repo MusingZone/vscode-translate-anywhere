@@ -2,6 +2,14 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.5] - No more Auto model
+
+### Removed
+- The **Auto** translation-model choice. Saved `@auto` settings are cleared and a visible lightweight model is chosen instead (or the sidebar asks you to choose). Run **Speed test** to get the AI-generated **Recommended** group.
+
+### Fixed
+- Copilot's own router model ("Auto", or Copilot Fusion in SDK Chat) is no longer listed or speed-tested. It can route to models you hid, and its cached details named a hidden model such as Claude Fable 5.1.
+
 ## [0.6.4] - Copilot SDK model visibility
 
 ### Fixed
