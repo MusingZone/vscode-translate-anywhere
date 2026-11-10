@@ -2,6 +2,13 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.4] - Copilot SDK model visibility
+
+### Fixed
+- Follow the current Copilot Chat session's model visibility instead of always using the ordinary Chat list. Models hidden in Copilot SDK Chat no longer reappear through their native Copilot equivalents, and visible lightweight models are no longer lost to ordinary Chat's separate hidden list.
+- Resolve SDK BYOK entries to their original callable providers while continuing to exclude session-only proxies and internal helper models.
+- Refresh model visibility while the sidebar is open, including after switching Chat session types, without requiring a window reload.
+
 ## [0.6.3] - Model picker fixes
 
 ### Fixed

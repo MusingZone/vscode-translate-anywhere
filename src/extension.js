@@ -94,36 +94,26 @@ async function activate(context) {
   );
   // Models the user hid in VS Code's "Language Models" view are left out, like in the Chat model picker. The
   // extension API does not expose that flag, so it is read from this profile's state database (read-only).
-  let hiddenCache = { at: 0, set: new Set(), excluded: new Set() };
+  let hiddenCache = { at: 0, set: new Set(), excluded: new Set(), source: '' };
   let hiddenWarned = false;
-  function hiddenModels() {
-    if (Date.now() - hiddenCache.at < 5000) return hiddenCache.set;
+  function hiddenModels(force = false) {
+    if (!force && Date.now() - hiddenCache.at < 5000) return hiddenCache.set;
     let set = new Set();
     let excluded = new Set();
+    let source = '';
     try {
       const file = path.join(path.dirname(stateFolder), 'state.vscdb');
       if (fs.existsSync(file)) {
-        const { DatabaseSync } = require('node:sqlite');
-        const db = new DatabaseSync(file, { readOnly: true });
-        try {
-          const query = db.prepare('SELECT value FROM ItemTable WHERE key = ?');
-          const read = key => {
-            const value = query.get(key)?.value;
-            return value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value;
-          };
-          const cached = read('chat.cachedLanguageModels.v2');
-          excluded = models.parseExcludedModels(cached);
-          set = models.parseHiddenModels({
-            visibility: read('chatModelVisibility'), pickerPreferences: read('chatModelPickerPreferences'),
-            cached
-          });
-        } finally { db.close(); }
+        const stored = models.readStoredModels(file);
+        excluded = models.parseExcludedModels(stored.cached);
+        source = JSON.stringify(stored);
+        set = models.parseHiddenModels(stored);
       }
     } catch (error) {
       if (!hiddenWarned) output.appendLine(`Model visibility unavailable (${errorText(error)}); listing all models.`);
       hiddenWarned = true;
     }
-    hiddenCache = { at: Date.now(), set, excluded };
+    hiddenCache = { at: Date.now(), set, excluded, source };
     return set;
   }
   // Visible VS Code models, in VS Code's own order.
@@ -1227,6 +1217,18 @@ async function activate(context) {
     if (sharedBridge) startBridge().catch(logError);
   }, 10000);
   context.subscriptions.push({ dispose: () => clearInterval(heartbeat) });
+  // Visibility changes do not fire onDidChangeChatModels. Poll only while the sidebar is
+  // visible, and refresh only when the relevant profile state actually changes.
+  let sidebarVisibility = '';
+  const visibilityTimer = setInterval(() => {
+    if (!panel?.view?.visible) return;
+    hiddenModels(true);
+    if (hiddenCache.source !== sidebarVisibility) {
+      sidebarVisibility = hiddenCache.source;
+      panel.refresh();
+    }
+  }, 2000);
+  context.subscriptions.push({ dispose: () => clearInterval(visibilityTimer) });
   const languageLabels = context.extension.packageJSON.contributes.configuration.properties[`${SECTION}.targetLanguage`].enumItemLabels;
   // Everything the sidebar renders. Values come from settings, so the panel and the Settings UI stay in sync.
   async function panelState() {

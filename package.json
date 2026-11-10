@@ -2,7 +2,7 @@
   "name": "vscode-translate-anywhere",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "publisher": "MusingZone",
   "license": "MIT",
   "icon": "images/icon.png",

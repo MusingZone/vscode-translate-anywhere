@@ -716,6 +716,148 @@ test('translation picker excludes session-only models and respects colon visibil
   assert.throws(() => models.parseExcludedModels('not json'), SyntaxError);
 });
 
+test('SDK Chat visibility maps to callable Copilot and BYOK models, including lightweight models', () => {
+  const cached = [
+    { identifier: 'copilot/auto', metadata: { vendor: 'copilot', id: 'auto' } },
+    { identifier: 'copilot/gemini-4-argon', metadata: { vendor: 'copilot', id: 'gemini-4-argon' } },
+    { identifier: 'copilot/gpt-6-luna', metadata: { vendor: 'copilot', id: 'gpt-6-luna' } },
+    { identifier: 'copilot/native-only', metadata: { vendor: 'copilot', id: 'native-only' } },
+    { identifier: 'copilot/helper', metadata: { vendor: 'copilot', id: 'helper', isUserSelectable: false } },
+    { identifier: 'customendpoint/Gateway/translation-flash', metadata: { vendor: 'customendpoint', id: 'translation-flash' } },
+    { identifier: 'customendpoint/Gateway/hidden-flash', metadata: { vendor: 'customendpoint', id: 'hidden-flash' } },
+    { identifier: 'customendpoint/Other/translation-flash', metadata: { vendor: 'customendpoint', id: 'translation-flash' } }
+  ];
+  const proxy = (id, byokModelIdentifier) => ({
+    identifier: `agent-host-copilotcli:${id}`,
+    metadata: {
+      vendor: 'agent-host-copilotcli', id, targetChatSessionType: 'agent-host-copilotcli', byokModelIdentifier
+    }
+  });
+  cached.push(proxy('auto'), proxy('gemini-4-argon'), proxy('gpt-6-luna'), proxy('helper'),
+    proxy('customendpoint/Gateway/translation-flash', 'customendpoint/Gateway/translation-flash'),
+    proxy('customendpoint/Gateway/hidden-flash', 'customendpoint/Gateway/hidden-flash'));
+  const stored = {
+    cached: JSON.stringify(cached),
+    currentModel: 'agent-host-copilotcli:auto',
+    visibility: JSON.stringify({ hiddenModels: [
+      'agent-host-copilotcli:gemini-4-argon', 'copilot/gpt-6-luna', 'customendpoint/Gateway/hidden-flash'
+    ] })
+  };
+  const hidden = models.parseHiddenModels(stored);
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'gemini-4-argon' }, hidden), 'SDK-hidden Argon must not reappear via Copilot');
+  assert.ok(!models.isHidden({ vendor: 'copilot', id: 'gpt-6-luna' }, hidden), 'SDK-visible luna must not inherit native Chat visibility');
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'native-only' }, hidden), 'models outside the current Chat catalog are excluded');
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'helper' }, hidden), 'SDK visibility cannot restore internal helpers');
+  assert.ok(hidden.has('customendpoint/Gateway/hidden-flash'), 'BYOK retains its provider visibility');
+  assert.ok(!hidden.has('customendpoint/Gateway/translation-flash'), 'BYOK maps to the original callable provider');
+  assert.ok(!hidden.has('customendpoint/Other/translation-flash'), 'another provider group keeps its own visibility');
+  assert.ok(!models.isHidden({ vendor: 'customendpoint', id: 'translation-flash' }, hidden));
+  assert.ok(models.isHidden({ vendor: 'agent-host-copilotcli', id: 'gpt-6-luna' }, hidden), 'session-only proxies remain excluded');
+
+  const native = models.parseHiddenModels({ ...stored, currentModel: 'copilot/auto' });
+  assert.ok(!models.isHidden({ vendor: 'copilot', id: 'gemini-4-argon' }, native), 'ordinary Chat keeps its independent visibility');
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'gpt-6-luna' }, native));
+  assert.ok(!models.isHidden({ vendor: 'copilot', id: 'native-only' }, native));
+  const stale = models.parseHiddenModels({ ...stored, currentModel: 'agent-host-copilotcli:removed' });
+  assert.deepEqual(stale, models.parseHiddenModels({ ...stored, currentModel: undefined }), 'unknown sessions do not infer aliases');
+});
+
+test('legacy Copilot CLI sessions map visibility without hiding models of unrelated vendors', () => {
+  const cached = [
+    { identifier: 'copilot/luna', metadata: { vendor: 'copilot', id: 'luna' } },
+    { identifier: 'copilotcli/auto', metadata: { vendor: 'copilotcli', id: 'auto', targetChatSessionType: 'copilotcli' } },
+    { identifier: 'copilotcli/luna', metadata: { vendor: 'copilotcli', id: 'luna', targetChatSessionType: 'copilotcli' } }
+  ];
+  const hidden = models.parseHiddenModels({
+    cached, currentModel: 'copilotcli/auto', pickerPreferences: { 'copilotcli/luna': false }
+  });
+  assert.ok(models.isHidden({ vendor: 'copilot', id: 'luna' }, hidden));
+  assert.ok(!models.isHidden({ vendor: 'another-provider', id: 'luna' }, hidden));
+  const excluded = models.parseExcludedModels(cached);
+  assert.ok(!models.isHidden({ vendor: 'copilot', id: 'luna' }, excluded), 'a saved user choice is not mistaken for an internal proxy');
+});
+
+test('model state reads current Chat visibility read-only, including live SQLite WAL updates', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ta-model-state-'));
+  const file = path.join(folder, 'state.vscdb');
+  const db = new DatabaseSync(file);
+  try {
+    db.exec('PRAGMA journal_mode = WAL; CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
+    const write = db.prepare('INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)');
+    const cached = [
+      { identifier: 'copilot/flash', metadata: { vendor: 'copilot', id: 'flash' } },
+      { identifier: 'copilot/auto', metadata: { vendor: 'copilot', id: 'auto' } },
+      { identifier: 'agent-host-copilotcli:auto', metadata: {
+        vendor: 'agent-host-copilotcli', id: 'auto', targetChatSessionType: 'agent-host-copilotcli'
+      } },
+      { identifier: 'agent-host-copilotcli:flash', metadata: {
+        vendor: 'agent-host-copilotcli', id: 'flash', targetChatSessionType: 'agent-host-copilotcli'
+      } }
+    ];
+    write.run('chat.cachedLanguageModels.v2', Buffer.from(JSON.stringify(cached)));
+    write.run('chat.currentLanguageModel.panel', 'agent-host-copilotcli:auto');
+    write.run('chatModelVisibility', JSON.stringify({ hiddenModels: ['agent-host-copilotcli:flash'] }));
+    let stored = models.readStoredModels(file);
+    assert.equal(stored.currentModel, 'agent-host-copilotcli:auto');
+    assert.equal(stored.pickerPreferences, undefined);
+    assert.deepEqual(JSON.parse(stored.cached), cached, 'BLOB values are decoded as UTF-8');
+    assert.ok(models.isHidden({ vendor: 'copilot', id: 'flash' }, models.parseHiddenModels(stored)));
+
+    write.run('chatModelVisibility', JSON.stringify({ hiddenModels: [] }));
+    stored = models.readStoredModels(file);
+    assert.ok(!models.isHidden({ vendor: 'copilot', id: 'flash' }, models.parseHiddenModels(stored)), 'visibility refresh sees the WAL without a reload');
+    write.run('chatModelVisibility', JSON.stringify({ hiddenModels: ['agent-host-copilotcli:flash'] }));
+    write.run('chat.currentLanguageModel.panel', 'copilot/auto');
+    stored = models.readStoredModels(file);
+    assert.ok(!models.isHidden({ vendor: 'copilot', id: 'flash' }, models.parseHiddenModels(stored)), 'switching back restores ordinary Chat visibility');
+    assert.deepEqual(JSON.parse(db.prepare('SELECT value FROM ItemTable WHERE key = ?').get('chatModelVisibility').value),
+      { hiddenModels: ['agent-host-copilotcli:flash'] }, 'the reader never changes user visibility');
+    assert.throws(() => models.readStoredModels(path.join(folder, 'missing.vscdb')));
+    assert.ok(!fs.existsSync(path.join(folder, 'missing.vscdb')), 'read-only access must not create databases');
+  } finally {
+    db.close();
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test('sidebar visibility polling notices changes even when another caller already refreshed the cache', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/extension.js'), 'utf8');
+  const start = source.indexOf("  let sidebarVisibility = '';");
+  const end = source.indexOf('  const languageLabels', start);
+  assert.ok(start >= 0 && end > start);
+  let poll;
+  let reads = 0;
+  let refreshes = 0;
+  let cleared;
+  const hiddenCache = { source: 'initial' };
+  const panel = { view: { visible: true }, refresh: () => { refreshes++; } };
+  const context = { subscriptions: [] };
+  require('node:vm').runInNewContext(source.slice(start, end), {
+    hiddenCache, panel, context,
+    hiddenModels: force => { assert.equal(force, true); reads++; },
+    setInterval: (callback, ms) => { assert.equal(ms, 2000); poll = callback; return 42; },
+    clearInterval: id => { cleared = id; }
+  });
+  poll();
+  assert.equal(refreshes, 1);
+  poll();
+  assert.equal(refreshes, 1, 'unchanged visibility does not push another state');
+  hiddenCache.source = 'changed by a translation or model command';
+  poll();
+  assert.equal(refreshes, 2, 'cache reads outside the timer must not swallow a sidebar update');
+  panel.view.visible = false;
+  const previousReads = reads;
+  hiddenCache.source = 'changed while hidden';
+  poll();
+  assert.equal(reads, previousReads, 'hidden sidebar does not poll storage');
+  panel.view.visible = true;
+  poll();
+  assert.equal(refreshes, 3, 'reopening catches changes made while hidden');
+  context.subscriptions[0].dispose();
+  assert.equal(cleared, 42);
+});
+
 test('sidebar retains unavailable saved models only as disabled options', () => {
   const Module = require('node:module');
   const load = Module._load;

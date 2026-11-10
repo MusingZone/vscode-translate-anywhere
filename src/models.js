@@ -1,5 +1,5 @@
 'use strict';
-// Choosing and timing VS Code language models (pure logic, no VS Code API, so it is unit-tested).
+// Choosing and timing language models and reading profile visibility, without the VS Code API.
 
 // Explicit "Auto" choice in translateAnywhere.ai.modelId. Not "auto": Copilot has a real model with that id.
 const AUTO_MODEL = '@auto';
@@ -74,6 +74,22 @@ function parseStoredModels(value) {
   return typeof value === 'string' ? JSON.parse(value) : value;
 }
 
+function readStoredModels(file) {
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(file, { readOnly: true });
+  try {
+    const query = db.prepare('SELECT value FROM ItemTable WHERE key = ?');
+    const read = key => {
+      const value = query.get(key)?.value;
+      return value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value;
+    };
+    return {
+      visibility: read('chatModelVisibility'), pickerPreferences: read('chatModelPickerPreferences'),
+      cached: read('chat.cachedLanguageModels.v2'), currentModel: read('chat.currentLanguageModel.panel')
+    };
+  } finally { db.close(); }
+}
+
 // Session-specific models belong to their own Chat picker, not the extension translation picker.
 function parseExcludedModels(cached) {
   const excluded = new Set();
@@ -88,17 +104,39 @@ function parseExcludedModels(cached) {
   return excluded;
 }
 
-function parseHiddenModels({ visibility, pickerPreferences, cached } = {}) {
-  const hidden = parseExcludedModels(cached);
+function parseHiddenModels({ visibility, pickerPreferences, cached, currentModel } = {}) {
+  const hidden = new Set();
   const current = parseStoredModels(visibility);
   if (Array.isArray(current?.hiddenModels)) {
     for (const id of current.hiddenModels) if (typeof id === 'string') hidden.add(id);
-    return hidden;
+  } else {
+    const legacy = parseStoredModels(pickerPreferences);
+    if (legacy && typeof legacy === 'object') {
+      for (const [id, visible] of Object.entries(legacy)) if (visible === false) hidden.add(id);
+    }
   }
-  const legacy = parseStoredModels(pickerPreferences);
-  if (legacy && typeof legacy === 'object') {
-    for (const [id, visible] of Object.entries(legacy)) if (visible === false) hidden.add(id);
+  const list = parseStoredModels(cached);
+  if (Array.isArray(list)) {
+    const session = list.find(item => item.identifier === currentModel)?.metadata?.targetChatSessionType;
+    if (session === 'agent-host-copilotcli' || session === 'copilotcli') {
+      // SDK Chat has its own visibility for Copilot models. BYOK entries point back to the
+      // original provider; use those callable models, not the session-only proxy models.
+      const equivalents = new Map();
+      for (const item of list) {
+        const meta = item.metadata;
+        if (meta?.targetChatSessionType !== session || meta.isUserSelectable === false) continue;
+        const identifier = meta.byokModelIdentifier || `copilot/${meta.id}`;
+        equivalents.set(identifier, hidden.has(item.identifier) || (!!meta.byokModelIdentifier && hidden.has(identifier)));
+      }
+      for (const item of list) {
+        if (item.metadata?.targetChatSessionType) continue;
+        if (item.metadata?.vendor !== 'copilot' && !equivalents.has(item.identifier)) continue;
+        if (equivalents.get(item.identifier) === false) hidden.delete(item.identifier);
+        else hidden.add(item.identifier);
+      }
+    }
   }
+  for (const id of parseExcludedModels(cached)) hidden.add(id);
   return hidden;
 }
 
@@ -223,5 +261,5 @@ function parseAdvice(text, ids) {
 
 module.exports = {
   AUTO_MODEL, PREFERRED_MODELS, preferredRank, sortByPreference, pickPreferred,
-  parseHiddenModels, parseExcludedModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
+  readStoredModels, parseHiddenModels, parseExcludedModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
 };
