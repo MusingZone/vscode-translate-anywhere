@@ -7,7 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { Dictionary } = require('../src/dictionary');
 const { createBridge, allowedOrigin } = require('../src/bridge');
-const { patchSources, applyPatch, restorePatch, pathsFor, withPatchLock } = require('../src/patcher');
+const { patchSources, applyPatch, restorePatch, pathsFor, withPatchLock, patchConfig, patchedAfter, pruneStaleStates } = require('../src/patcher');
 const ui = require('../src/ui');
 const { Vocabulary } = require('../src/vocabulary');
 
@@ -16,11 +16,12 @@ const fixture = () => {
   const script = "\nconst getActiveFrame = () => {};\n";
   const hash = crypto.createHash('sha256').update(script.replace(/\r\n?/g, '\n')).digest('base64');
   const bundle = '/* Copyright (C) Microsoft Corporation */\nconsole.log("base");';
-  const html = `<meta content="default-src 'none'; connect-src 'self' https: ws:;">`;
+  const html = `<meta content="default-src 'none'; connect-src 'self' https: ws:;"><script src="./workbench.js" type="module"></script>`;
+  const loader = 'let e=new URL("vs/workbench/workbench.desktop.main.js",l).href;await import(e);';
   return {
-    bundle, html,
+    bundle, html, loader,
     webview: `<meta content="script-src 'sha256-${hash}' 'self'; frame-src 'self';"><script async type="module">${script}</script>`,
-    product: `{\n\t"checksums": {\n\t\t"vs/workbench/workbench.desktop.main.js": "${vscodeChecksum(bundle)}",\n\t\t"vs/code/electron-browser/workbench/workbench.html": "${vscodeChecksum(html)}",\n\t\t"vs/other.js": "keep"\n\t}\n}\n`
+    product: `{\n\t"checksums": {\n\t\t"vs/workbench/workbench.desktop.main.js": "${vscodeChecksum(bundle)}",\n\t\t"vs/code/electron-browser/workbench/workbench.html": "${vscodeChecksum(html)}",\n\t\t"vs/code/electron-browser/workbench/workbench.js": "${vscodeChecksum(loader)}",\n\t\t"vs/other.js": "keep"\n\t}\n}\n`
   };
 };
 
@@ -57,10 +58,24 @@ test('patches keep CSP checks and verify exact inline hash', () => {
   const checksums = JSON.parse(patched.product).checksums;
   assert.equal(checksums['vs/workbench/workbench.desktop.main.js'], vscodeChecksum(patched.bundle));
   assert.equal(checksums['vs/code/electron-browser/workbench/workbench.html'], vscodeChecksum(patched.html));
+  assert.equal(checksums['vs/code/electron-browser/workbench/workbench.js'], vscodeChecksum(patched.loader));
   assert.equal(checksums['vs/other.js'], 'keep');
   assert.ok(patched.product.startsWith('{\n\t"checksums"'), 'formatting preserved');
   assert.throws(() => patchSources({ ...fixture(), webview: '<html></html>' }, ui.toString(), {}), /Unsupported/);
   assert.throws(() => patchSources({ ...fixture(), html: '<html></html>' }, ui.toString(), {}), /CSP/);
+});
+
+test('each patch loads under new URLs, because Reload Window reuses the in-memory module cache', () => {
+  const config = { endpoint: 'http://127.0.0.1:17865', token: 'test' };
+  const first = patchSources(fixture(), ui.toString(), config);
+  const stamp = /src="\.\/workbench\.js(\?imt=[0-9a-f]{12})"/.exec(first.html)?.[1];
+  assert.ok(stamp, 'loader script URL is versioned');
+  assert.ok(first.loader.includes(`"vs/workbench/workbench.desktop.main.js${stamp}"`), 'bundle import uses the same version');
+  const second = patchSources(fixture(), ui.toString(), { ...config, token: 'other' });
+  assert.notEqual(/\?imt=[0-9a-f]+/.exec(second.html)[0], stamp, 'a changed bundle gets a new URL');
+  // Unknown layouts keep working, just without cache busting, and never get half of the change.
+  const unknown = patchSources({ ...fixture(), loader: 'import("./other.js")' }, ui.toString(), config);
+  assert.ok(!unknown.html.includes('?imt=') && !unknown.loader.includes('?imt='));
 });
 
 test('integrity check reads fresh checksums so a window reload after patching shows no corrupt warning', () => {
@@ -77,14 +92,15 @@ test('integrity check reads fresh checksums so a window reload after patching sh
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, originals[key]);
     }
-    const config = { endpoint: 'http://127.0.0.1:17865', token: 'test', version: '1.0.0' };
+    const config = patchConfig({ endpoint: 'http://127.0.0.1:17865', token: 'test', runtime: ui.toString() });
     assert.equal(applyPatch(root, state, ui.toString(), config).changed, true);
     const bundle = fs.readFileSync(files.bundle, 'utf8');
     assert.ok(bundle.includes('let o=(await globalThis.__imtFreshChecksums?.())||this.productService.checksums||{};'));
     assert.equal((bundle.match(/__imtFreshChecksums=async/g) || []).length, 1);
     assert.equal(JSON.parse(fs.readFileSync(files.product, 'utf8')).checksums['vs/workbench/workbench.desktop.main.js'], vscodeChecksum(bundle));
-    // A newer runtime (new version) re-patches from the backup instead of stacking a second injection.
-    assert.equal(applyPatch(root, state, ui.toString(), { ...config, version: '1.0.1' }).changed, true);
+    // A newer runtime re-patches from the backup instead of stacking a second injection.
+    const newer = ui.toString() + '\n';
+    assert.equal(applyPatch(root, state, newer, patchConfig({ endpoint: config.endpoint, token: 'test', runtime: newer })).changed, true);
     const again = fs.readFileSync(files.bundle, 'utf8');
     assert.equal((again.match(/__imtFreshChecksums\?\.\(\)/g) || []).length, 1);
     assert.equal(restorePatch(root, state), true);
@@ -212,6 +228,57 @@ test('patch lock serializes windows and recovers from stale locks', async () => 
     fs.utimesSync(path.join(temp, 'patch.lock'), old, old);
     assert.equal(await withPatchLock(temp, () => 'ok'), 'ok');
     assert.equal(fs.existsSync(path.join(temp, 'patch.lock')), false);
+    // A holder waiting on the user (consent, UAC) for longer than staleMs keeps its lock.
+    let overlapped = false;
+    let holding = false;
+    const slow = withPatchLock(temp, async () => {
+      holding = true;
+      await new Promise(resolve => setTimeout(resolve, 900));
+      holding = false;
+    }, { staleMs: 300 });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await withPatchLock(temp, () => { overlapped = holding; }, { staleMs: 300 });
+    await slow;
+    assert.equal(overlapped, false);
+  } finally {
+    fs.rmSync(temp, { recursive: true });
+  }
+});
+
+test('patch identity ignores the extension version, detects stale windows and prunes uninstalled versions', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'imt-test-'));
+  try {
+    const install = path.join(temp, 'Microsoft VS Code');
+    const root = path.join(install, 'aaaa', 'resources', 'app');
+    const state = path.join(temp, 'state');
+    const originals = fixture();
+    const write = target => {
+      for (const [key, file] of Object.entries(pathsFor(target))) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, originals[key]);
+      }
+    };
+    write(root);
+    const config = runtime => patchConfig({ endpoint: 'http://127.0.0.1:17865', token: 'test', runtime });
+    const before = Date.now() - 1000;
+    assert.equal(applyPatch(root, state, ui.toString(), config(ui.toString())).changed, true);
+    // A new extension release with the same runtime leaves VS Code's files alone (no UAC, no reload).
+    assert.equal(applyPatch(root, state, ui.toString(), config(ui.toString())).changed, false);
+    assert.equal(patchedAfter(root, state, before), true, 'a window loaded before the patch must reload');
+    assert.equal(patchedAfter(root, state, Date.now() + 1000), false);
+    // VS Code updated into a new folder and removed the old one.
+    const next = path.join(install, 'bbbb', 'resources', 'app');
+    write(next);
+    applyPatch(next, state, ui.toString(), config(ui.toString()));
+    fs.rmSync(path.join(install, 'aaaa'), { recursive: true });
+    // A whole drive/share being unavailable is not an uninstall: keep those backups.
+    const offline = JSON.parse(fs.readFileSync(path.join(state, fs.readdirSync(state).find(name => name.startsWith('patch-'))), 'utf8'));
+    fs.writeFileSync(path.join(state, 'patch-0123456789abcdef.json'), JSON.stringify({ ...offline, root: path.join(temp, 'gone', 'x', 'resources', 'app') }));
+    assert.deepEqual(pruneStaleStates(state).map(item => path.basename(path.dirname(path.dirname(item)))), ['aaaa']);
+    const left = fs.readdirSync(state).filter(name => name.endsWith('.original') || name.startsWith('patch-'));
+    assert.equal(left.filter(name => name.endsWith('.original')).length, Object.keys(pathsFor(next)).length);
+    assert.ok(left.includes('patch-0123456789abcdef.json'));
+    assert.equal(restorePatch(next, state), true);
   } finally {
     fs.rmSync(temp, { recursive: true });
   }

@@ -15,11 +15,12 @@ const flush = async () => { for (let i = 0; i < 20; i++) await new Promise(resol
 async function activate(options = {}) {
   const root = path.join(__dirname, '..');
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ta-engine-'));
+  options.setup?.(folder);
   const h = {
     values: new Map(Object.entries(options.values || { 'translation.engine': 'online', 'online.provider': 'google', 'online.sourceLanguage': 'auto' })),
     stored: new Map([['welcomeShown', true]]),
     commands: new Map(), configListeners: [], errors: [], warnings: [], infos: [], closed: 0,
-    allow: false, info: undefined, calls: 0, aiCalls: 0, bridge: undefined, panelApi: undefined, bridgeFetches: [],
+    allow: false, info: options.info, calls: 0, aiCalls: 0, bridge: undefined, panelApi: undefined, bridgeFetches: [],
     models: options.models,
     nextResponse: async url => new URL(url).hostname === 'translate.googleapis.com'
       ? new Response(JSON.stringify([[['translated', 'source']]]))
@@ -239,6 +240,38 @@ test('declining the no-model suggestion keeps AI mode and sends nothing online',
 });
 
 const inUse = () => Object.assign(new Error('in use'), { code: 'EADDRINUSE' });
+
+test('activation does not wait for integration prompts, so the sidebar can load', async () => {
+  const { pathsFor } = require('../src/patcher');
+  const crypto = require('node:crypto');
+  const script = '\nconst getActiveFrame = () => {};\n';
+  const hash = crypto.createHash('sha256').update(script).digest('base64');
+  const files = {
+    bundle: '/* Copyright (C) Microsoft Corporation */',
+    html: `<meta content="default-src 'none'; connect-src 'self';">`,
+    loader: '',
+    webview: `<meta content="script-src 'sha256-${hash}' 'self'; frame-src 'self';"><script async type="module">${script}</script>`,
+    product: '{}'
+  };
+  let appRoot;
+  const pending = activate({
+    values: { 'integration.enabled': true },
+    setup: folder => {
+      appRoot = folder;
+      for (const [key, file] of Object.entries(pathsFor(folder))) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, files[key]);
+      }
+    },
+    info: () => new Promise(() => {}) // the user never answers the reload notification
+  });
+  const h = await Promise.race([pending, new Promise((_, reject) => setTimeout(() => reject(new Error('activate() blocked')), 3000))]);
+  try {
+    for (let i = 0; i < 100 && !h.infos.length; i++) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.match(h.infos[0], /Reload the window/);
+    assert.ok(fs.readFileSync(pathsFor(appRoot).bundle, 'utf8').includes('IMMERSIVE_TRANSLATE_BEGIN'));
+  } finally { h.dispose(); }
+});
 const statusReply = ownerVersion => new Response(JSON.stringify({ service: 'immersive-translate-vscode', version: ownerVersion }));
 
 test('a newer window takes over the bridge from an owner that supports handover', async () => {
@@ -253,6 +286,8 @@ test('a newer window takes over the bridge from an owner that supports handover'
       : new Response(JSON.stringify({ handover: true }))
   });
   try {
+    // Startup runs after activate() returns; the handover retries listening on a 100 ms cadence.
+    for (let i = 0; i < 50 && !h.bridge; i++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.deepEqual(h.bridgeFetches, ['/status', '/handover']);
     assert.ok(h.bridge, 'this window now owns the bridge');
     assert.equal((await h.panelApi.state()).staleBridge, '');

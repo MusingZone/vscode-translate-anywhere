@@ -11,12 +11,22 @@ const normalizeRoot = root => path.resolve(root).replace(/^[a-z]:/, drive => dri
 const pathsFor = root => ({
   bundle: path.join(root, 'out', 'vs', 'workbench', 'workbench.desktop.main.js'),
   html: path.join(root, 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.html'),
+  loader: path.join(root, 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.js'),
   webview: path.join(root, 'out', 'vs', 'workbench', 'contrib', 'webview', 'browser', 'pre', 'index.html'),
   product: path.join(root, 'product.json')
 });
 // VS Code's integrity check: base64 SHA-256 without padding, compared to product.json "checksums".
 const vscodeChecksum = text => crypto.createHash('sha256').update(Buffer.from(text, 'utf8')).digest('base64').replace(/=+$/, '');
-const CHECKSUMMED = { bundle: 'vs/workbench/workbench.desktop.main.js', html: 'vs/code/electron-browser/workbench/workbench.html' };
+const CHECKSUMMED = {
+  bundle: 'vs/workbench/workbench.desktop.main.js',
+  html: 'vs/code/electron-browser/workbench/workbench.html',
+  loader: 'vs/code/electron-browser/workbench/workbench.js'
+};
+// "Reload Window" keeps the renderer process, which serves module scripts from its in-memory cache by URL, so a
+// reload would keep running the previously loaded bundle. Versioned URLs make every new patch load fresh.
+const STAMP = /\?imt=[0-9a-f]+/g;
+const LOADER_SCRIPT = /(src="\.\/workbench\.js)(")/;
+const BUNDLE_IMPORT = /("vs\/workbench\/workbench\.desktop\.main\.js)(")/;
 const withoutChecksums = text => text.replace(/"checksums"\s*:\s*\{[^}]*\}/, '');
 const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 // VS Code's main process reads product.json once at launch, so after (re)patching, a window reload would still
@@ -31,15 +41,17 @@ const FRESH_HELPER = `globalThis.__imtFreshChecksums=async()=>{try{` +
 function withoutOurPatch(key, text, endpoint) {
   const block = new RegExp(`\\n${escapeRegExp(BEGIN)}[\\s\\S]*?${escapeRegExp(END)}\\n`, 'g');
   if (key === 'bundle') return text.replace(block, '').split(FRESH).join('');
-  if (key === 'html') return text.replace(` ${endpoint};`, ';');
+  if (key === 'html') return text.replace(` ${endpoint};`, ';').replace(STAMP, '');
+  if (key === 'loader') return text.replace(STAMP, '');
   if (key === 'webview') {
     return text.replace(block, '').replace(`connect-src ${endpoint}; `, '').replace(/'sha256-[A-Za-z0-9+/=]+'/g, "'sha256'");
   }
   return withoutChecksums(text);
 }
 
-// Serializes patching across VS Code windows (each runs its own extension host).
-async function withPatchLock(stateFolder, action, { timeoutMs = 120000, staleMs = 180000 } = {}) {
+// Serializes patching across VS Code windows (each runs its own extension host). The holder keeps the lock fresh
+// while it waits for the user (consent dialog, UAC), so other windows wait instead of treating it as abandoned.
+async function withPatchLock(stateFolder, action, { timeoutMs = 600000, staleMs = 60000 } = {}) {
   fs.mkdirSync(stateFolder, { recursive: true });
   const lock = path.join(stateFolder, 'patch.lock');
   const deadline = Date.now() + timeoutMs;
@@ -56,13 +68,57 @@ async function withPatchLock(stateFolder, action, { timeoutMs = 120000, staleMs 
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
+  const keepAlive = setInterval(() => {
+    try { const now = new Date(); fs.utimesSync(lock, now, now); } catch { /* removed */ }
+  }, staleMs / 4);
+  keepAlive.unref?.();
   try { return await action(); }
-  finally { try { fs.unlinkSync(lock); } catch { /* already removed */ } }
+  finally {
+    clearInterval(keepAlive);
+    try { fs.unlinkSync(lock); } catch { /* already removed */ }
+  }
+}
+
+// The injected config identifies the runtime by content, not by extension version, so releases that leave the
+// runtime unchanged do not rewrite VS Code's files (no administrator prompt, no reload).
+const patchConfig = ({ endpoint, token, runtime }) => ({ endpoint, token, uiHash: digest(runtime).slice(0, 16) });
+
+// True when this installation's patched files were written after `since` (ms), i.e. a renderer started before
+// that moment is still running the unpatched (or previously patched) UI.
+function patchedAfter(root, stateFolder, since) {
+  root = normalizeRoot(root);
+  const stateFile = path.join(stateFolder, `patch-${digest(root).slice(0, 16)}.json`);
+  try {
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    return Object.values(state.files).some(record => fs.statSync(record.file).mtimeMs > since);
+  } catch { return false; }
+}
+
+// Each VS Code update installs into a new folder; backups of folders that no longer exist are dead weight (~20 MB each).
+function pruneStaleStates(stateFolder) {
+  const removed = [];
+  let names;
+  try { names = fs.readdirSync(stateFolder); } catch { return removed; }
+  for (const name of names.filter(file => /^patch-[0-9a-f]{16}\.json$/.test(file))) {
+    const stateFile = path.join(stateFolder, name);
+    let state;
+    try { state = JSON.parse(fs.readFileSync(stateFile, 'utf8')); } catch { continue; }
+    if (!state?.root || fs.existsSync(state.root)) continue;
+    // An unplugged drive or offline share is not an uninstalled version: its install folder must still be there.
+    if (!fs.existsSync(path.resolve(state.root, '..', '..', '..'))) continue;
+    const prefix = name.slice('patch-'.length, -'.json'.length);
+    for (const file of names.filter(other => other.startsWith(`${prefix}-`) && other.endsWith('.original'))) {
+      try { fs.unlinkSync(path.join(stateFolder, file)); } catch { /* best effort */ }
+    }
+    try { fs.unlinkSync(stateFile); removed.push(state.root); } catch { /* best effort */ }
+  }
+  return removed;
 }
 
 function updateChecksums(product, patched) {
   let result = product;
   for (const [key, rel] of Object.entries(CHECKSUMMED)) {
+    if (patched[key] === undefined) continue;
     const pattern = new RegExp(`("${rel.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}"\\s*:\\s*")([^"]*)(")`);
     result = result.replace(pattern, (_all, open, _old, close) => open + vscodeChecksum(patched[key]) + close);
   }
@@ -88,7 +144,15 @@ function patchSources(originals, runtime, config) {
   const bundleSource = ISPURE.test(originals.bundle) ? originals.bundle.replace(ISPURE, `$1${FRESH}$2`) : originals.bundle;
   const bundleBlock = bundleSource === originals.bundle ? block : `${BEGIN}\n${FRESH_HELPER}\n;(${runtime})(${JSON.stringify(config)});\n${END}`;
   const bundle = bundleSource + '\n' + bundleBlock + '\n';
-  const html = addConnectSource(originals.html, config.endpoint);
+  let html = addConnectSource(originals.html, config.endpoint);
+  let loader = originals.loader;
+  // Both URLs must change together: a fresh loader is only fetched if the page references it under a new URL.
+  const countOf = (text, pattern) => (text.match(new RegExp(pattern.source, 'g')) || []).length;
+  if (loader !== undefined && countOf(html, LOADER_SCRIPT) === 1 && countOf(loader, BUNDLE_IMPORT) === 1) {
+    const stamp = `?imt=${digest(bundle).slice(0, 12)}`;
+    html = html.replace(LOADER_SCRIPT, `$1${stamp}$2`);
+    loader = loader.replace(BUNDLE_IMPORT, `$1${stamp}$2`);
+  }
   const pattern = /(<script async type="module">)([\s\S]*?)(<\/script>)/g;
   const scripts = [...originals.webview.matchAll(pattern)];
   if (scripts.length !== 1 || !originals.webview.includes("const getActiveFrame =")) {
@@ -106,6 +170,7 @@ function patchSources(originals, runtime, config) {
     .replace(`'sha256-${oldHash}'`, `'sha256-${newHash}'`)
     .replace("frame-src 'self';", `connect-src ${config.endpoint}; frame-src 'self';`);
   const patched = { bundle, html, webview };
+  if (loader !== undefined) patched.loader = loader;
   if (originals.product !== undefined) patched.product = updateChecksums(originals.product, patched);
   return patched;
 }
@@ -224,4 +289,4 @@ function restorePatch(root, stateFolder) {
   return restore.length > 0;
 }
 
-module.exports = { applyPatch, restorePatch, patchSources, pathsFor, digest, normalizeRoot, withPatchLock };
+module.exports = { applyPatch, restorePatch, patchSources, pathsFor, digest, normalizeRoot, withPatchLock, patchConfig, patchedAfter, pruneStaleStates };

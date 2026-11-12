@@ -2,6 +2,16 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.2] - One reload after VS Code updates
+
+### Fixed
+- After a VS Code update, the extension could stay inactive and VS Code warned "Your Code installation appears to be corrupt", even after reloading. Reload Window reuses the renderer process, which kept running the old workbench scripts. Each patch now loads under new script URLs, so a single reload starts the extension.
+- The sidebar no longer shows a loading spinner while the extension asks for consent, administrator permission or a reload. Activation no longer waits for these prompts.
+- Updating the extension no longer re-patches VS Code and asks for another reload unless the injected UI actually changed.
+- After an elevated (UAC) patch, the window reloads automatically instead of showing a second reload prompt.
+- Backups left by earlier VS Code versions are removed.
+- Windows that still run an outdated UI after patching are detected and offer a reload.
+
 ## [0.7.1] - Format-preserving full-page translation
 
 ### Changed

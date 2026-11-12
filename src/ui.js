@@ -157,7 +157,8 @@ function immersiveUI(config) {
     disabled = !data.enabled;
     settings = { ...DEFAULTS, ...(data.settings || {}) };
     settings.shortcuts = { ...DEFAULTS.shortcuts, ...(data.settings?.shortcuts || {}) };
-    if (config.version && data.version && data.version !== config.version && !staleWarned) {
+    const stale = config.uiHash ? data.uiHash && data.uiHash !== config.uiHash : config.version && data.version && data.version !== config.version;
+    if (stale && !staleWarned) {
       staleWarned = true;
       for (const notify of toasters) notify(t('stale'), 8000);
     }

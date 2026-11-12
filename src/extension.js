@@ -9,7 +9,7 @@ const { PROVIDERS, buildPrompt, resolveProvider, translateWithProvider, listProv
 const { ONLINE_PROVIDERS, ONLINE_LANGUAGES, OnlineTranslator } = require('./online');
 const { SettingsPanel } = require('./panel');
 const { compareVersions, createBridge, PORT } = require('./bridge');
-const { applyPatch, restorePatch, withPatchLock } = require('./patcher');
+const { applyPatch, restorePatch, withPatchLock, patchConfig, patchedAfter, pruneStaleStates } = require('./patcher');
 const ui = require('./ui');
 const { elevatedMaintenance, readOnlyInstallReason } = require('./elevation');
 const { Vocabulary } = require('./vocabulary');
@@ -77,6 +77,9 @@ async function activate(context) {
   if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
   const token = fs.readFileSync(tokenFile, 'utf8');
   const version = context.extension.packageJSON.version;
+  // The window's UI is loaded before its extension host starts: patches written after this moment are not running here.
+  const uiLoadedBefore = Date.now() - process.uptime() * 1000;
+  const runtimeConfig = () => patchConfig({ endpoint: `http://127.0.0.1:${PORT}`, token, runtime: ui.toString() });
   const vocabulary = new Vocabulary(path.join(stateFolder, 'vocabulary.json'));
   let panel;
   let server;
@@ -1102,7 +1105,7 @@ async function activate(context) {
     onHandover: handOver,
     onTip: action => recordTip(action).catch(logError),
     isEnabled: () => config().get('integration.enabled', false),
-    getStatus: () => ({ version, settings: runtimeSettings() }),
+    getStatus: () => ({ version, uiHash: runtimeConfig().uiHash, settings: runtimeSettings() }),
     onError: logError
   });
   async function startBridgeOnce() {
@@ -1154,24 +1157,25 @@ async function activate(context) {
   async function maintainUnlocked(mode) {
     try {
       return mode === 'apply'
-        ? applyPatch(vscode.env.appRoot, stateFolder, ui.toString(), { endpoint: `http://127.0.0.1:${PORT}`, token, version })
+        ? applyPatch(vscode.env.appRoot, stateFolder, ui.toString(), runtimeConfig())
         : { changed: restorePatch(vscode.env.appRoot, stateFolder) };
     } catch (error) {
       if (!['EACCES', 'EPERM', 'EROFS'].includes(error.code)) throw error;
       const readOnly = readOnlyInstallReason(vscode.env.appRoot);
       if (readOnly || error.code === 'EROFS') throw new Error(readOnlyMessage(readOnly));
       if (!['win32', 'darwin', 'linux'].includes(process.platform)) throw error;
-      const { message, button } = elevationText();
+      const { message, button } = elevationText(mode);
       const consent = await vscode.window.showWarningMessage(message, { modal: true }, button);
       if (!consent) throw new Error(L('Administrator confirmation was cancelled; VS Code files were not changed.', '已取消管理员确认，未修改 VS Code 文件。',
         'Administratorbestätigung abgebrochen; VS Code-Dateien wurden nicht geändert.'));
       try {
-        return await elevatedMaintenance({
+        const result = await elevatedMaintenance({
           appRoot: vscode.env.appRoot, stateFolder, extensionRoot: context.extensionUri.fsPath,
           codeExecutable: process.execPath, mode,
           prompt: L('Translate Anywhere needs to update VS Code\'s UI files.', 'Translate Anywhere 需要更新 VS Code 的界面文件。',
             'Translate Anywhere muss die UI-Dateien von VS Code aktualisieren.')
         });
+        return { ...result, elevated: true };
       } catch (elevationError) {
         if (elevationError.manualCommand) {
           const copy = L('Copy Terminal Command', '复制终端命令', 'Terminalbefehl kopieren');
@@ -1185,7 +1189,16 @@ async function activate(context) {
       }
     }
   }
-  function elevationText() {
+  // Applying is followed by an automatic reload of this window, so the confirmation here is the only one.
+  function elevationText(mode) {
+    const text = platformElevationText();
+    if (mode !== 'apply') return text;
+    return {
+      message: `${text.message} ${L('This window reloads automatically afterwards.', '完成后本窗口会自动重载。', 'Dieses Fenster wird danach automatisch neu geladen.')}`,
+      button: L(`${text.button} and Reload`, `${text.button}并重载`, `${text.button} und neu laden`)
+    };
+  }
+  function platformElevationText() {
     if (process.platform === 'darwin') {
       return {
         message: L('The VS Code application is not writable by your user account. Confirm this one patch operation with an administrator password? No background helper is installed; VS Code updates may ask again.',
@@ -1233,13 +1246,22 @@ async function activate(context) {
   async function integrate() {
     if (!server && !sharedBridge) await startBridge();
     const result = await maintain('apply');
-    patchStatus = result.changed ? 'Applied; reload windows to load the new UI' : 'Installed and up to date';
+    // Another window (or an earlier run) may have patched after this window's UI was loaded.
+    const loadedStale = !result.changed && patchedAfter(vscode.env.appRoot, stateFolder, uiLoadedBefore);
+    patchStatus = result.changed || loadedStale ? 'Applied; reload this window to load the new UI' : 'Installed and up to date';
     output.appendLine(patchStatus);
     panel?.refresh();
-    if (result.changed) {
+    if (result.changed && result.elevated) {
+      // The administrator confirmation already announced the reload; asking again would be a third prompt.
+      await vscode.commands.executeCommand('workbench.action.reloadWindow');
+    } else if (result.changed) {
       await offerReload(L('Translate Anywhere is integrated with this VS Code version. Reload the window to start using it.',
         'Translate Anywhere 已为当前 VS Code 版本完成集成，重载窗口后生效。',
         'Translate Anywhere ist in diese VS Code-Version integriert. Laden Sie das Fenster neu, um es zu verwenden.'));
+    } else if (loadedStale) {
+      await offerReload(L('Translate Anywhere was set up for this VS Code version in another window. Reload this window to use it here too.',
+        'Translate Anywhere 已在另一个窗口中为当前 VS Code 版本完成集成，重载本窗口即可在这里使用。',
+        'Translate Anywhere wurde in einem anderen Fenster für diese VS Code-Version eingerichtet. Laden Sie dieses Fenster neu, um es auch hier zu verwenden.'));
     }
   }
   async function enable() {
@@ -1542,27 +1564,36 @@ async function activate(context) {
     })
   );
   scheduleDefaultModel(3000);
-  try {
-    await startBridge();
-    if (config().get('integration.enabled', false)) {
-      if (config().get('integration.autoRepair', true)) await integrate();
-    } else if (!context.globalState.get('welcomeShown')) {
-      await context.globalState.update('welcomeShown', true);
-      const action = L('Enable…', '启用…', 'Aktivieren…');
-      const choice = await vscode.window.showInformationMessage(
-        L('Translate Anywhere: select text in Chat, Markdown preview, Release Notes or Settings and hover the red dot to translate. Enable the UI integration to start.',
-          'Translate Anywhere：在 Chat、Markdown 预览、Release Notes、设置页中划词并悬停红点即可翻译。启用界面集成后开始使用。',
-          'Translate Anywhere: Markieren Sie Text in Chat, Markdown-Vorschau, Release Notes oder Einstellungen und zeigen Sie auf den roten Punkt, um ihn zu übersetzen. Aktivieren Sie zuerst die UI-Integration.'),
-        action);
-      if (choice === action) await guarded(enable)();
+  // Not awaited: integration can wait on a lock, a consent dialog, UAC or a notification, and VS Code does not
+  // resolve this extension's views (the sidebar) until activate() returns.
+  startup().catch(logError);
+  async function startup() {
+    try {
+      for (const root of pruneStaleStates(stateFolder)) output.appendLine(`Removed backups of a VS Code version that is no longer installed: ${root}`);
+    } catch (error) { logError(error); }
+    try {
+      await startBridge();
+      if (config().get('integration.enabled', false)) {
+        if (config().get('integration.autoRepair', true)) await integrate();
+      } else if (!context.globalState.get('welcomeShown')) {
+        await context.globalState.update('welcomeShown', true);
+        const action = L('Enable…', '启用…', 'Aktivieren…');
+        const choice = await vscode.window.showInformationMessage(
+          L('Translate Anywhere: select text in Chat, Markdown preview, Release Notes or Settings and hover the red dot to translate. Enable the UI integration to start.',
+            'Translate Anywhere：在 Chat、Markdown 预览、Release Notes、设置页中划词并悬停红点即可翻译。启用界面集成后开始使用。',
+            'Translate Anywhere: Markieren Sie Text in Chat, Markdown-Vorschau, Release Notes oder Einstellungen und zeigen Sie auf den roten Punkt, um ihn zu übersetzen. Aktivieren Sie zuerst die UI-Integration.'),
+          action);
+        if (choice === action) await guarded(enable)();
+      }
+    } catch (error) {
+      patchStatus = errorText(error);
+      logError(error);
+      panel?.refresh();
+      await vscode.window.showErrorMessage(L(
+        `Translate Anywhere could not integrate automatically: ${errorText(error)}. Nothing was overwritten; run "Translate Anywhere: Enable / Repair Integration" to retry.`,
+        `Translate Anywhere 自动集成失败：${errorText(error)}。未强行覆盖；运行 Enable / Repair 检查权限或兼容性。`,
+        `Translate Anywhere konnte nicht automatisch integriert werden: ${errorText(error)}. Es wurde nichts überschrieben; führen Sie "Translate Anywhere: Enable / Repair Integration" aus, um es erneut zu versuchen.`));
     }
-  } catch (error) {
-    patchStatus = errorText(error);
-    logError(error);
-    await vscode.window.showErrorMessage(L(
-      `Translate Anywhere could not integrate automatically: ${errorText(error)}. Nothing was overwritten; run "Translate Anywhere: Enable / Repair Integration" to retry.`,
-      `Translate Anywhere 自动集成失败：${errorText(error)}。未强行覆盖；运行 Enable / Repair 检查权限或兼容性。`,
-      `Translate Anywhere konnte nicht automatisch integriert werden: ${errorText(error)}. Es wurde nichts überschrieben; führen Sie "Translate Anywhere: Enable / Repair Integration" aus, um es erneut zu versuchen.`));
   }
 }
 module.exports = { activate };

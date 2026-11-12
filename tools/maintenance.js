@@ -22,10 +22,8 @@ try {
   if (mode === 'apply') {
     const token = fs.readFileSync(path.join(stateFolder, 'bridge-token'), 'utf8');
     const ui = require(path.join(extensionRoot, 'src', 'ui.js'));
-    changed = patcher.applyPatch(appRoot, stateFolder, ui.toString(), {
-      endpoint: 'http://127.0.0.1:17865', token,
-      version: JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8')).version
-    }).changed;
+    changed = patcher.applyPatch(appRoot, stateFolder, ui.toString(),
+      patcher.patchConfig({ endpoint: 'http://127.0.0.1:17865', token, runtime: ui.toString() })).changed;
   } else {
     changed = patcher.restorePatch(appRoot, stateFolder);
   }
