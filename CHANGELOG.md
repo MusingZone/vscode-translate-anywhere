@@ -2,6 +2,20 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1] - Format-preserving full-page translation
+
+### Changed
+- The Marketplace name now starts with "翻译" (`翻译 Translate Anywhere · 划词翻译 · 全文翻译 · Select & Hover Translator`), and more search keywords were added, so Chinese-speaking users can find the extension more easily. The extension ID and settings are unchanged.
+- README restructured: translation engines in one place, a section on how full-page translation keeps the page working, and a troubleshooting table.
+
+### Fixed
+- Full-page and paragraph translation no longer drop the page's structure. In Release Notes, Markdown previews, Chat, Settings and other pages, hyperlinks, clickable settings (such as `workbench.browser.enableRemoteProxy`), inline code, keys, icons, the Release Notes **In this update** contents, checkboxes and buttons now stay in place and keep working.
+  - **Translation only** rebuilds each paragraph from the page's own elements, so page scripts keep working too (for example, the Release Notes contents still highlight the current section). Pressing the shortcut again restores the original nodes exactly.
+  - **Bilingual** and **Alt+Z** show a translated copy that keeps the inline formatting. Links in the copy work, buttons and other controls forward to the original, and state such as the current contents entry follows the original. Copies never duplicate element IDs.
+  - Inline elements are sent to the engine as numbered markers (`<g1>…</g1>`, `<x2/>`). Code, setting IDs and link targets are not sent. If an engine drops the markers, that paragraph falls back to bilingual display instead of losing its links.
+- Short text placed directly in a `<div>` inside webviews (such as the **In this update** heading) is now translated.
+- Definition lists, table cells, `<summary>` and figure captions are translated as their own paragraphs.
+
 ## [0.7.0] - Token-free online translation
 
 ### Added

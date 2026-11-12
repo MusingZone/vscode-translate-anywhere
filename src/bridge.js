@@ -97,7 +97,7 @@ function createBridge({ token, dictionary, translate, vocabulary, isEnabled, get
         const entry = { text: body.text.trim(), translation: field(body.translation), phonetic: field(body.phonetic) };
         return reply(200, { saved: body.action === 'has' ? vocabulary.has(entry.text) : vocabulary.toggle(entry) });
       }
-      const mode = body.mode === 'paragraph' ? 'paragraph' : 'selection';
+      const mode = ['paragraph', 'markup'].includes(body.mode) ? body.mode : 'selection';
       // AI responses stream as NDJSON ({delta} lines, then {done,...} or {error}) once the model starts producing text.
       const abort = new AbortController();
       res.on('close', () => { if (!res.writableFinished) abort.abort(); });

@@ -4,6 +4,7 @@ Runs in invisible headless Chrome; no VS Code window is opened.
 Usage: py -3.13 tools/ui-dom-test.py
 """
 import json
+import re
 import time
 import subprocess
 from pathlib import Path
@@ -299,6 +300,110 @@ def webview_test(browser, handle, ui):
     return out
 
 
+RELEASE_NOTES = """<!doctype html><html><head><meta charset="utf-8"></head><body style="font:14px sans-serif;width:800px">
+<div id="release-notes-tokenization"></div>
+<nav id="toc-nav"><div id="toc-title">In this update</div>
+ <ul><li id="tl1"><a id="t1" href="#accessibility">Accessibility</a></li><li id="tl2"><a id="t2" href="#editor">Editor experience</a></li></ul></nav>
+<h2 id="accessibility">Accessibility</h2>
+<p id="rs"><strong>Setting</strong>: <code tabindex="0"><a id="cs" href="command:workbench.action.openSettings?%5B%22workbench.browser.enableRemoteProxy%22%5D" class="codesetting" title="Open setting" aria-role="button"><svg width="10" height="10"></svg><span class="separator"></span><span class="setting-name">workbench.browser.enableRemoteProxy</span></a></code></p>
+<p id="rl">Read the <a id="lnk" href="https://code.visualstudio.com/docs">documentation</a> for more details about the proxy.</p>
+<p id="rc"><input id="showReleaseNotes" type="checkbox"><label id="lab" for="showReleaseNotes">Show release notes after an update</label></p>
+<p id="rb">Press the <button id="btn">Try it now</button> button to start.</p>
+<p id="rd">DROPTAG Open the <a id="dl" href="#editor">editor settings</a> to try it.</p>
+<p id="rsp">SPACED Use the <a id="sl" href="#editor">new layout</a> today.</p>
+<p id="rw"><a id="wl" href="#editor">SWAP Click <b id="wb">here</b></a> to continue.</p>
+<p id="lt">Values &lt;= 0 disable the limit entirely.</p>
+<h2 id="editor">Editor experience</h2>
+<script>
+  // Like VS Code's release-notes scroll spy: it keeps references to the ORIGINAL contents anchors.
+  window.spy = [...document.querySelectorAll('#toc-nav a[href^="#"]')];
+  window.setCurrent = i => spy.forEach((a, j) => j === i ? a.setAttribute('aria-current', 'location') : a.removeAttribute('aria-current'));
+  window.clicked = []; window.pressed = 0; window.changed = 0;
+  document.addEventListener('click', e => { const a = e.target.closest('a'); if (a) { e.preventDefault(); clicked.push(a.getAttribute('href')); } });
+  document.getElementById('btn').addEventListener('click', () => pressed++);
+  document.getElementById('showReleaseNotes').addEventListener('change', () => changed++);
+</script>
+</body></html>"""
+
+
+def release_notes_test(browser, handle, ui, status):
+    """Release Notes: links, setting buttons, the contents navigation and controls survive full-page translation."""
+    page = browser.new_page(viewport={"width": 900, "height": 900})
+
+    def route(r):
+        if r.request.url.endswith("/rn"):
+            return r.fulfill(status=200, content_type="text/html", body=RELEASE_NOTES)
+        return handle(r)
+
+    page.route(ORIGIN + "/**", route)
+    previous = status["fullPageMode"]
+    status["fullPageMode"] = "translationOnly"
+    page.goto(ORIGIN + "/rn")
+    page.add_script_tag(content=f"({ui})({json.dumps({'endpoint': ORIGIN, 'token': 't'})});")
+    page.wait_for_timeout(300)
+    ids = ["tl1", "tl2", "toc-title", "accessibility", "rs", "rl", "rc", "rb", "rsp", "rw", "lt"]
+    page.evaluate(f"""window.orig = Object.fromEntries({json.dumps(ids + ['rd'])}.map(id => [id, document.getElementById(id).innerHTML]));
+      window.nodes = Object.fromEntries(['t1','cs','lnk','showReleaseNotes','lab','btn','sl','wl','wb'].map(id => [id, document.getElementById(id)]));""")
+    out = {}
+
+    # Translation-only: text replaced in place around the page's own nodes.
+    page.keyboard.press("Alt+w")
+    page.wait_for_function(f"{json.dumps(ids)}.every(id => document.getElementById(id).dataset.imtPlaced)", timeout=6000)
+    assert page.evaluate("Object.entries(nodes).every(([id, n]) => document.getElementById(id) === n && n.isConnected)"), "original nodes kept"
+    assert page.evaluate("document.getElementById('t1').textContent") == "Accessibility" and \
+        page.evaluate("document.getElementById('tl1').textContent") == "译(markup):Accessibility"
+    assert page.evaluate("document.getElementById('toc-title').textContent").startswith("译(paragraph):")
+    rs = page.evaluate("document.getElementById('rs').textContent")
+    assert rs.startswith("译(markup):Setting: ") and rs.endswith("workbench.browser.enableRemoteProxy"), rs
+    assert page.evaluate("document.querySelector('#rs code > a.codesetting') === nodes.cs && document.querySelector('#rs > strong').textContent === 'Setting'")
+    assert page.evaluate("document.getElementById('sl').textContent") == "new layout", "tags returned with spaces still match"
+    assert page.evaluate("document.getElementById('wb').contains(document.getElementById('wl'))"), "swapped nesting is placed"
+    assert page.evaluate("document.getElementById('lt').textContent") == "译(paragraph):Values <= 0 ", "a literal < is sent"
+    # The page's own scripts keep working against the original nodes.
+    page.evaluate("setCurrent(1)")
+    assert page.evaluate("document.querySelector('#toc-nav a[aria-current]') === document.getElementById('t2')")
+    page.click("#t1")
+    page.click("#cs")
+    page.click("#lab")
+    page.click("#btn")
+    assert page.evaluate("clicked") == ["#accessibility", "command:workbench.action.openSettings?%5B%22workbench.browser.enableRemoteProxy%22%5D"]
+    assert page.evaluate("nodes.showReleaseNotes.checked && changed === 1 && pressed === 1")
+    # A translation that lost its tags falls back to bilingual: original (with its link) stays visible.
+    page.wait_for_function("document.querySelector('#rd > .imt-trans:not(.imt-loading)')")
+    assert page.evaluate("!document.getElementById('rd').dataset.imtPlaced && !document.getElementById('rd').classList.contains('imt-only')")
+    assert page.evaluate("document.getElementById('dl').getBoundingClientRect().height > 0")
+    out["translation_only"] = "ok"
+    page.keyboard.press("Alt+w")
+    page.wait_for_function("document.querySelectorAll('.imt-trans,.imt-only,[data-imt-placed],[data-imt-src]').length === 0")
+    page.evaluate("setCurrent(-1)")  # the scroll-spy state set above is the page's own, not a restore artefact
+    diff = page.evaluate("Object.entries(orig).filter(([id, html]) => document.getElementById(id).innerHTML !== html).map(([id, html]) => [id, html, document.getElementById(id).innerHTML])")
+    assert not diff, diff
+    assert page.evaluate("Object.entries(nodes).every(([id, n]) => document.getElementById(id) === n)")
+    out["restore"] = "ok"
+
+    # Bilingual: translated copies keep links and controls; state follows the originals, clicks reach them.
+    status["fullPageMode"] = "bilingual"
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    page.wait_for_timeout(150)
+    page.keyboard.press("Alt+w")
+    page.wait_for_function("['tl1','tl2','rs','rb','rl'].every(id => document.querySelector('#'+id+' > .imt-trans:not(.imt-loading)'))", timeout=6000)
+    assert page.evaluate("!!document.querySelector('#rs > .imt-trans code > a.codesetting:not([id])')")
+    assert page.evaluate("document.querySelector('#rl > .imt-trans a').getAttribute('href')") == "https://code.visualstudio.com/docs"
+    page.evaluate("setCurrent(0)")
+    page.wait_for_function("document.querySelector('#tl1 > .imt-trans a').getAttribute('aria-current') === 'location' && !document.querySelector('#tl2 > .imt-trans a').hasAttribute('aria-current')")
+    page.click("#rb > .imt-trans button")
+    assert page.evaluate("pressed") == 2, "clone button forwards to the page's button"
+    page.click("#tl2 > .imt-trans a")
+    assert page.evaluate("clicked.at(-1)") == "#editor"
+    assert page.evaluate("document.querySelectorAll('.imt-trans [id]').length") == 0, "copies never duplicate ids"
+    page.keyboard.press("Alt+w")
+    page.wait_for_function("document.querySelectorAll('.imt-trans').length === 0")
+    out["bilingual"] = "ok"
+    status["fullPageMode"] = previous
+    page.close()
+    return out
+
+
 def cross_page_test(browser, handle, ui, select):
     """Two pages (e.g. Chat and a Markdown preview webview) each run their own runtime; a press in one page
     closes the popup open in the other, while losing focus without a VS Code click (alt-tab) keeps it."""
@@ -357,7 +462,18 @@ def main():
             data = {"found": found, "word": body["text"], "phonetic": "pə'fɔːməns" if found else "",
                     "translation": "n. 性能" if found else "离线词典未收录", "source": "ECDICT · 离线词典"}
         elif path == "/ai":
-            data = {"translation": f"译({body['mode']}):{body['text'][:12]}", "source": "AI · mock"}
+            text = body["text"]
+            if body["mode"] == "markup":
+                # Simulated translator quirks: tags lost entirely, or tags returned with extra spaces.
+                if "DROPTAG" in text:
+                    text = re.sub(r"<[^>]+>", "", text)
+                elif "SPACED" in text:
+                    text = re.sub(r"<(/?)([gx])(\d+)(/?)>", r"< \1 \2\3 \4>", text)
+                elif "SWAP" in text:
+                    text = re.sub(r"g[12]", lambda m: "g2" if m.group() == "g1" else "g1", text)
+                data = {"translation": f"译(markup):{text}", "source": "AI · mock"}
+            else:
+                data = {"translation": f"译({body['mode']}):{text[:12]}", "source": "AI · mock"}
         elif path == "/pointer":
             if body.get("action") == "down" and body.get("source"):
                 pointer.update(time=int(time.time() * 1000), source=body["source"])
@@ -445,32 +561,37 @@ def main():
         page.mouse.move(box["x"] + 5, box["y"] + box["height"] / 2)
         page.keyboard.press("Alt+z")
         page.wait_for_function("document.querySelector('#p1 .imt-trans') && !document.querySelector('#p1 .imt-loading')")
-        assert trans(page, "p1").startswith("译(paragraph):Improved per"), trans(page, "p1")
+        assert trans(page, "p1") == "译(markup):Improved performance for large workspaces.", trans(page, "p1")
+        assert page.evaluate("!!document.querySelector('#p1 > .imt-trans > b')"), "bilingual copy keeps inline formatting"
         assert page.evaluate("!document.getElementById('p1').classList.contains('imt-only')"), "Alt+Z keeps the original"
         assert trans(page, "p2") is None
         page.keyboard.press("Alt+z")
         page.wait_for_timeout(100)
         assert trans(page, "p1") is None
         results["alt_z"] = "ok"
-        # 5. Alt+W full page, translation-only (default): original hidden, nested list still visible, restorable.
+        # 5. Alt+W full page, translation-only (default): text replaced in place using the page's own inline
+        #    elements, nested list untouched, original nodes restored exactly.
+        page.evaluate("window.orig = { b: document.querySelector('#p1 b'), p1: document.getElementById('p1').innerHTML, li1: document.getElementById('li1').innerHTML }")
         page.keyboard.press("Alt+w")
         page.wait_for_function("document.querySelector('.imt-toast') && document.querySelector('.imt-toast').textContent.includes('仅译文')")
-        page.wait_for_function("['h','p1','p2','li1','li2'].every(id => document.querySelector('#'+id+'.imt-only > .imt-trans:not(.imt-loading)'))")
-        assert trans(page, "li1") == "译(paragraph):Outer item t", trans(page, "li1")
-        assert page.evaluate("document.querySelector('#li1 > .imt-trans').nextElementSibling.tagName") == "UL"
-        assert page.evaluate("getComputedStyle(document.querySelector('#p1 b')).display") == "none"
-        assert page.evaluate("getComputedStyle(document.querySelector('#p1 > .imt-trans')).fontSize") == "16px"
+        page.wait_for_function("['h','p1','p2','li1','li2'].every(id => document.getElementById(id).dataset.imtPlaced)")
+        assert page.evaluate("document.getElementById('li1').firstChild.data") == "译(paragraph):Outer item t"
+        assert page.evaluate("document.getElementById('li1').firstChild.nextSibling.tagName") == "UL"
+        assert page.evaluate("document.getElementById('p1').textContent") == "译(markup):Improved performance for large workspaces."
+        assert page.evaluate("document.querySelector('#p1 b') === orig.b"), "the page's own <b> is reused"
+        assert page.evaluate("document.querySelectorAll('.imt-trans,.imt-only').length") == 0
         assert page.evaluate("document.querySelector('#li2').getBoundingClientRect().height > 0"), "nested list must stay visible"
-        assert trans(page, "zh") is None and page.evaluate("!document.querySelector('#code .imt-trans')")
-        assert trans(page, "far") is None, "off-screen paragraph must wait for scroll"
+        assert page.evaluate("!document.getElementById('zh').dataset.imtPlaced && !document.querySelector('#code .imt-trans')")
+        assert not page.evaluate("document.getElementById('far').dataset.imtPlaced"), "off-screen paragraph must wait for scroll"
         page.locator("#far").scroll_into_view_if_needed()
-        page.wait_for_function("document.querySelector('#far > .imt-trans:not(.imt-loading)')")
+        page.wait_for_function("document.getElementById('far').dataset.imtPlaced")
         page.evaluate("window.scrollTo(0, 0)")
         page.evaluate("document.getElementById('p2').insertAdjacentHTML('afterend', '<p id=\"new\">Freshly rendered paragraph.</p>')")
-        page.wait_for_function("document.querySelector('#new > .imt-trans:not(.imt-loading)')")
+        page.wait_for_function("document.getElementById('new').dataset.imtPlaced")
         page.keyboard.press("Alt+w")
-        page.wait_for_function("document.querySelectorAll('.imt-trans,.imt-only').length === 0")
-        assert page.evaluate("getComputedStyle(document.querySelector('#p1 b')).display") != "none"
+        page.wait_for_function("document.querySelectorAll('.imt-trans,.imt-only,[data-imt-placed],[data-imt-src]').length === 0")
+        assert page.evaluate("document.getElementById('p1').innerHTML === orig.p1 && document.querySelector('#p1 b') === orig.b")
+        assert page.evaluate("document.getElementById('li1').innerHTML === orig.li1")
         # Bilingual mode via the setting (served through /status).
         status["fullPageMode"] = "bilingual"
         page.evaluate("window.dispatchEvent(new Event('focus'))")
@@ -586,6 +707,7 @@ def main():
         results["chat"] = chat_test(browser, handle, ui)
         results["settings"] = settings_test(browser, handle, ui, status)
         results["webviews"] = webview_test(browser, handle, ui)
+        results["release_notes"] = release_notes_test(browser, handle, ui, status)
         results["cross_page_dismiss"] = cross_page_test(browser, handle, ui, select)
         # New pages get the selected engine from /status; the same flow serves online and AI.
         status["translationEngine"] = "online"

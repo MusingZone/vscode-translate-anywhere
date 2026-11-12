@@ -2,28 +2,41 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Select text in VS Code's **Chat**, **Markdown preview**, **Release Notes**, **Settings**, **extension pages** and other built-in pages. A small red dot appears next to the selection; hover it for an instant translation. Single words come from an offline dictionary (English → Chinese); phrases, sentences and paragraphs are translated by the AI model you choose: GitHub Copilot through VS Code, or OpenAI, Claude, Gemini, DeepSeek, Qwen and other providers with your own API key.
+Select text in VS Code's **Chat**, **Markdown preview**, **Release Notes**, **Settings**, **extension pages** and other built-in pages. A small red dot appears next to the selection; hover it for an instant translation. Single words come from an offline dictionary; phrases, sentences and paragraphs are translated by the AI model you choose: GitHub Copilot through VS Code, or OpenAI, Claude, Gemini, DeepSeek, Qwen and other providers with your own API key. No Copilot and no key? Use the token-free online engine instead.
+
+Press **Alt+Z** to translate the paragraph under the mouse, or **Alt+W** to translate the whole page while keeping its links, buttons and layout.
 
 Text editors are never touched. The extension does nothing while you edit code.
-
-**New in 0.7.0:** no Copilot and no API key? Choose **Online (no API key)** as the **Translation engine** in the sidebar. It uses Google Translate (experimental) or MyMemory, after a one-time permission for each service. Without a Copilot / VS Code model, AI mode offers this switch itself. Dictionary hits stay local; everything else uses only the engine you selected. Existing installations keep AI. See [setup, research, privacy and limitations](docs/ONLINE-TRANSLATION.md).
 
 <picture><img src="docs/images/en/demo.gif" alt="Select, hover, Alt+Z and Alt+W" width="100%"></picture>
 
 > Inspired by the reading experience of the [Immersive Translate](https://chromewebstore.google.com/detail/immersive-translate-ai-we/bpoadfkcbjbfhfodiogcnhhhpibjhbnh) browser extension. Not affiliated with or endorsed by it. The screenshots are rendered from the extension's real UI on demo pages.
 
+## What's new
+
+- **0.7.1: Full-page translation keeps the page intact.** Links, clickable settings such as `workbench.browser.enableRemoteProxy`, inline code, the Release Notes **In this update** contents, checkboxes and buttons stay in place and keep working after **Alt+W**; pressing it again restores the page exactly. See the [changelog](CHANGELOG.md).
+- **0.7.0:** no Copilot and no API key? Choose **Online (no API key)** as the **Translation engine** in the sidebar. It uses Google Translate (experimental) or MyMemory, after a one-time permission for each service. Without a Copilot / VS Code model, AI mode offers this switch itself. Dictionary hits stay local; everything else uses only the engine you selected. Existing installations keep AI. See [setup, research, privacy and limitations](docs/ONLINE-TRANSLATION.md).
+
+## Getting started
+
+1. Install the extension.
+2. Click **Enable…** in the welcome notification, or **Enable / Repair** in the Translate Anywhere sidebar (the **文A** icon in the Activity Bar). Read the disclosure, then confirm. [Why is this needed?](#how-it-works-please-read)
+3. Reload the window when prompted.
+4. Click **Try it on a sample page** in the sidebar, or select some text in Chat or a Markdown preview, then hover the red dot.
+5. Pick a [translation engine](#translation-engines). The default is AI through **VS Code language models**: the extension picks a visible lightweight model (luna, haiku, flash, mini…), and the first AI translation asks for permission to use it. If you dismissed that prompt, click **Allow access** next to the model in the sidebar.
+
 ## Features
 
 | Feature | How |
 | --- | --- |
-| **Select & hover translation** | Select text, then hover the red dot. Words use the offline dictionary (English → Chinese). Dictionary misses use the selected AI or online engine; offline-only mode never sends them. |
-| **Token-free online translation** | Google Translate (experimental, unofficial) or MyMemory (documented, 5,000 characters/day). Separate permission, no automatic service fallback. |
+| **Select & hover translation** | Select text, then hover the red dot. Words use the offline dictionary. Dictionary misses use the selected AI or online engine; offline-only mode never sends them. |
 | **Paragraph translation** | Hover a paragraph and press **Alt+Z**. Press again to remove the translation. When you select a long passage, the popup shows a one-line hint about this shortcut (a few times at most). |
-| **Full-page translation** | Press **Alt+W** to translate the Chat conversation, preview or page you are working in. Press again to restore. "Translation only" (default) or "bilingual" display. |
+| **Full-page translation** | Press **Alt+W** to translate the Chat conversation, preview or page you are working in; press again to restore. Links, setting buttons, code, contents navigation and other controls keep working. "Translation only" (default) or "bilingual" display. |
+| **Three engines** | AI (Copilot or your own API key), token-free online translation (Google Translate or MyMemory), or the offline dictionary only. |
 | **Many AI providers** | VS Code language models (GitHub Copilot, no key needed), OpenAI, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Kimi, GLM, SiliconFlow, OpenRouter, Groq, Mistral, Ollama, or any OpenAI-compatible endpoint. |
-| **Settings sidebar** | Everything in one panel in the Activity Bar: shortcuts with a sample page to try them, provider and model lists, API keys, vocabulary and dictionary. |
+| **Settings sidebar** | Everything in one panel: shortcuts with a sample page to try them, engines, models, API keys, vocabulary and dictionary. |
 | **Markdown as preview** | One click in the sidebar makes `.md` files open as a rendered preview by default, which is easier to read and translate. **Open as text again** undoes it. |
-| **Vocabulary book** | Click ☆ in the popup to save a word or sentence. The sidebar shows your latest entries and unfolds more in place; open, export to CSV or remove them. |
+| **Vocabulary book** | Click ☆ in the popup to save a word or sentence. Open, export to CSV or remove entries from the sidebar. |
 | **Your language** | 20 target languages; the UI follows your VS Code display language. |
 
 | Dictionary | AI translation |
@@ -44,38 +57,18 @@ Each surface can be switched off with `translateAnywhere.surfaces` (sidebar foot
 - Welcome page and walkthroughs
 - Notifications, dialogs, workbench hover cards, the Workspace Trust page and view messages
 
-## Getting started
+### Full-page translation keeps the page working
 
-1. Install the extension.
-2. Click **Enable…** in the welcome notification, or click **Enable / Repair** in the Translate Anywhere sidebar. Read the disclosure, then confirm.
-3. Reload the window when prompted.
-4. Click **Try it on a sample page** in the sidebar, or select some text in Chat or a Markdown preview, then hover the red dot.
-5. AI engine: with **VS Code language models** (the default), the extension picks a lightweight model (luna, haiku, flash, mini…) among the visible models. Copilot models follow the current Chat session's visibility, including Copilot SDK Chat; hidden models are excluded from automatic selection and speed tests. If none matches, the sidebar asks you to choose one. The first AI translation asks for permission to use the model; if you dismissed that prompt, click **Allow access** next to the model in the sidebar.
+- **Translation only** replaces the text in place around the page's own elements. Links, clickable settings, inline code, keys and icons are the original elements, so they look and behave exactly as before. The Release Notes contents keep highlighting the section you are reading.
+- **Bilingual** adds a translated copy under each paragraph. Links in the copy work, clickable controls forward to the original, and state such as the current contents entry follows the original.
+- Code blocks, editors, inputs and text already in your target language are left alone. Paragraphs are translated as they scroll into view, including content that appears later.
+- If an engine returns a paragraph without its format markers, that paragraph is shown bilingually instead, so the original links are never lost.
 
-## Settings sidebar
+## Translation engines
 
-<picture><img src="docs/images/en/sidebar.png" alt="Settings sidebar" width="300" align="right"></picture>
+Choose the engine under **Translation** in the sidebar (`translateAnywhere.translation.engine`). Dictionary hits are always answered locally.
 
-Click the **文A** icon in the Activity Bar. The sidebar shows:
-
-- **Integration status**, with **Enable / Repair** and **Disable & Restore**.
-- **Shortcuts & how to use**: what select, **Alt+Z** and **Alt+W** do. Click the dot to customize it: size, color, border, opacity, shape, or your own image (PNG, JPG, GIF, WebP, SVG), with a live preview. Click a key and press a new combination to change it; Backspace turns it off. **Try it on a sample page** opens a practice page, and a card offers to open Markdown files as a preview by default.
-- **Translation**: engine (AI / online / offline only), target language, full-page display mode, automatic dictionary-miss translation.
-- **Online translation** (when selected): service, source language, privacy disclosure, local permission and revocation. Source language defaults to automatic detection for both services. Google is experimental, not its supported Cloud API. Never send confidential text or code.
-- **AI engine**:
-  - provider list;
-  - model list: user-selectable VS Code language models available for translation, in VS Code's order. There is no Auto choice: Copilot's own Auto router is excluded too, because it can route to models you hid. Copilot SDK models use the current Chat session's visibility and their callable Copilot or custom-provider equivalents; internal helpers and session-only proxies are excluded. Visibility changes refresh while the sidebar is open. An explicitly saved model hidden later remains selected and is marked **hidden**; a saved model that is no longer selectable is shown as **not available**, disabled until you choose another model. **Speed test** warms up each model once and times three runs and shows the median; then the fastest lightweight model among them picks the ones suited to translation, which appear as **Recommended**, with **Use it** (with no lightweight model, nothing is asked and there is no Recommended group). It never runs by itself; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view. API providers get **Fetch list** instead;
-  - API key status with a link to the provider's key page;
-  - an optional base URL.
-  - **Vocabulary**: your five latest entries; **Show N more** unfolds the rest in place (the full list opens in an editor); open, export, remove.
-- **Offline dictionary**: status, Download, Choose file, Use default.
-- Footer: **Where to translate…** (per-surface switches), all settings, log.
-
-Configuration values appear in **Settings → Extensions → Translate Anywhere** and sync with Settings Sync; links there jump to the matching control in the sidebar. API keys stay in VS Code's Secret Storage. Online-service permissions are separate local profile state, not synchronized settings.
-
-<br clear="right">
-
-## AI providers
+### AI (default)
 
 | Provider | API | Default (lightweight) model | Get a key |
 | --- | --- | --- | --- |
@@ -94,24 +87,58 @@ Configuration values appear in **Settings → Extensions → Translate Anywhere*
 | Ollama (local) | OpenAI-compatible | `qwen2.5:3b` | no key; runs on `http://localhost:11434` |
 | Custom | OpenAI-compatible | *(you set it)* | any compatible endpoint: LM Studio, vLLM, one-api, an Azure gateway… |
 
-- Change the model in the sidebar. **Fetch list** loads the provider's model list; you can also type any model name.
-- **Base URL** overrides the endpoint. Use it for proxies, regional endpoints such as `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`, or self-hosted gateways.
-- Model names change often. If a default stops working, pick another model from the list.
+**VS Code language models**
+- The model list shows the user-selectable models available for translation, in VS Code's order. Copilot models follow the current Chat session's visibility, including Copilot SDK Chat; internal helpers and session-only proxies are excluded. Visibility changes refresh while the sidebar is open.
+- There is no Auto choice. Copilot's own Auto router is excluded too, because it can route to models you hid.
+- A saved model that you hide later stays selected and is marked **hidden**. A saved model that is no longer selectable is marked **not available** and disabled until you choose another.
+- **Speed test** warms up each model once, times three runs and shows the median. The fastest lightweight model then picks the ones suited to translation as **Recommended**, with **Use it**. It only runs when you click it; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view.
+
+**API providers**
+- **Fetch list** loads the provider's model list; you can also type any model name. Model names change often: if a default stops working, pick another.
+- **Base URL** overrides the endpoint, for proxies, regional endpoints such as `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`, or self-hosted gateways.
 - Only lightweight models are suggested by default: translation needs speed, not reasoning.
+- **API keys** are stored with VS Code's encrypted [Secret Storage](https://code.visualstudio.com/api/references/vscode-api#SecretStorage), one per provider. They are never written to `settings.json` and are not synced. Set or clear them with **Set key** in the sidebar or **Translate Anywhere: Set API Key**.
 
-**API keys** are stored with VS Code's encrypted [Secret Storage](https://code.visualstudio.com/api/references/vscode-api#SecretStorage), one per provider. They are never written to `settings.json` and are not synced. Set or clear them with **Set key** in the sidebar or **Translate Anywhere: Set API Key**.
+### Online (no API key)
 
-## Offline dictionary
+- **Google Translate**: experimental, unofficial endpoint; not the supported Cloud API.
+- **MyMemory**: documented anonymous API, 5,000 characters per day.
+- Each service needs a one-time local permission, which you can revoke. Source language defaults to automatic detection. There is no automatic fallback to another service or to AI.
+- Details, setup and privacy notes: [docs/ONLINE-TRANSLATION.md](docs/ONLINE-TRANSLATION.md).
 
-The English → Chinese dictionary is [ECDICT](https://github.com/skywind3000/ECDICT): 770,000 entries, 15 MB compressed. There are three ways to get it:
+### Offline dictionary
+
+Word lookups use [ECDICT](https://github.com/skywind3000/ECDICT) for English → Chinese (770,000 entries, 15 MB compressed) and a dictionary derived from [HanDeDict](https://handedict.zydeo.net/) for German → Chinese. Choose **Offline dictionary only** as the engine to never send text anywhere. There are three ways to get the dictionaries:
 
 | Option | How |
 | --- | --- |
-| **Automatic download** *(default)* | On first use the dictionary is downloaded once, from GitHub Releases with jsDelivr and raw.githubusercontent mirrors as fallbacks, and checked with SHA-256. Until it is ready, every selection uses AI. |
+| **Automatic download** *(default)* | On first use the dictionary is downloaded once, from GitHub Releases with jsDelivr and raw.githubusercontent mirrors as fallbacks, and checked with SHA-256. Until it is ready, every selection uses the selected engine. |
 | **Offline VSIX** | Download `vscode-translate-anywhere-offline-<version>.vsix` (one package for every platform) from [GitHub Releases](https://github.com/MusingZone/vscode-translate-anywhere/releases) and run **Extensions: Install from VSIX…**. No network access is needed. |
 | **Local file** | Click **Choose file…** in the sidebar (or set `translateAnywhere.dictionary.path`) to use a `dictionary.json.gz` you downloaded or built yourself with `tools/build.py`. |
 
 Behind a firewall, set `translateAnywhere.dictionary.downloadUrl` to an internal HTTPS mirror of the same file. Set `translateAnywhere.dictionary.autoDownload` to `false` to never download.
+
+## Settings sidebar
+
+<picture><img src="docs/images/en/sidebar.png" alt="Settings sidebar" width="300" align="right"></picture>
+
+Click the **文A** icon in the Activity Bar. The sidebar shows:
+
+- **Integration status**, with **Enable / Repair** and **Disable & Restore**.
+- **Shortcuts & how to use**: what select, **Alt+Z** and **Alt+W** do, and **Try it on a sample page**.
+  - Click the dot to customize it: size, color, border, opacity, shape, or your own image (PNG, JPG, GIF, WebP, SVG), with a live preview.
+  - Click a key and press a new combination to change it; Backspace turns it off.
+  - A card offers to open Markdown files as a preview by default.
+- **Translation**: engine (AI / online / offline only), target language, full-page display mode, automatic dictionary-miss translation.
+- **Online translation** (when selected): service, source language, privacy disclosure, local permission and revocation.
+- **AI engine** (when selected): provider, model with **Speed test** or **Fetch list**, API key status with a link to the provider's key page, and an optional base URL.
+- **Vocabulary**: your five latest entries; **Show N more** unfolds the rest in place (the full list opens in an editor); open, export, remove.
+- **Offline dictionary**: status, Download, Choose file, Use default.
+- Footer: **Where to translate…** (per-surface switches), all settings, log.
+
+Configuration values appear in **Settings → Extensions → Translate Anywhere** and sync with Settings Sync; links there jump to the matching control in the sidebar. API keys stay in VS Code's Secret Storage. Online-service permissions are separate local profile state, not synchronized settings.
+
+<br clear="right">
 
 ## How it works (please read)
 
@@ -188,8 +215,19 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
   - Turn off `translateAnywhere.ai.autoTranslate` to require the popup's translate button on dictionary misses. Paragraph/page shortcuts still explicitly request translation.
 - **Online translation** sends text directly to the chosen service only after local per-service consent. Google is unofficial/experimental. MyMemory allows 5,000 anonymous characters/day and may retain submitted text and share it with translation partners. HTTPS query parameters can appear in service/proxy logs. Never send confidential text or code; revocation cannot recall text already sent. No silent fallback to other services or AI.
 - **Offline dictionary only** disables AI and online translation; dictionary downloads are still governed separately by the dictionary settings.
+- Paragraph and page translation send the visible text with short numbered markers such as `<g1>…</g1>` where links and other inline elements sit. Link targets, code and setting IDs are not sent.
 - The UI talks to the extension through an HTTP bridge bound to `127.0.0.1` only. It is protected by a random per-installation token and checks the request origin.
 - Your vocabulary is stored locally in VS Code's global storage folder for this extension.
+
+## Troubleshooting
+
+| Symptom | What to do |
+| --- | --- |
+| No red dot appears | Check the sidebar's integration status and click **Enable / Repair**, then reload the window. Make sure the surface is on under **Where to translate…**. |
+| Alt+Z / Alt+W does nothing | Move the mouse over the page or Chat answer first; elsewhere the key keeps its VS Code meaning. Check the shortcuts in the sidebar. |
+| AI translation fails | Click **Allow access** next to the model, choose another model, or switch to the online engine. **Show Log** has the details. |
+| A paragraph shows original and translation after Alt+W in "translation only" mode | The engine dropped the paragraph's format markers, so it was shown bilingually to keep its links. Try another model or service. |
+| VS Code warns about a "corrupt installation" after disabling | Fully quit and restart VS Code once. |
 
 ## Requirements and limitations
 
@@ -209,7 +247,12 @@ Uninstalling restores VS Code's original files after the next full restart. To r
 
 ## Contributing
 
-Issues and pull requests are welcome at [github.com/MusingZone/vscode-translate-anywhere](https://github.com/MusingZone/vscode-translate-anywhere). See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and how to add an interface language. Run the tests with `npm test` (unit), `python tools/ui-dom-test.py` and `python tools/panel-test.py` (headless Chrome, needs `pip install playwright`). Build packages with `npm run package`.
+Issues and pull requests are welcome at [github.com/MusingZone/vscode-translate-anywhere](https://github.com/MusingZone/vscode-translate-anywhere). See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and how to add an interface language.
+
+- Tests: `npm test` (unit), `python tools/ui-dom-test.py` and `python tools/panel-test.py` (headless Chrome, needs `pip install playwright`).
+- Packages: `npm run package`.
+
+If the extension helps you, a rating on the [Marketplace](https://marketplace.visualstudio.com/items?itemName=MusingZone.vscode-translate-anywhere&ssr=false#review-details) helps others find it.
 
 ## Credits
 

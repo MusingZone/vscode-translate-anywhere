@@ -6,7 +6,8 @@ function immersiveUI(config) {
   const attached = new WeakSet();
   const cache = new Map();
   let disabled = false;
-  const NESTED_CSS = 'p,ul,ol,pre,table,blockquote,div,dl,h1,h2,h3,h4,h5,h6';
+  const NESTED_CSS = 'p,ul,ol,pre,table,blockquote,div,dl,h1,h2,h3,h4,h5,h6,li,dt,dd,td,th,figure,details,summary,' +
+    'figcaption,section,article,nav,aside,header,footer,form,fieldset,hr';
   // User settings arrive from the extension through /status (polled), so changes apply without a reload.
   const DEFAULTS = {
     targetLanguage: 'zh-CN', uiLanguage: 'en', fullPageMode: 'translationOnly', autoAI: true, translationEngine: 'ai',
@@ -760,15 +761,33 @@ function immersiveUI(config) {
 
     // ---- Paragraph translation (default keys match Chrome Immersive Translate):
     //      the page shortcut toggles the whole surface, the paragraph shortcut the paragraph under the mouse. ----
-    const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,dt,dd' + (scope === 'workbench'
+    const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,dt,dd,summary,figcaption,caption' + (scope === 'workbench'
       ? ',.setting-item-markdown,.setting-item-enumDescription,.setting-item-deprecation-message,.step-description-container,.extension-editor .description' +
         ',.chat-question-title,.chat-question-carousel-message,.chat-question-description,.chat-question-detailed-message' +
         ',.chat-confirmation-widget-message,.chat-input-notification-title,.chat-input-notification-description' +
         ',.notification-list-item-message,.dialog-message-text,.dialog-message-detail,.workspace-trust-description' +
         ',.tree-explorer-viewlet-tree-view .message,.search-view .message,.editor-placeholder-label-container'
       : '');
-    const SKIP = 'pre,script,style,.imt-panel,.imt-dot,.imt-trans,.monaco-editor,input,textarea,select,[contenteditable="true"]';
+    const SKIP = 'pre,script,style,.imt-panel,.imt-dot,.imt-trans,.imt-toast,.monaco-editor,input,textarea,select,[contenteditable="true"]';
+    // Inline content kept exactly as it is: code, setting links, keys, icons, media and form controls.
+    const ATOMIC = 'code,kbd,samp,var,tt,img,svg,picture,video,audio,canvas,iframe,object,embed,input,select,textarea,' +
+      'math,br,wbr,hr,meter,progress,script,style,template,.codicon,.codesetting,.monaco-keybinding,.monaco-icon-label,' +
+      '.chat-inline-anchor-widget,[translate="no"],.notranslate,[contenteditable]:not([contenteditable="false"])';
+    // Child blocks are translated on their own and stay where they are.
+    const NESTED = `${BLOCKS},${NESTED_CSS}`;
+    // Elements a reader clicks, or whose state page scripts toggle (e.g. the Release Notes contents highlight).
+    const INTERACTIVE = 'a,button,label,summary,input,select,textarea,[role],[tabindex],[href],[onclick]';
+    const MIRRORED = ['class', 'aria-current', 'aria-selected', 'aria-expanded', 'aria-pressed', 'aria-checked', 'aria-disabled', 'hidden', 'disabled'];
+    const TAG = /<\s*(\/?)\s*([gx])\s*(\d+)\s*(\/?)\s*>/gi;
+    const stripTags = text => text.replace(TAG, '');
+    // While streaming, also hide a marker that has only partly arrived (e.g. "<g1" or "</").
+    const streamed = text => stripTags(text).replace(/<\s*\/?\s*(?:[gx]\s*\d*\s*\/?\s*)?$/i, '');
     const jobs = new Map();
+    // Translation-only blocks rebuilt in place from their own nodes: block -> how to restore it exactly.
+    const placed = new WeakMap();
+    const originals = new WeakMap();
+    const mirrors = new WeakMap();
+    let mirrorObserver;
     const queue = [];
     const settling = new WeakMap();
     let running = 0;
@@ -800,29 +819,217 @@ function immersiveUI(config) {
       const region = regionOf(element);
       return !!region?.content;
     }
-    function ownText(block) {
-      const clone = block.cloneNode(true);
-      for (const nested of clone.querySelectorAll(`${BLOCKS},pre,ul,ol,table,.imt-trans,script,style`)) nested.remove();
-      return clone.textContent.replace(/\s+/g, ' ').trim();
+    const nestedChild = node => node.nodeType === 1 &&
+      (node.matches(NESTED) || node.classList.contains('imt-trans') || !!node.querySelector(BLOCKS));
+    // A block's own inline content (nested blocks excluded) as numbered-tag markup, e.g.
+    // "<g1>Setting</g1>: <x2/>": <gN> wraps translatable formatting or links, <xN/> stands for content kept
+    // as it is. Also returns the nodes behind the tags so the translation can be rebuilt from them.
+    function structure(block) {
+      const elements = [];
+      const inline = [];
+      let plain = '';
+      const walk = (parent, top) => {
+        let markup = '';
+        for (const node of parent.childNodes) {
+          if (top) {
+            if (nestedChild(node)) continue;
+            inline.push(node);
+          }
+          if (node.nodeType === 3) { markup += node.data; plain += node.data; continue; }
+          if (node.nodeType !== 1) continue;
+          const info = { el: node, children: [...node.childNodes] };
+          elements.push(info);
+          const id = elements.length;
+          if (node.matches(ATOMIC)) {
+            info.atomic = true;
+            if (!node.matches('script,style,template')) plain += node.textContent;
+            markup += `<x${id}/>`;
+            continue;
+          }
+          const inner = walk(node, false);
+          if (/\p{L}/u.test(stripTags(inner))) { markup += `<g${id}>${inner}</g${id}>`; continue; }
+          // Nothing to translate inside (an icon link, a badge): keep the whole element.
+          elements.length = id;
+          info.atomic = true;
+          markup += `<x${id}/>`;
+        }
+        return markup;
+      };
+      const markup = walk(block, true).replace(/\s+/g, ' ').trim();
+      return {
+        markup, elements, inline, rich: elements.length > 0,
+        text: stripTags(markup).replace(/\s+/g, ' ').trim(),
+        plain: plain.replace(/\s+/g, ' ').trim()
+      };
     }
+    const ownText = block => structure(block).plain;
     function translatable(block) {
-      const text = ownText(block);
+      const { text } = structure(block);
       return text.length >= 2 && /\p{L}{2}/u.test(text) && !inTarget(text);
     }
-    const blockAt = element => {
+    // Parses translated markup into a tree. Unknown or repeated tags are dropped; a wrapper left without
+    // words counts as missing.
+    function parseMarkup(markup, elements) {
+      const root = { children: [] };
+      const stack = [root];
+      const used = new Set();
+      let last = 0;
+      const add = value => { if (value) stack[stack.length - 1].children.push(value); };
+      for (const match of markup.matchAll(TAG)) {
+        add(markup.slice(last, match.index));
+        last = match.index + match[0].length;
+        const id = Number(match[3]);
+        const info = elements[id - 1];
+        if (!info) continue;
+        if (match[1]) {
+          const at = stack.findLastIndex(frame => frame.id === id);
+          if (at > 0) stack.length = at;
+          continue;
+        }
+        if (used.has(id) || (match[4] && !info.atomic)) continue;
+        used.add(id);
+        if (info.atomic) { add({ id }); continue; }
+        const frame = { id, children: [] };
+        add(frame);
+        stack.push(frame);
+      }
+      add(markup.slice(last));
+      const filled = frame => frame.children.some(child => typeof child === 'string' ? /\S/.test(child)
+        : elements[child.id - 1].atomic || filled(child));
+      const prune = children => {
+        for (const child of children) {
+          if (typeof child === 'string' || elements[child.id - 1].atomic) continue;
+          if (!filled(child)) used.delete(child.id);
+          prune(child.children);
+        }
+      };
+      prune(root.children);
+      return { tree: root.children, used };
+    }
+    // Replacing the original needs every kept element and every link or control back in the translation.
+    const complete = (elements, used) =>
+      elements.every((info, index) => used.has(index + 1) || !(info.atomic || info.el.matches(INTERACTIVE)));
+    // Builds translated content from the page's own elements (in place) or from copies of them (bilingual).
+    function build(tree, elements, copy) {
+      const fragment = doc.createDocumentFragment();
+      for (const item of tree) {
+        if (typeof item === 'string') { fragment.append(item); continue; }
+        const info = elements[item.id - 1];
+        if (copy && info.el.matches('input,select,textarea')) continue;
+        const el = copy ? copyOf(info.el, !!info.atomic) : info.el;
+        if (!info.atomic) el.replaceChildren(build(item.children, elements, copy));
+        fragment.append(el);
+      }
+      return fragment;
+    }
+    // Bilingual copies keep the look of links and controls and follow their state (e.g. the current section).
+    function copyOf(original, deep) {
+      const copy = original.cloneNode(deep);
+      for (const el of [copy, ...copy.querySelectorAll('[id]')]) el.removeAttribute('id');
+      originals.set(copy, original);
+      if (original.matches(INTERACTIVE)) {
+        if (!mirrors.has(original)) mirrors.set(original, new Set());
+        mirrors.get(original).add(copy);
+        mirrorObserver ??= new MutationObserver(records => {
+          for (const { target, attributeName } of records) {
+            for (const clone of mirrors.get(target) || []) {
+              if (!clone.isConnected) { mirrors.get(target).delete(clone); continue; }
+              const value = target.getAttribute(attributeName);
+              if (value === null) clone.removeAttribute(attributeName); else clone.setAttribute(attributeName, value);
+            }
+          }
+        });
+        mirrorObserver.observe(original, { attributes: true, attributeFilter: MIRRORED });
+      }
+      return copy;
+    }
+    // A click on a copied control that is not a plain link runs the page's own control.
+    function forwardClick(event, span) {
+      const target = event.target.closest?.(INTERACTIVE);
+      if (!target || !span.contains(target) || target.matches('a[href]')) return;
+      let base = target;
+      const path = [];
+      while (base && base !== span && !originals.has(base)) {
+        path.unshift([...base.parentNode.children].indexOf(base));
+        base = base.parentElement;
+      }
+      let original = originals.get(base);
+      for (const index of path) original = original?.children[index];
+      if (!original?.isConnected) return;
+      event.preventDefault();
+      event.stopPropagation();
+      original.click();
+    }
+    function render(block, span, translation, source, rich) {
+      const s = rich ? structure(block) : null;
+      if (s && s.markup === source) span.replaceChildren(build(parseMarkup(translation, s.elements).tree, s.elements, true));
+      else span.textContent = rich ? stripTags(translation) : translation;
+    }
+    // Translation only: swap the paragraph's own text for the translation while reusing its links, code,
+    // setting buttons and controls, so their listeners, styles and live state keep working.
+    function place(block, span, translation, source, rich) {
+      const s = structure(block);
+      if ((rich ? s.markup : s.text) !== source || !s.inline.length) return false;
+      let tree = [translation];
+      if (rich) {
+        const parsed = parseMarkup(translation, s.elements);
+        if (!complete(s.elements, parsed.used)) return false;
+        tree = parsed.tree;
+      }
+      span.remove();
+      showOriginal(block);
+      const children = [...block.childNodes];
+      const spot = doc.createComment('');
+      block.insertBefore(spot, s.inline[0]);
+      for (const node of s.inline) node.remove();
+      const fragment = build(tree, s.elements, false);
+      const nodes = [...fragment.childNodes];
+      spot.replaceWith(fragment);
+      placed.set(block, {
+        children, nodes, out: ownText(block),
+        wrappers: s.elements.filter(info => !info.atomic).map(info => [info.el, info.children])
+      });
+      block.dataset.imtPlaced = '1';
+      return true;
+    }
+    function restore(block) {
+      const state = placed.get(block);
+      if (!state) return;
+      placed.delete(block);
+      delete block.dataset.imtPlaced;
+      // Undo only our own change: if the page re-rendered the block meanwhile, its new content stays.
+      if (!state.nodes.every(node => node.parentNode === block) || ownText(block) !== state.out) return;
+      // The translation may have swapped nesting (link inside bold instead of bold inside link): detach every
+      // wrapper first so restoring one can never insert an ancestor into its own descendant.
+      for (const [el] of state.wrappers) el.remove();
+      for (const [el, children] of state.wrappers) el.replaceChildren(...children);
+      block.replaceChildren(...state.children);
+    }
+    // Webviews also keep short text directly in a <div>, e.g. "In this update" above the Release Notes contents.
+    const looseBlock = el => scope !== 'workbench' && el.tagName === 'DIV' && !el.parentElement?.closest(BLOCKS) &&
+      [...el.childNodes].some(node => node.nodeType === 3 && /\p{L}{2}/u.test(node.data));
+    function blockOf(element) {
       const block = element?.closest?.(BLOCKS);
+      if (block || scope === 'workbench') return block || null;
+      for (let el = element?.closest?.('div'); el; el = el.parentElement?.closest('div')) if (looseBlock(el)) return el;
+      return null;
+    }
+    const blockAt = element => {
+      const block = blockOf(element);
       return block && inContent(block) ? block : null;
     };
     const transOf = block => [...block.children].find(child => child.classList.contains('imt-trans'));
+    const translated = block => !!transOf(block) || placed.has(block) || jobs.has(block) || block.classList.contains('imt-only');
     function removeTranslation(block) {
       jobs.get(block)?.abort();
       jobs.delete(block);
       transOf(block)?.remove();
+      restore(block);
       delete block.dataset.imtSrc;
       showOriginal(block);
     }
-    // Translation-only mode hides the paragraph's own inline content (nested blocks stay visible)
-    // with CSS instead of rewriting VS Code's DOM, so turning it off restores the page exactly.
+    // While a translation-only paragraph streams in, CSS hides its inline content; when it completes, place()
+    // rebuilds it in place. Turning translation off restores the original nodes exactly.
     function hideOriginal(block) {
       if (block.classList.contains('imt-only')) return;
       const style = win.getComputedStyle(block);
@@ -835,11 +1042,26 @@ function immersiveUI(config) {
       block.style.removeProperty('--imt-fs');
       block.style.removeProperty('--imt-lh');
     }
-    function chunks(text) {
+    // Sentences, never cut inside a tagged span, so each request keeps its tags paired.
+    function sentences(text, rich) {
+      if (!rich) return text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+      const out = [];
+      let depth = 0;
+      let start = 0;
+      for (const match of text.matchAll(new RegExp(`${TAG.source}|[.!?]\\s+`, 'gi'))) {
+        if (match[2]) { if (!match[4]) depth += match[1] ? -1 : 1; continue; }
+        if (depth > 0) continue;
+        out.push(text.slice(start, match.index + match[0].length));
+        start = match.index + match[0].length;
+      }
+      if (start < text.length) out.push(text.slice(start));
+      return out;
+    }
+    function chunks(text, rich) {
       if (text.length <= 1000) return [text];
       const out = [];
       let current = '';
-      for (const sentence of text.match(/[^.!?]+[.!?]*\s*/g) || [text]) {
+      for (const sentence of sentences(text, rich)) {
         for (let i = 0; i < sentence.length; i += 1000) {
           const piece = sentence.slice(i, i + 1000);
           if (current && (current + piece).length > 1000) { out.push(current); current = ''; }
@@ -851,9 +1073,15 @@ function immersiveUI(config) {
     }
     function enqueue(block, priority, only = false) {
       if (jobs.has(block) || !inContent(block)) return;
-      const text = ownText(block);
+      if (placed.has(block)) {
+        if (ownText(block) === placed.get(block).out) return;
+        // The page re-rendered this paragraph: translate its new content.
+        placed.delete(block);
+        delete block.dataset.imtPlaced;
+      }
+      const s = structure(block);
       if (transOf(block)) {
-        if (block.dataset.imtSrc === text) return;
+        if (block.dataset.imtSrc === s.plain) return;
         removeTranslation(block);
       }
       if (!translatable(block)) return;
@@ -861,12 +1089,12 @@ function immersiveUI(config) {
       span.className = 'imt-trans imt-loading';
       span.lang = settings.targetLanguage || 'zh-CN';
       span.textContent = t('translating');
-      const nested = [...block.children].find(child => child.matches(`${BLOCKS},pre,ul,ol,table`));
-      block.insertBefore(span, nested || null);
-      block.dataset.imtSrc = text;
+      span.addEventListener('click', event => forwardClick(event, span));
+      block.insertBefore(span, [...block.childNodes].find(nestedChild) || null);
+      block.dataset.imtSrc = s.plain;
       const controller = new AbortController();
       jobs.set(block, controller);
-      queue[priority ? 'unshift' : 'push']({ block, span, text, controller, only });
+      queue[priority ? 'unshift' : 'push']({ block, span, text: s.rich ? s.markup : s.text, rich: s.rich, controller, only });
       pump();
     }
     function pump() {
@@ -877,19 +1105,20 @@ function immersiveUI(config) {
         runJob(job).finally(() => { running--; pump(); });
       }
     }
-    async function runJob({ block, span, text, controller, only }) {
+    async function runJob({ block, span, text, rich, controller, only }) {
       let done = '';
+      const show = value => { span.textContent = rich ? streamed(value) : value; };
       try {
-        for (const part of chunks(text)) {
+        for (const part of chunks(text, rich)) {
           for (let attempt = 0; ; attempt++) {
             let partial = '';
             try {
               const data = await streamAI(part, controller.signal, delta => {
                 partial += delta;
                 span.classList.remove('imt-loading');
-                span.textContent = done + partial;
+                show(done + partial);
                 if (only) hideOriginal(block);
-              }, 'paragraph');
+              }, rich ? 'markup' : 'paragraph');
               done += data.translation;
               break;
             } catch (error) {
@@ -898,10 +1127,13 @@ function immersiveUI(config) {
               await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
             }
           }
-          span.textContent = done;
+          show(done);
         }
         span.classList.remove('imt-loading');
-        if (only) hideOriginal(block);
+        if (only && place(block, span, done, text, rich)) return;
+        // Bilingual, or a translation whose tags could not be matched safely: the original stays visible.
+        showOriginal(block);
+        render(block, span, done, text, rich);
       } catch (error) {
         if (controller.signal.aborted) return;
         span.classList.remove('imt-loading');
@@ -927,14 +1159,18 @@ function immersiveUI(config) {
       const roots = scope === 'workbench'
         ? REGIONS.filter(([key]) => fullSurfaces.has(key)).flatMap(([, , content]) => [...doc.querySelectorAll(content)])
         : [doc.body];
-      return roots.flatMap(root => [...root.querySelectorAll(BLOCKS)]).filter(block => inContent(block) && fullFor(block));
+      return roots.flatMap(root => [...root.querySelectorAll(BLOCKS),
+        ...(scope === 'workbench' ? [] : [...root.querySelectorAll('div')].filter(looseBlock))])
+        .filter(block => inContent(block) && fullFor(block));
     }
     function observeAll() {
       rescanTimer = 0;
       if (!fullSurfaces.size) return;
       for (const block of candidates()) {
         if (block.dataset.imtSeen) {
-          if (transOf(block) && !jobs.has(block) && block.dataset.imtSrc !== ownText(block)) settle(block);
+          if (jobs.has(block)) continue;
+          if (transOf(block) && block.dataset.imtSrc !== ownText(block)) settle(block);
+          else if (placed.has(block) && placed.get(block).out !== ownText(block)) settle(block);
           continue;
         }
         block.dataset.imtSeen = '1';
@@ -1028,7 +1264,7 @@ function immersiveUI(config) {
         }
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (transOf(block) || jobs.has(block) || block.classList.contains('imt-only')) removeTranslation(block);
+        if (translated(block)) removeTranslation(block);
         else if (translatable(block)) { enqueue(block, true); shortcutUsed(); }
         else toast(t('noNeed'));
         return;

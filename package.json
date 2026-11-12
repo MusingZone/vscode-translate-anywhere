@@ -2,7 +2,7 @@
   "name": "vscode-translate-anywhere",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "MusingZone",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -35,7 +35,16 @@
     "英汉词典",
     "AI翻译",
     "翻译插件",
-    "德语"
+    "德语",
+    "中文翻译",
+    "英译中",
+    "在线翻译",
+    "离线词典",
+    "双语对照",
+    "生词本",
+    "google translate",
+    "copilot",
+    "release notes"
   ],
   "categories": [
     "Education",

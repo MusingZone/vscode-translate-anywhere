@@ -7,7 +7,7 @@
   "config.engine.offline": "仅本地查词，不使用在线或 AI 翻译。",
   "config.online.provider": "Google 使用非正式实验性接口，可能不可用、被阻断或限流。MyMemory 提供正式匿名 API，每天 5,000 字符，其政策允许保留文本及与合作方共享。请勿发送机密文本或代码。不会自动回退其他服务。",
   "config.online.sourceLanguage": "在线翻译的源语言。默认由两个服务自动检测；MyMemory 单次请求最多 500 UTF-8 字节；较长文本会分段处理，不丢弃内容。",
-  "displayName": "Translate Anywhere - 翻译 · 划词翻译 · 段落/全文翻译",
+  "displayName": "翻译 Translate Anywhere · 划词翻译 · 段落/全文翻译",
   "description": "翻译插件：在 Chat、Markdown 预览、Release Notes、设置页等处划词，悬停红点即可秒出词典或 AI 翻译；支持段落翻译、全文翻译与生词本。",
   "command.enable": "启用 / 修复界面集成",
   "command.disable": "禁用并恢复 VS Code 原文件",

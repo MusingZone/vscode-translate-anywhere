@@ -369,8 +369,12 @@ test('bridge vocabulary route and AI mode passthrough', async () => {
     assert.deepEqual(await (await post('/vocab', { action: 'has', text: 'word' })).json(), { saved: true });
     await (await post('/ai', { text: 'para', mode: 'paragraph' })).text();
     await (await post('/ai', { text: 'sel' })).text();
+    await (await post('/ai', { text: '<g1>Setting</g1>: <x2/>', mode: 'markup' })).text();
+    await (await post('/ai', { text: 'other', mode: 'unknown' })).text();
     assert.equal(modes[0], 'paragraph');
     assert.notEqual(modes[1], 'paragraph');
+    assert.equal(modes[2], 'markup');
+    assert.equal(modes[3], 'selection');
     // Cross-page dismiss: presses are shared between pages without needing selected text.
     assert.equal((await (await post('/pointer', { action: 'get' })).json()).time, 0);
     const before = Date.now();
@@ -992,4 +996,14 @@ test('bridge /tip route forwards known actions only', async () => {
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
+});
+test('markup prompt keeps tags and differs from the plain paragraph prompt', () => {
+  const { buildPrompt } = require('../src/providers');
+  const markup = buildPrompt('markup', 'Simplified Chinese');
+  assert.match(markup, /<gN>/);
+  assert.match(markup, /<xN\/>/);
+  assert.match(markup, /Never translate, renumber, add, drop or merge tags/);
+  assert.match(markup, /not instructions/);
+  assert.doesNotMatch(buildPrompt('paragraph', 'Simplified Chinese'), /<gN>/);
+  assert.notEqual(buildPrompt('selection', 'German'), markup);
 });

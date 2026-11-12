@@ -7,7 +7,7 @@
   "config.engine.offline": "Only local dictionary lookups; no online or AI translations.",
   "config.online.provider": "Google uses an unofficial experimental endpoint: it may be unavailable, blocked or rate-limited. MyMemory offers a documented anonymous API with 5,000 characters/day; its policy permits text retention and partner sharing. Never send confidential text or code. No automatic fallback to other services.",
   "config.online.sourceLanguage": "Source language for online translation. Both services detect it automatically by default. MyMemory limits each request to 500 UTF-8 bytes; longer text is split without discarding content.",
-  "displayName": "Translate Anywhere - 翻译 · 划词翻译 · Select & Hover Translator",
+  "displayName": "翻译 Translate Anywhere · 划词翻译 · 全文翻译 · Select & Hover Translator",
   "description": "Select text in Chat, Markdown preview, Release Notes, Settings and more, then hover the red dot for an instant dictionary or AI translation. Paragraph and full-page translation included. 翻译 · 划词翻译 · 段落翻译 · 全文翻译 · 中英翻译 · AI 翻译",
   "command.enable": "Enable / Repair Integration",
   "command.disable": "Disable and Restore VS Code",
