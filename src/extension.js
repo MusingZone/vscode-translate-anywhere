@@ -144,18 +144,32 @@ async function activate(context) {
   // extension API does not expose that flag, so it is read from this profile's state database (read-only).
   let hiddenCache = { at: 0, set: new Set(), excluded: new Set(), source: '' };
   let hiddenWarned = false;
+  let pickerLogged = '';
+  // This profile's database, then the application one (the Agents window keeps model preferences there).
+  const stateDatabases = () => {
+    const profileDb = path.join(path.dirname(stateFolder), 'state.vscdb');
+    const marker = `${path.sep}profiles${path.sep}`;
+    const at = stateFolder.lastIndexOf(marker);
+    const appDb = at < 0 ? profileDb : path.join(stateFolder.slice(0, at), 'globalStorage', 'state.vscdb');
+    return [...new Set([profileDb, appDb])].filter(file => fs.existsSync(file));
+  };
   function hiddenModels(force = false) {
     if (!force && Date.now() - hiddenCache.at < 5000) return hiddenCache.set;
     let set = new Set();
     let excluded = new Set();
     let source = '';
     try {
-      const file = path.join(path.dirname(stateFolder), 'state.vscdb');
-      if (fs.existsSync(file)) {
-        const stored = models.readStoredModels(file);
+      const files = stateDatabases();
+      if (files.length) {
+        const stored = models.readStoredModels(files);
         excluded = models.parseExcludedModels(stored.cached);
         source = JSON.stringify(stored);
         set = models.parseHiddenModels(stored);
+        const picker = models.visibilityPicker(stored);
+        const description = picker.from === 'fallback'
+          ? `models visible in every candidate picker (standard + ${picker.types.join(' + ')}): VS Code did not record which Chat picker is in use`
+          : `${picker.types.length ? picker.types.join(' + ') : 'standard'} picker (from ${picker.from})`;
+        if (description !== pickerLogged) output.appendLine(`Model visibility follows the ${pickerLogged = description}.`);
       }
     } catch (error) {
       if (!hiddenWarned) output.appendLine(`Model visibility unavailable (${errorText(error)}); listing all models.`);
@@ -303,8 +317,8 @@ async function activate(context) {
       await config().update('translation.engine', 'offline', vscode.ConfigurationTarget.Global);
     }
   }
-  // Fresh installs get the best recommended model among the visible ones; nothing is benchmarked automatically.
-  // Model providers register one after another, so "no recommended model" is only concluded after a grace period.
+  // Nothing is chosen for the user: until a model is picked, a translation borrows a light visible model for that
+  // request only, says so next to the result, and the user is pointed to the model list.
   const activatedAt = Date.now();
   let defaultTimer;
   function scheduleDefaultModel(delay = 2000) {
@@ -316,32 +330,30 @@ async function activate(context) {
     if (translationEngine() !== 'ai') return;
     if (config().get('ai.modelId', '') === models.LEGACY_AUTO_MODEL) {
       await config().update('ai.modelId', undefined, vscode.ConfigurationTarget.Global);
-      output.appendLine('The "Auto" translation model choice was removed; a visible model is chosen instead.');
+      output.appendLine('The "Auto" translation model choice was removed; please choose a model.');
     }
     if (aiProvider() !== 'vscode' || configuredModelId()) return;
+    // Model providers register one after another, so "no models" is only concluded after a grace period.
+    if (Date.now() - activatedAt < 15000) return scheduleDefaultModel(15000 - (Date.now() - activatedAt));
     const visible = await visibleModels();
     if (!visible.length) {
-      if (Date.now() - activatedAt < 15000) return scheduleDefaultModel(15000 - (Date.now() - activatedAt));
       if (!context.globalState.get('engineChoiceSuggested') && vscode.window.state.focused) await suggestEngineChoice();
       return;
     }
-    const best = models.pickPreferred(visible);
-    if (best) {
-      await config().update('ai.modelId', best.id, vscode.ConfigurationTarget.Global);
-      output.appendLine(`Translation model set to ${best.name} (${best.id}), the first recommended lightweight model you have.`);
-      return;
-    }
-    if (Date.now() - activatedAt < 15000) return scheduleDefaultModel(15000 - (Date.now() - activatedAt));
-    if (context.globalState.get('modelChoiceSuggested')) return;
+    if (context.globalState.get('modelChoiceSuggested') || !vscode.window.state.focused) return;
     await context.globalState.update('modelChoiceSuggested', true);
     await suggestChoosingModel();
   }
-  async function resolveModel() {
+  const NO_MODEL_HINT = () => L('temporary model, choose yours in the Translate Anywhere sidebar',
+    '临时模型，请在 Translate Anywhere 侧边栏选择翻译模型',
+    'vorläufiges Modell, wählen Sie Ihres in der Translate Anywhere-Seitenleiste');
+  // The chosen model; with borrow, a temporary one ({ model, temporary: true }) while none is chosen.
+  async function resolveModel({ borrow = false } = {}) {
     const modelId = configuredModelId();
     if (modelId) {
       // An explicit choice is honoured even if the model was hidden later.
       const configured = await selectableModel(modelId);
-      if (configured) return configured;
+      if (configured) return borrow ? { model: configured, temporary: false } : configured;
       suggestChoosingModel().catch(logError);
       throw new Error(L(`The translation model "${modelId}" is no longer available. Choose another one in the Translate Anywhere sidebar.`,
         `翻译模型「${modelId}」已不可用，请在 Translate Anywhere 侧边栏中重新选择。`,
@@ -352,12 +364,9 @@ async function activate(context) {
       suggestEngineChoice().catch(logError);
       throw noModelsError();
     }
-    const best = models.pickPreferred(visible);
-    if (best) {
-      await config().update('ai.modelId', best.id, vscode.ConfigurationTarget.Global);
-      return best;
-    }
     suggestChoosingModel().catch(logError);
+    const fallback = borrow && models.pickPreferred(visible);
+    if (fallback) return { model: fallback, temporary: true };
     throw new Error(L('No translation model chosen yet. Pick one in the Translate Anywhere sidebar (AI engine → Model).',
       '尚未选择翻译模型。请在 Translate Anywhere 侧边栏的「AI 引擎 → 模型」中选择。',
       'Noch kein Übersetzungsmodell ausgewählt. Wählen Sie eines in der Translate Anywhere-Seitenleiste (KI-Engine → Modell).'));
@@ -509,11 +518,13 @@ async function activate(context) {
     }
     if (selectedEngine !== 'ai') throw new Error(`Unknown translation engine: ${selectedEngine}`);
     const providerId = aiProvider();
-    const model = providerId === 'vscode' ? await resolveModel() : undefined;
+    const resolved = providerId === 'vscode' ? await resolveModel({ borrow: true }) : undefined;
+    const model = resolved?.model;
+    const hinted = result => resolved?.temporary ? { ...result, source: `${result.source} · ${NO_MODEL_HINT()}` } : result;
     const provider = providerId === 'vscode' ? undefined : httpProvider();
     const engine = model ? model.id : `${provider.id}|${provider.baseUrl}|${provider.model}`;
     const key = `${engine}\n${targetLanguage()}\n${mode}\n${text.trim().toLowerCase()}`;
-    if (aiCache.has(key)) return aiCache.get(key);
+    if (aiCache.has(key)) return hinted(aiCache.get(key));
     if (aiInFlight >= MAX_AI_CONCURRENCY) {
       throw new Error(L(`Too many concurrent AI translations (limit ${MAX_AI_CONCURRENCY}); try again shortly.`,
         `同时进行的 AI 翻译已达 ${MAX_AI_CONCURRENCY} 个上限，请稍后重试。`,
@@ -549,7 +560,7 @@ async function activate(context) {
       const result = { translation, source: `AI · ${label} · ${elapsed}s` };
       if (aiCache.size >= 300) aiCache.delete(aiCache.keys().next().value);
       aiCache.set(key, result);
-      return result;
+      return hinted(result);
     } finally {
       aiInFlight--;
     }
@@ -573,7 +584,8 @@ async function activate(context) {
         `KI-Übersetzung ist bereit: ${provider.label} ${provider.model} (${((Date.now() - started) / 1000).toFixed(1)} s) → ${sample}`));
       return;
     }
-    const model = await resolveModel();
+    const model = configuredModelId() ? await resolveModel() : await chooseModel();
+    if (!model) return;
     if (context.languageModelAccessInformation.canSendRequest(model) === true) {
       await vscode.window.showInformationMessage(L(`Translate Anywhere is authorized to use ${model.name}.`, `Translate Anywhere 已获得模型授权：${model.name}`,
         `Translate Anywhere darf jetzt ${model.name} verwenden.`));

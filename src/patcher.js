@@ -13,20 +13,44 @@ const pathsFor = root => ({
   html: path.join(root, 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.html'),
   loader: path.join(root, 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.js'),
   webview: path.join(root, 'out', 'vs', 'workbench', 'contrib', 'webview', 'browser', 'pre', 'index.html'),
-  product: path.join(root, 'product.json')
+  product: path.join(root, 'product.json'),
+  // The Agents window (VS Code 1.146+) is a separate renderer with its own page, loader and bundle.
+  sessionsBundle: path.join(root, 'out', 'vs', 'sessions', 'sessions.desktop.main.js'),
+  sessionsHtml: path.join(root, 'out', 'vs', 'sessions', 'electron-browser', 'sessions.html'),
+  sessionsLoader: path.join(root, 'out', 'vs', 'sessions', 'electron-browser', 'sessions.js')
 });
+// Absent in VS Code versions without the Agents window; those installations are patched without them.
+const OPTIONAL = new Set(['sessionsBundle', 'sessionsHtml', 'sessionsLoader']);
+const KIND = { sessionsBundle: 'bundle', sessionsHtml: 'html', sessionsLoader: 'loader' };
 // VS Code's integrity check: base64 SHA-256 without padding, compared to product.json "checksums".
 const vscodeChecksum = text => crypto.createHash('sha256').update(Buffer.from(text, 'utf8')).digest('base64').replace(/=+$/, '');
 const CHECKSUMMED = {
   bundle: 'vs/workbench/workbench.desktop.main.js',
   html: 'vs/code/electron-browser/workbench/workbench.html',
-  loader: 'vs/code/electron-browser/workbench/workbench.js'
+  loader: 'vs/code/electron-browser/workbench/workbench.js',
+  sessionsBundle: 'vs/sessions/sessions.desktop.main.js',
+  sessionsHtml: 'vs/sessions/electron-browser/sessions.html',
+  sessionsLoader: 'vs/sessions/electron-browser/sessions.js'
 };
 // "Reload Window" keeps the renderer process, which serves module scripts from its in-memory cache by URL, so a
 // reload would keep running the previously loaded bundle. Versioned URLs make every new patch load fresh.
 const STAMP = /\?imt=[0-9a-f]+/g;
-const LOADER_SCRIPT = /(src="\.\/workbench\.js)(")/;
-const BUNDLE_IMPORT = /("vs\/workbench\/workbench\.desktop\.main\.js)(")/;
+// Per window type: how the page loads its loader, how the loader imports the bundle, and where product.json is
+// relative to the page.
+const WINDOWS = {
+  workbench: {
+    keys: { bundle: 'bundle', html: 'html', loader: 'loader' },
+    loaderScript: /(src="\.\/workbench\.js)(")/,
+    bundleImport: /("vs\/workbench\/workbench\.desktop\.main\.js)(")/,
+    product: '../../../../../product.json'
+  },
+  sessions: {
+    keys: { bundle: 'sessionsBundle', html: 'sessionsHtml', loader: 'sessionsLoader' },
+    loaderScript: /(src="\.\/sessions\.js)(")/,
+    bundleImport: /("vs\/sessions\/sessions\.desktop\.main\.js)(")/,
+    product: '../../../../product.json'
+  }
+};
 const withoutChecksums = text => text.replace(/"checksums"\s*:\s*\{[^}]*\}/, '');
 const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 // VS Code's main process reads product.json once at launch, so after (re)patching, a window reload would still
@@ -34,11 +58,12 @@ const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 // The integrity check is redirected to the checksums currently on disk (same check a full restart performs).
 const FRESH = '(await globalThis.__imtFreshChecksums?.())||';
 const ISPURE = /(async _isPure\(\)\{let \w+=)(this\.productService\.checksums\|\|\{\};)/;
-const FRESH_HELPER = `globalThis.__imtFreshChecksums=async()=>{try{` +
-  `const r=await fetch(new URL('../../../../../product.json',location.href),{cache:'no-store'});` +
+const freshHelper = product => `globalThis.__imtFreshChecksums=async()=>{try{` +
+  `const r=await fetch(new URL('${product}',location.href),{cache:'no-store'});` +
   `const p=r.ok?await r.json():null;return p&&p.checksums&&typeof p.checksums==='object'?p.checksums:null}catch{return null}};`;
 // Removes exactly what patchSources adds, so "only our patch differs" can be verified against the backup.
 function withoutOurPatch(key, text, endpoint) {
+  key = KIND[key] || key;
   const block = new RegExp(`\\n${escapeRegExp(BEGIN)}[\\s\\S]*?${escapeRegExp(END)}\\n`, 'g');
   if (key === 'bundle') return text.replace(block, '').split(FRESH).join('');
   if (key === 'html') return text.replace(` ${endpoint};`, ';').replace(STAMP, '');
@@ -135,23 +160,40 @@ function addConnectSource(html, endpoint) {
   return result;
 }
 
-function patchSources(originals, runtime, config) {
-  if (!originals.bundle.includes('Copyright (C) Microsoft Corporation')) {
-    throw new Error('Unsupported workbench bundle');
-  }
-  const block = `${BEGIN}\n;(${runtime})(${JSON.stringify(config)});\n${END}`;
+// Injects the runtime into one window type's bundle, allows the bridge in its page CSP and versions its URLs.
+function patchWindow(window, originals, block, config) {
+  const { keys } = window;
+  const source = originals[keys.bundle];
+  if (!source.includes('Copyright (C) Microsoft Corporation')) throw new Error('Unsupported workbench bundle');
+  const html0 = originals[keys.html];
   // Optional: an unknown future layout only loses the reload-without-warning nicety, not translation.
-  const bundleSource = ISPURE.test(originals.bundle) ? originals.bundle.replace(ISPURE, `$1${FRESH}$2`) : originals.bundle;
-  const bundleBlock = bundleSource === originals.bundle ? block : `${BEGIN}\n${FRESH_HELPER}\n;(${runtime})(${JSON.stringify(config)});\n${END}`;
+  const bundleSource = ISPURE.test(source) ? source.replace(ISPURE, `$1${FRESH}$2`) : source;
+  const bundleBlock = bundleSource === source ? block : block.replace(`${BEGIN}\n`, `${BEGIN}\n${freshHelper(window.product)}\n`);
   const bundle = bundleSource + '\n' + bundleBlock + '\n';
-  let html = addConnectSource(originals.html, config.endpoint);
-  let loader = originals.loader;
+  let html = addConnectSource(html0, config.endpoint);
+  let loader = originals[keys.loader];
   // Both URLs must change together: a fresh loader is only fetched if the page references it under a new URL.
   const countOf = (text, pattern) => (text.match(new RegExp(pattern.source, 'g')) || []).length;
-  if (loader !== undefined && countOf(html, LOADER_SCRIPT) === 1 && countOf(loader, BUNDLE_IMPORT) === 1) {
+  if (loader !== undefined && countOf(html, window.loaderScript) === 1 && countOf(loader, window.bundleImport) === 1) {
     const stamp = `?imt=${digest(bundle).slice(0, 12)}`;
-    html = html.replace(LOADER_SCRIPT, `$1${stamp}$2`);
-    loader = loader.replace(BUNDLE_IMPORT, `$1${stamp}$2`);
+    html = html.replace(window.loaderScript, `$1${stamp}$2`);
+    loader = loader.replace(window.bundleImport, `$1${stamp}$2`);
+  }
+  const patched = { [keys.bundle]: bundle, [keys.html]: html };
+  if (loader !== undefined) patched[keys.loader] = loader;
+  return patched;
+}
+
+function patchSources(originals, runtime, config) {
+  const block = `${BEGIN}\n;(${runtime})(${JSON.stringify(config)});\n${END}`;
+  const patched = patchWindow(WINDOWS.workbench, originals, block, config);
+  if (originals.sessionsBundle !== undefined && originals.sessionsHtml !== undefined) {
+    // Best effort: an Agents window layout this version does not recognize stays untouched.
+    try { Object.assign(patched, patchWindow(WINDOWS.sessions, originals, block, config)); }
+    catch { /* keep the Agents window files as they are */ }
+  }
+  for (const key of ['sessionsBundle', 'sessionsHtml', 'sessionsLoader']) {
+    if (patched[key] === undefined && originals[key] !== undefined) patched[key] = originals[key];
   }
   const pattern = /(<script async type="module">)([\s\S]*?)(<\/script>)/g;
   const scripts = [...originals.webview.matchAll(pattern)];
@@ -169,8 +211,7 @@ function patchSources(originals, runtime, config) {
     .replace(pattern, (_all, open, _script, close) => open + script + close)
     .replace(`'sha256-${oldHash}'`, `'sha256-${newHash}'`)
     .replace("frame-src 'self';", `connect-src ${config.endpoint}; frame-src 'self';`);
-  const patched = { bundle, html, webview };
-  if (loader !== undefined) patched.loader = loader;
+  patched.webview = webview;
   if (originals.product !== undefined) patched.product = updateChecksums(originals.product, patched);
   return patched;
 }
@@ -195,7 +236,7 @@ function atomicWrite(file, text) {
 function applyPatch(root, stateFolder, runtime, config) {
   root = normalizeRoot(root);
   fs.mkdirSync(stateFolder, { recursive: true });
-  const files = pathsFor(root);
+  const files = Object.fromEntries(Object.entries(pathsFor(root)).filter(([key, file]) => !OPTIONAL.has(key) || fs.existsSync(file)));
   const stateFile = path.join(stateFolder, `patch-${digest(root).slice(0, 16)}.json`);
   const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : null;
   const originals = {};

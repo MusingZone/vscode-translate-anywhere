@@ -7,9 +7,9 @@ const LEGACY_AUTO_MODEL = '@auto';
 // Its cached family names whichever model it last routed to, so it is not listed or measured.
 const isRouterModel = model => String(model?.id || '').toLowerCase() === 'auto';
 
-// Only used to pick the very first model on a fresh install, among the models the user can see; never shown.
-// Patterns name model tiers and size words, not versions, so newer releases still match. The last pattern
-// catches any "mini/nano/flash/lite/…" model. If nothing matches, the user is asked to choose.
+// Only used to borrow a model for a translation while the user has not chosen one, among the models the user can
+// see; the result says so. Patterns name model tiers and size words, not versions, so newer releases still match.
+// The last pattern catches any "mini/nano/flash/lite/…" model. If nothing matches, the user is asked to choose.
 const PREFERRED_MODELS = [
   /\bgpt-[\d.]+-luna\b/,
   /\bclaude-(?:[\d.-]+-)?haiku\b/,
@@ -59,7 +59,7 @@ function sortByPreference(models) {
     .map(item => item.model);
 }
 
-// The default for a fresh install: the best preferred model among the visible ones, or undefined.
+// The model borrowed while none is chosen: the best preferred model among the visible ones, or undefined.
 function pickPreferred(models) {
   const [best] = sortByPreference(models);
   return best && preferredRank(best) >= 0 ? best : undefined;
@@ -77,20 +77,61 @@ function parseStoredModels(value) {
   return typeof value === 'string' ? JSON.parse(value) : value;
 }
 
-function readStoredModels(file) {
+const STORED_KEYS = {
+  visibility: 'chatModelVisibility', pickerPreferences: 'chatModelPickerPreferences',
+  cached: 'chat.cachedLanguageModels.v2', currentModel: 'chat.currentLanguageModel.panel',
+  sessionType: 'chat.userSelectedSessionType'
+};
+
+// Reads the keys from the first database that has each one. The profile database comes first; the
+// application database follows because the Agents window keeps model preferences in application scope.
+function readStoredModels(files) {
   const { DatabaseSync } = require('node:sqlite');
-  const db = new DatabaseSync(file, { readOnly: true });
-  try {
-    const query = db.prepare('SELECT value FROM ItemTable WHERE key = ?');
-    const read = key => {
-      const value = query.get(key)?.value;
-      return value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value;
-    };
-    return {
-      visibility: read('chatModelVisibility'), pickerPreferences: read('chatModelPickerPreferences'),
-      cached: read('chat.cachedLanguageModels.v2'), currentModel: read('chat.currentLanguageModel.panel')
-    };
-  } finally { db.close(); }
+  const stored = {};
+  for (const file of [].concat(files)) {
+    let db;
+    try { db = new DatabaseSync(file, { readOnly: true }); } catch (error) {
+      if (file === [].concat(files)[0]) throw error;
+      continue;
+    }
+    try {
+      const query = db.prepare('SELECT value FROM ItemTable WHERE key = ?');
+      for (const [name, key] of Object.entries(STORED_KEYS)) {
+        if (stored[name] !== undefined) continue;
+        const value = query.get(key)?.value;
+        if (value !== undefined && value !== null) stored[name] = value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value;
+      }
+    } finally { db.close(); }
+  }
+  return stored;
+}
+
+// SDK Chat harnesses (e.g. "agent-host-copilotcli") list Copilot models under their own identifiers, each with
+// its own visibility. Returns which picker the translation list should mirror:
+// - { types: [] } for the standard picker,
+// - { types: [type] } for an SDK harness the user selected,
+// - { types: [...], from: 'fallback' } when no key says which one is in use: the standard picker and every SDK picker
+//   the user customized are candidates, and only models visible in all of them are listed, so a model hidden in the
+//   picker actually in use is never offered. (VS Code renamed the key once: chat.currentLanguageModel.panel →
+//   chat.userSelectedSessionType. The extension logs the fallback so a future rename is visible.)
+function visibilityPicker({ cached, currentModel, sessionType, visibility } = {}) {
+  const list = parseStoredModels(cached);
+  if (!Array.isArray(list)) return { types: [], from: 'none' };
+  const sdkTypes = new Set();
+  for (const item of list) {
+    const type = item?.metadata?.targetChatSessionType;
+    if (typeof type === 'string' && item.metadata.isUserSelectable !== false && !isRouterModel(item.metadata)) sdkTypes.add(type);
+  }
+  const fromModel = list.find(item => item?.identifier === currentModel)?.metadata?.targetChatSessionType;
+  if (fromModel && sdkTypes.has(fromModel)) return { types: [fromModel], from: STORED_KEYS.currentModel };
+  if (typeof sessionType === 'string' && sessionType) {
+    return sdkTypes.has(sessionType) ? { types: [sessionType], from: STORED_KEYS.sessionType } : { types: [], from: STORED_KEYS.sessionType };
+  }
+  if (currentModel) return { types: [], from: STORED_KEYS.currentModel };
+  const hidden = parseStoredModels(visibility)?.hiddenModels;
+  const customized = Array.isArray(hidden) ? [...sdkTypes].filter(type => list.some(item =>
+    item?.metadata?.targetChatSessionType === type && hidden.includes(item.identifier))) : [];
+  return { types: customized, from: 'fallback' };
 }
 
 // Session-specific models belong to their own Chat picker, not the extension translation picker.
@@ -107,7 +148,8 @@ function parseExcludedModels(cached) {
   return excluded;
 }
 
-function parseHiddenModels({ visibility, pickerPreferences, cached, currentModel } = {}) {
+function parseHiddenModels(stored = {}) {
+  const { visibility, pickerPreferences, cached } = stored;
   const hidden = new Set();
   const current = parseStoredModels(visibility);
   if (Array.isArray(current?.hiddenModels)) {
@@ -119,24 +161,33 @@ function parseHiddenModels({ visibility, pickerPreferences, cached, currentModel
     }
   }
   const list = parseStoredModels(cached);
-  if (Array.isArray(list)) {
-    const session = list.find(item => item.identifier === currentModel)?.metadata?.targetChatSessionType;
-    if (session === 'agent-host-copilotcli' || session === 'copilotcli') {
-      // SDK Chat has its own visibility for Copilot models. BYOK entries point back to the
-      // original provider; use those callable models, not the session-only proxy models.
-      const equivalents = new Map();
+  const { types, from } = visibilityPicker(stored);
+  if (Array.isArray(list) && types.length) {
+    // The extension calls the standard models; SDK entries say which of them the user sees there. BYOK entries
+    // point back to the original provider; Copilot ones share the model id. Copilot models absent from an SDK
+    // picker are not visible there.
+    const pickers = types.map(type => {
+      const visible = new Set();
+      const mapped = new Set();
       for (const item of list) {
-        const meta = item.metadata;
-        if (meta?.targetChatSessionType !== session || meta.isUserSelectable === false) continue;
+        const meta = item?.metadata;
+        if (meta?.targetChatSessionType !== type || meta.isUserSelectable === false || isRouterModel(meta)) continue;
         const identifier = meta.byokModelIdentifier || `copilot/${meta.id}`;
-        equivalents.set(identifier, hidden.has(item.identifier) || (!!meta.byokModelIdentifier && hidden.has(identifier)));
+        mapped.add(identifier);
+        if (!hidden.has(item.identifier) && !(meta.byokModelIdentifier && hidden.has(identifier))) visible.add(identifier);
       }
-      for (const item of list) {
-        if (item.metadata?.targetChatSessionType) continue;
-        if (item.metadata?.vendor !== 'copilot' && !equivalents.has(item.identifier)) continue;
-        if (equivalents.get(item.identifier) === false) hidden.delete(item.identifier);
-        else hidden.add(item.identifier);
-      }
+      return { visible, mapped };
+    });
+    // Known picker: mirror it. Unknown picker: the standard picker's own hidden set stays, and a model hidden in
+    // any candidate SDK picker is hidden too (never unhidden), so the guess cannot reveal a model the user hid.
+    const fallback = from === 'fallback';
+    for (const item of list) {
+      if (item?.metadata?.targetChatSessionType) continue;
+      const relevant = pickers.filter(picker => item.metadata?.vendor === 'copilot' || picker.mapped.has(item.identifier));
+      if (!relevant.length) continue;
+      const shown = relevant.every(picker => picker.visible.has(item.identifier));
+      if (!shown) hidden.add(item.identifier);
+      else if (!fallback) hidden.delete(item.identifier);
     }
   }
   for (const id of parseExcludedModels(cached)) hidden.add(id);
@@ -264,5 +315,5 @@ function parseAdvice(text, ids) {
 
 module.exports = {
   LEGACY_AUTO_MODEL, isRouterModel, PREFERRED_MODELS, preferredRank, sortByPreference, pickPreferred,
-  readStoredModels, parseHiddenModels, parseExcludedModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
+  readStoredModels, visibilityPicker, parseHiddenModels, parseExcludedModels, isHidden, median, benchmark, timingRank, advicePrompt, parseAdvice, pickAdvisor
 };

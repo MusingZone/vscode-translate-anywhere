@@ -92,7 +92,8 @@
 | 自定义 | OpenAI 兼容 | 自行填写 | 任何兼容接口：LM Studio、vLLM、one-api、各类中转/网关…… |
 
 **VS Code 语言模型**
-- 模型列表只列出可供翻译使用、允许用户选择的模型，保持 VS Code 原有顺序。Copilot 模型遵循当前 Chat 会话的可见性（包括 Copilot SDK Chat），不列出内部辅助模型和仅限会话的代理模型；侧边栏打开时会自动刷新可见性。
+- 模型列表只列出可供翻译使用、允许用户选择的模型，保持 VS Code 原有顺序。Copilot 模型遵循你当前所用 Chat 模型选择器的可见性（包括 Copilot CLI（SDK）会话和 Agents 窗口），不列出内部辅助模型和仅限会话的代理模型；侧边栏打开时会自动刷新可见性。
+- 扩展不会替你选定模型。在你选择之前，AI 翻译会为每次请求临时借用一个小而快的模型，并在结果旁注明“临时模型，请在 Translate Anywhere 侧边栏选择翻译模型”。你在另一台电脑上选好的模型会经设置同步带过来，并保持不变。
 - 不提供“自动”选项。Copilot 自带的 Auto 路由模型也不列出，因为它可能转到你已隐藏的模型。
 - 明确保存过、之后才隐藏的模型仍保留选中并标为 **已隐藏**；已保存但不再可选的模型会标为 **不可用** 并禁用，需手动选择其他模型。
 - **测速** 会让每个模型先预热一次、再计时三次并显示中位数，随后由其中最快的轻量模型判断哪些适合翻译，列为 **推荐**，旁边有 **改用此模型**。测速只在你点击时运行；对高级模型的请求会计入 Copilot 高级请求额度，不用的模型可在 VS Code 的 **语言模型** 视图中隐藏。
@@ -150,6 +151,7 @@ VS Code 没有给扩展提供在 Chat、Release Notes、设置页或内置 Markd
 
 - `out/vs/workbench/workbench.desktop.main.js`
 - `out/vs/code/electron-browser/workbench/workbench.html`
+- Agents 窗口的 `out/vs/sessions/sessions.desktop.main.js` 和 `out/vs/sessions/electron-browser/sessions.html`（仅限带有 Agents 窗口的 VS Code 版本）
 - Webview 的 `index.html`
 - `product.json` 中对应的 `checksums`
 

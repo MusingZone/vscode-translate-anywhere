@@ -18,10 +18,13 @@ const fixture = () => {
   const bundle = '/* Copyright (C) Microsoft Corporation */\nconsole.log("base");';
   const html = `<meta content="default-src 'none'; connect-src 'self' https: ws:;"><script src="./workbench.js" type="module"></script>`;
   const loader = 'let e=new URL("vs/workbench/workbench.desktop.main.js",l).href;await import(e);';
+  const sessionsBundle = '/* Copyright (C) Microsoft Corporation */\nconsole.log("agents");async _isPure(){let s=this.productService.checksums||{};}';
+  const sessionsHtml = `<meta content="default-src 'none'; connect-src 'self' https: ws:;"><script src="./sessions.js" type="module"></script>`;
+  const sessionsLoader = 'let t=new URL("vs/sessions/sessions.desktop.main.js",s).href;await import(t);';
   return {
-    bundle, html, loader,
+    bundle, html, loader, sessionsBundle, sessionsHtml, sessionsLoader,
     webview: `<meta content="script-src 'sha256-${hash}' 'self'; frame-src 'self';"><script async type="module">${script}</script>`,
-    product: `{\n\t"checksums": {\n\t\t"vs/workbench/workbench.desktop.main.js": "${vscodeChecksum(bundle)}",\n\t\t"vs/code/electron-browser/workbench/workbench.html": "${vscodeChecksum(html)}",\n\t\t"vs/code/electron-browser/workbench/workbench.js": "${vscodeChecksum(loader)}",\n\t\t"vs/other.js": "keep"\n\t}\n}\n`
+    product: `{\n\t"checksums": {\n\t\t"vs/workbench/workbench.desktop.main.js": "${vscodeChecksum(bundle)}",\n\t\t"vs/code/electron-browser/workbench/workbench.html": "${vscodeChecksum(html)}",\n\t\t"vs/code/electron-browser/workbench/workbench.js": "${vscodeChecksum(loader)}",\n\t\t"vs/sessions/sessions.desktop.main.js": "${vscodeChecksum(sessionsBundle)}",\n\t\t"vs/sessions/electron-browser/sessions.html": "${vscodeChecksum(sessionsHtml)}",\n\t\t"vs/sessions/electron-browser/sessions.js": "${vscodeChecksum(sessionsLoader)}",\n\t\t"vs/other.js": "keep"\n\t}\n}\n`
   };
 };
 
@@ -107,6 +110,56 @@ test('integrity check reads fresh checksums so a window reload after patching sh
     for (const [key, file] of Object.entries(files)) assert.equal(fs.readFileSync(file, 'utf8'), originals[key], key);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('the Agents window is patched like the workbench, and is optional and upgradeable', () => {
+  const config = { endpoint: 'http://127.0.0.1:17865', token: 'test' };
+  const patched = patchSources(fixture(), ui.toString(), config);
+  assert.ok(patched.sessionsBundle.includes('IMMERSIVE_TRANSLATE_BEGIN'));
+  assert.ok(patched.sessionsBundle.includes("new URL('../../../../product.json',location.href)"), 'product.json is four levels above sessions.html');
+  assert.ok(patched.sessionsHtml.includes('https: ws: http://127.0.0.1:17865;'));
+  const stamp = /src="\.\/sessions\.js(\?imt=[0-9a-f]{12})"/.exec(patched.sessionsHtml)?.[1];
+  assert.ok(stamp && patched.sessionsLoader.includes(`"vs/sessions/sessions.desktop.main.js${stamp}"`));
+  const checksums = JSON.parse(patched.product).checksums;
+  for (const [key, rel] of [['sessionsBundle', 'vs/sessions/sessions.desktop.main.js'], ['sessionsHtml', 'vs/sessions/electron-browser/sessions.html'], ['sessionsLoader', 'vs/sessions/electron-browser/sessions.js']]) {
+    assert.equal(checksums[rel], vscodeChecksum(patched[key]), rel);
+  }
+  // An Agents window layout this version does not know must not block the main window.
+  const odd = patchSources({ ...fixture(), sessionsHtml: '<html></html>' }, ui.toString(), config);
+  assert.ok(odd.bundle.includes('IMMERSIVE_TRANSLATE_BEGIN'));
+  assert.equal(odd.sessionsBundle, fixture().sessionsBundle);
+  assert.equal(odd.sessionsHtml, '<html></html>');
+
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'imt-agents-'));
+  try {
+    const root = path.join(temp, 'app');
+    const state = path.join(temp, 'state');
+    const originals = fixture();
+    const files = pathsFor(root);
+    for (const [key, file] of Object.entries(files)) {
+      if (key.startsWith('sessions')) continue;
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, originals[key]);
+    }
+    // VS Code without the Agents window.
+    const { stateFile } = applyPatch(root, state, ui.toString(), config);
+    assert.ok(!Object.keys(JSON.parse(fs.readFileSync(stateFile, 'utf8')).files).some(key => key.startsWith('sessions')));
+    // Same folder now has the Agents window files (simulates state written by a release before Agents support).
+    for (const key of ['sessionsBundle', 'sessionsHtml', 'sessionsLoader']) {
+      fs.mkdirSync(path.dirname(files[key]), { recursive: true });
+      fs.writeFileSync(files[key], originals[key]);
+    }
+    assert.equal(applyPatch(root, state, ui.toString(), config).changed, true);
+    assert.ok(fs.readFileSync(files.sessionsBundle, 'utf8').includes('IMMERSIVE_TRANSLATE_BEGIN'));
+    const product = JSON.parse(fs.readFileSync(files.product, 'utf8')).checksums;
+    assert.equal(product['vs/sessions/sessions.desktop.main.js'], vscodeChecksum(fs.readFileSync(files.sessionsBundle, 'utf8')));
+    assert.equal(product['vs/workbench/workbench.desktop.main.js'], vscodeChecksum(fs.readFileSync(files.bundle, 'utf8')));
+    assert.equal(applyPatch(root, state, ui.toString(), config).changed, false);
+    assert.equal(restorePatch(root, state), true);
+    for (const [key, file] of Object.entries(files)) assert.equal(fs.readFileSync(file, 'utf8'), originals[key], key);
+  } finally {
+    fs.rmSync(temp, { recursive: true });
   }
 });
 
@@ -830,7 +883,37 @@ test('SDK Chat visibility maps to callable Copilot and BYOK models, including li
   assert.ok(models.isHidden({ vendor: 'copilot', id: 'gpt-6-luna' }, native));
   assert.ok(!models.isHidden({ vendor: 'copilot', id: 'native-only' }, native));
   const stale = models.parseHiddenModels({ ...stored, currentModel: 'agent-host-copilotcli:removed' });
-  assert.deepEqual(stale, models.parseHiddenModels({ ...stored, currentModel: undefined }), 'unknown sessions do not infer aliases');
+  assert.deepEqual(stale, native, 'an unknown current model means the standard picker, not inferred aliases');
+});
+
+// Regression (0.8.0): VS Code stopped writing chat.currentLanguageModel.panel and stores the harness in
+// chat.userSelectedSessionType; the list then fell back to stale standard visibility and lost GPT-6 Luna.
+test('SDK picker visibility follows chat.userSelectedSessionType, and an unknown picker never reveals a hidden model', () => {
+  const copilot = id => ({ identifier: `copilot/${id}`, metadata: { vendor: 'copilot', id } });
+  const sdk = id => ({ identifier: `agent-host-copilotcli:${id}`, metadata: {
+    vendor: 'agent-host-copilotcli', id, targetChatSessionType: 'agent-host-copilotcli', isUserSelectable: true
+  } });
+  const cached = JSON.stringify([
+    copilot('gpt-6-luna'), copilot('claude-opus-5.5'), copilot('gemini-4-argon'), copilot('claude-haiku-4.5'),
+    sdk('auto'), sdk('gpt-6-luna'), sdk('claude-opus-5.5'), sdk('gemini-4-argon'), sdk('claude-haiku-4.5')
+  ]);
+  const visibility = JSON.stringify({ hiddenModels: [
+    'copilot/gpt-6-luna', 'copilot/claude-haiku-4.5', 'agent-host-copilotcli:gemini-4-argon', 'agent-host-copilotcli:claude-haiku-4.5'
+  ] });
+  const listed = stored => {
+    const hidden = models.parseHiddenModels(stored);
+    return ['gpt-6-luna', 'claude-opus-5.5', 'gemini-4-argon', 'claude-haiku-4.5'].filter(id => !models.isHidden({ vendor: 'copilot', id }, hidden));
+  };
+
+  const current = { cached, visibility, sessionType: 'agent-host-copilotcli' };
+  assert.deepEqual(models.visibilityPicker(current), { types: ['agent-host-copilotcli'], from: 'chat.userSelectedSessionType' });
+  assert.deepEqual(listed(current), ['gpt-6-luna', 'claude-opus-5.5'], 'exactly what the SDK picker shows');
+  assert.deepEqual(listed({ cached, visibility, sessionType: 'local' }), ['claude-opus-5.5', 'gemini-4-argon'], 'a non-SDK session uses the standard picker');
+  assert.deepEqual(listed({ cached, visibility }), ['claude-opus-5.5'],
+    'without any session key only models visible in every candidate picker are listed');
+  assert.deepEqual(models.visibilityPicker({ cached, visibility }).from, 'fallback');
+  assert.deepEqual(listed({ cached, visibility: JSON.stringify({ hiddenModels: ['copilot/gpt-6-luna'] }) }), ['claude-opus-5.5', 'gemini-4-argon', 'claude-haiku-4.5'],
+    'an SDK picker the user never customized does not override the standard one');
 });
 
 test('legacy Copilot CLI sessions map visibility without hiding models of unrelated vendors', () => {
@@ -886,6 +969,18 @@ test('model state reads current Chat visibility read-only, including live SQLite
       { hiddenModels: ['agent-host-copilotcli:flash'] }, 'the reader never changes user visibility');
     assert.throws(() => models.readStoredModels(path.join(folder, 'missing.vscdb')));
     assert.ok(!fs.existsSync(path.join(folder, 'missing.vscdb')), 'read-only access must not create databases');
+
+    // The Agents window profile has no model preferences of its own; they come from the application database.
+    const profileFile = path.join(folder, 'profile.vscdb');
+    const profile = new DatabaseSync(profileFile);
+    profile.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
+    profile.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)').run('chat.userSelectedSessionType', 'agent-host-copilotcli');
+    profile.close();
+    write.run('chat.userSelectedSessionType', 'local');
+    stored = models.readStoredModels([profileFile, file]);
+    assert.equal(stored.sessionType, 'agent-host-copilotcli', 'the profile value wins');
+    assert.deepEqual(JSON.parse(stored.cached), cached, 'missing keys come from the application database');
+    assert.equal(models.readStoredModels([file, path.join(folder, 'missing-app.vscdb')]).sessionType, 'local', 'a missing fallback database is skipped');
   } finally {
     db.close();
     fs.rmSync(folder, { recursive: true, force: true });

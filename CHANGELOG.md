@@ -2,6 +2,18 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - Agents window, and the model list you actually see
+
+### Added
+- Works in the VS Code **Agents window** (the separate agent sessions window in VS Code 1.146+): hover/selection translation, paragraph (Alt+Z) and full-page (Alt+W) translation in its chat. The extension declares Agents window support, and the integration also patches the Agents window's page and scripts. Existing users get this with one reload after updating; VS Code versions without the Agents window are unaffected.
+
+### Changed
+- No translation model is chosen for you any more. Until you pick one, AI translation borrows a small, fast model for that request, labels the result *temporary model, choose yours in the Translate Anywhere sidebar* and points you to the model list once. Nothing is saved until you choose.
+
+### Fixed
+- The model list again matches the Chat model picker you actually use. Current VS Code stores the Copilot CLI (SDK) session choice under a new key, so the list fell back to the standard picker's older visibility: lightweight models such as GPT-6 Luna were missing, and mostly expensive ones remained. The new key is read and the old one still works. If neither exists, the list shows only models that are visible in every picker that could be in use, so a model you hid is never offered, and the output log says that VS Code did not record the active picker. Otherwise the log names the picker being followed.
+- In the Agents window the model list now uses your model visibility (kept in application storage there) instead of listing every model.
+
 ## [0.7.2] - One reload after VS Code updates
 
 ### Fixed

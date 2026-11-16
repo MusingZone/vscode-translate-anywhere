@@ -64,9 +64,9 @@ async function activate(options = {}) {
     },
     lm: {
       onDidChangeChatModels: disposable,
-      selectChatModels: async () => {
+      selectChatModels: async (selector = {}) => {
         h.aiCalls++;
-        if (h.models) return h.models;
+        if (h.models) return h.models.filter(model => !selector.id || model.id === selector.id);
         throw new Error('AI should not be called');
       }
     },
@@ -241,6 +241,36 @@ test('declining the no-model suggestion keeps AI mode and sends nothing online',
 
 const inUse = () => Object.assign(new Error('in use'), { code: 'EADDRINUSE' });
 
+test('without a chosen model, AI translates with a borrowed light model, says so and never saves it', async () => {
+  const model = (id, name) => ({
+    id, name, vendor: 'copilot', family: id, sent: 0,
+    async sendRequest() { this.sent++; return { text: (async function* () { yield `${name}: translated`; })() }; }
+  });
+  const opus = model('claude-opus-5.5', 'Claude Opus 5.5');
+  const luna = model('gpt-6-luna', 'GPT-6 Luna');
+  const h = await activate({ values: { 'translation.engine': 'ai' }, models: [opus, luna] });
+  Object.assign(h.vscode, {
+    CancellationTokenSource: class { constructor() { this.token = { isCancellationRequested: false }; } cancel() { this.token.isCancellationRequested = true; } dispose() {} },
+    LanguageModelChatMessage: { User: content => ({ content }) },
+    LanguageModelError: class extends Error {}
+  });
+  try {
+    const result = await h.bridge.translate('Hello world.');
+    assert.equal(result.translation, 'GPT-6 Luna: translated', 'a light model, never the first (expensive) one');
+    assert.equal(opus.sent, 0);
+    assert.match(result.source, /GPT-6 Luna.*temporary model, choose yours in the Translate Anywhere sidebar/);
+    assert.equal(h.values.has('ai.modelId'), false, 'the borrowed model is not saved as the choice');
+    await flush();
+    assert.equal(h.infos.filter(message => /choose the AI model/.test(message)).length, 1, 'the user is pointed to the model list');
+    assert.match((await h.bridge.translate('Hello world.')).source, /temporary model/, 'a cached result keeps the hint');
+
+    h.values.set('ai.modelId', 'gpt-6-luna');
+    const chosen = await h.bridge.translate('Hello world.');
+    assert.doesNotMatch(chosen.source, /temporary/, 'once chosen, the same model gives a plain result');
+    assert.equal(h.values.get('ai.modelId'), 'gpt-6-luna');
+  } finally { h.dispose(); }
+});
+
 test('activation does not wait for integration prompts, so the sidebar can load', async () => {
   const { pathsFor } = require('../src/patcher');
   const crypto = require('node:crypto');
@@ -259,6 +289,7 @@ test('activation does not wait for integration prompts, so the sidebar can load'
     setup: folder => {
       appRoot = folder;
       for (const [key, file] of Object.entries(pathsFor(folder))) {
+        if (files[key] === undefined) continue;
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.writeFileSync(file, files[key]);
       }

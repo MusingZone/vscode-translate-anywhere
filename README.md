@@ -88,7 +88,8 @@ Choose the engine under **Translation** in the sidebar (`translateAnywhere.trans
 | Custom | OpenAI-compatible | *(you set it)* | any compatible endpoint: LM Studio, vLLM, one-api, an Azure gateway… |
 
 **VS Code language models**
-- The model list shows the user-selectable models available for translation, in VS Code's order. Copilot models follow the current Chat session's visibility, including Copilot SDK Chat; internal helpers and session-only proxies are excluded. Visibility changes refresh while the sidebar is open.
+- The model list shows the user-selectable models available for translation, in VS Code's order. Copilot models follow the visibility of the Chat picker you currently use, including Copilot CLI (SDK) sessions and the Agents window; internal helpers and session-only proxies are excluded. Visibility changes refresh while the sidebar is open.
+- No model is chosen for you. Until you pick one, AI translation borrows a small, fast model for each request, and the result says *temporary model, choose yours in the Translate Anywhere sidebar*. A model you chose on another computer arrives through Settings Sync and is kept.
 - There is no Auto choice. Copilot's own Auto router is excluded too, because it can route to models you hid.
 - A saved model that you hide later stays selected and is marked **hidden**. A saved model that is no longer selectable is marked **not available** and disabled until you choose another.
 - **Speed test** warms up each model once, times three runs and shows the median. The fastest lightweight model then picks the ones suited to translation as **Recommended**, with **Use it**. It only runs when you click it; requests to premium models count toward your Copilot premium-request quota, so hide models you never use in VS Code's **Language Models** view.
@@ -146,6 +147,7 @@ VS Code does not give extensions an API to read selections or draw popups inside
 
 - `out/vs/workbench/workbench.desktop.main.js`
 - `out/vs/code/electron-browser/workbench/workbench.html`
+- the Agents window's `out/vs/sessions/sessions.desktop.main.js` and `out/vs/sessions/electron-browser/sessions.html` (VS Code versions that have it)
 - the webview `index.html`
 - the matching `checksums` in `product.json`
 
