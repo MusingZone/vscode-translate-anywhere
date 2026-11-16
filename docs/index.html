@@ -3,8 +3,35 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Translate Anywhere brings select-and-hover translation to VS Code Chat, Markdown previews, and other built-in pages.">
-  <title>Translate Anywhere | MusingZone</title>
+  <meta name="description" content="VS Code translator for Chat, Agents and Markdown preview: select-and-hover, paragraph and full-page translation. AI, online or offline dictionary, with bilingual display.">
+  <title>Translate Anywhere - VS Code Translator for Chat &amp; Markdown</title>
+  <link rel="canonical" href="https://vta.musingzone.com/">
+  <link rel="icon" href="./images/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="./images/icon.png" type="image/png" sizes="128x128">
+  <link rel="apple-touch-icon" href="./images/icon.png">
+  <meta name="theme-color" content="#1e40af">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://vta.musingzone.com/">
+  <meta property="og:title" content="Translate Anywhere - VS Code Translator for Chat &amp; Markdown">
+  <meta property="og:description" content="Translate Chat, Agents and Markdown previews in VS Code. Select and hover, translate a paragraph or read a full page bilingually.">
+  <meta property="og:image" content="https://vta.musingzone.com/images/en/chat.png">
+  <meta property="og:image:alt" content="Translation popup in VS Code Chat">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Translate Anywhere",
+      "url": "https://vta.musingzone.com/",
+      "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=MusingZone.vscode-translate-anywhere",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Windows, macOS, Linux",
+      "description": "VS Code translator for Chat, Agents and Markdown preview, with select-and-hover, paragraph and full-page translation, bilingual display, AI, online translation and offline dictionaries.",
+      "screenshot": "https://vta.musingzone.com/images/en/chat.png",
+      "image": "https://vta.musingzone.com/images/icon.png",
+      "author": { "@type": "Organization", "name": "MusingZone", "url": "https://github.com/MusingZone" }
+    }
+  </script>
   <style>
     :root {
       color-scheme: dark;
@@ -50,15 +77,9 @@
       white-space: nowrap;
     }
     .brand-mark {
-      display: grid;
-      place-items: center;
+      display: block;
       width: 36px;
       height: 36px;
-      border-radius: 11px;
-      background: #8cebc8;
-      color: #10221e;
-      font-size: 13px;
-      letter-spacing: -.04em;
     }
     nav { display: flex; flex-wrap: wrap; gap: 22px; }
     nav a, footer a { color: #c1cfdf; text-decoration: none; }
@@ -156,7 +177,7 @@
   <a class="skip" href="#content">Skip to content</a>
   <header>
     <div class="wrap header-inner">
-      <a class="brand" href="#content"><span class="brand-mark" aria-hidden="true">TA</span> Translate Anywhere</a>
+      <a class="brand" href="#content"><img class="brand-mark" src="./images/icon.svg" alt="" width="36" height="36"> Translate Anywhere</a>
       <nav aria-label="Main navigation">
         <a href="#features">Features</a>
         <a href="#privacy">Privacy</a>
@@ -168,9 +189,9 @@
     <section class="hero" aria-labelledby="headline">
       <div>
         <p class="eyebrow">An open-source VS Code extension</p>
-        <h1 id="headline">Read anywhere.<br><span>Understand more.</span></h1>
-        <p class="lead">Translate the words, conversations, and documentation you read in VS Code, without leaving your flow.</p>
-        <p class="translation" lang="zh-CN">在 VS Code 中划词、悬停，即可翻译聊天和文档等内容。</p>
+        <h1 id="headline">Translate in VS Code.<br><span>Chat to Markdown.</span></h1>
+        <p class="lead">Select and hover to translate Chat, the Agents window and Markdown previews. Read a paragraph or a full page in your language, with bilingual display when you want it.</p>
+        <p class="translation" lang="zh-CN">VS Code 划词翻译插件：支持 Chat、Agents 与 Markdown 预览中的段落翻译、全文翻译和双语对照。</p>
         <div class="actions">
           <a class="button button-primary" href="https://marketplace.visualstudio.com/items?itemName=MusingZone.vscode-translate-anywhere">Get the extension</a>
           <a class="button" href="https://github.com/MusingZone/vscode-translate-anywhere">View on GitHub</a>
@@ -195,15 +216,24 @@
           <p>Use <kbd>Alt+Z</kbd> for a paragraph or <kbd>Alt+W</kbd> for a full page. Press again to restore the original.</p>
         </article>
         <article class="card">
-          <h3>Choose your model</h3>
-          <p>Use a VS Code language model, your preferred AI provider, or a compatible local endpoint.</p>
+          <h3>AI, online or offline</h3>
+          <p>Choose a VS Code language model, your AI provider or a local endpoint. No API key? Use online translation or the offline English-to-Chinese dictionary.</p>
         </article>
       </div>
     </section>
     <section id="privacy" class="details" aria-labelledby="privacy-heading">
       <h2 id="privacy-heading">Know how it works</h2>
-      <p>AI translation sends the text being translated to your configured model provider or local endpoint. English-to-Chinese word lookups can use an offline dictionary.</p>
+      <p>AI translation sends text to the model provider or local endpoint used for that request. Online translation requires permission for the chosen service. Offline dictionary hits stay local; offline-only mode never sends misses to a translation service.</p>
       <p>Enabling the integration changes VS Code installation files. Review the disclosure before enabling it; you can disable the integration and restore the files. <a href="https://github.com/MusingZone/vscode-translate-anywhere#readme">Read the documentation</a>.</p>
+    </section>
+    <section class="details" aria-labelledby="questions-heading">
+      <h2 id="questions-heading">VS Code translation: common questions</h2>
+      <h3>Can I translate Chat and Markdown without copying text?</h3>
+      <p>Yes. Select text in Chat, the Agents window or a Markdown preview, then hover the red dot. Use <kbd>Alt+Z</kbd> for the paragraph under your mouse or <kbd>Alt+W</kbd> for full-page translation. Links and controls stay usable.</p>
+      <h3>Does it translate source code or comments in the editor?</h3>
+      <p>No. Translation runs in built-in reading pages, not text editors. Your source files are never changed by translation.</p>
+      <h3>Do I need Copilot or an API key?</h3>
+      <p>No. You can choose online translation without an API key, or use the offline dictionary. AI translation can use VS Code language models, your own provider key or a compatible local endpoint. Provider access, quotas and charges depend on the service you choose.</p>
     </section>
   </main>
   <footer>

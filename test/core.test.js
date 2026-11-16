@@ -264,6 +264,72 @@ test('stale state from a concurrent/older run self-heals, but foreign edits are 
   }
 });
 
+test('an older window dropping Agents records is recoverable only with verified originals', async t => {
+  for (const scenario of ['recover', 'records only', 'foreign bundle', 'foreign html', 'foreign loader', 'bad Agents backup', 'bad product backup', 'missing Agents backup']) {
+    await t.test(scenario, () => {
+      const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'imt-agents-state-'));
+      try {
+        const root = path.join(temp, 'app');
+        const state = path.join(temp, 'state');
+        const originals = fixture();
+        const files = pathsFor(root);
+        for (const [key, file] of Object.entries(files)) {
+          fs.mkdirSync(path.dirname(file), { recursive: true });
+          fs.writeFileSync(file, originals[key]);
+        }
+        const config = { endpoint: 'http://127.0.0.1:17865', token: 'test' };
+        const { stateFile } = applyPatch(root, state, 'function oldUI(){}', config);
+        const records = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        const agentsBackup = records.files.sessionsBundle.backup;
+        // A pre-Agents extension host rewrites the five files it knows and drops the newer records.
+        const legacySources = { ...originals };
+        for (const key of ['sessionsBundle', 'sessionsHtml', 'sessionsLoader']) {
+          delete records.files[key];
+          delete legacySources[key];
+        }
+        const legacy = patchSources(scenario === 'records only' ? originals : legacySources, 'function oldUI(){}', config);
+        for (const key of Object.keys(records.files)) {
+          fs.writeFileSync(files[key], legacy[key]);
+          records.files[key].patchedHash = crypto.createHash('sha256').update(legacy[key]).digest('hex');
+        }
+        fs.writeFileSync(stateFile, JSON.stringify(records));
+        if (scenario.startsWith('foreign ')) {
+          const key = { 'foreign bundle': 'sessionsBundle', 'foreign html': 'sessionsHtml', 'foreign loader': 'sessionsLoader' }[scenario];
+          fs.appendFileSync(files[key], '\n/* external change */');
+        }
+        if (scenario === 'bad Agents backup') fs.appendFileSync(agentsBackup, '\n/* damaged */');
+        if (scenario === 'bad product backup') fs.appendFileSync(records.files.product.backup, ' ');
+        if (scenario === 'missing Agents backup') fs.unlinkSync(agentsBackup);
+        const before = Object.fromEntries(Object.entries(files).map(([key, file]) => [key, fs.readFileSync(file, 'utf8')]));
+        const beforeState = fs.readFileSync(stateFile, 'utf8');
+        const repair = () => scenario === 'records only'
+          ? applyPatch(root, state, 'function oldUI(){}', config)
+          : applyPatch(root, state, 'function newUI(){}', { ...config, token: 'new-token' });
+        if (!['recover', 'records only'].includes(scenario)) {
+          assert.throws(repair, /changed outside|Backup corrupted/);
+          for (const [key, file] of Object.entries(files)) assert.equal(fs.readFileSync(file, 'utf8'), before[key], key);
+          assert.equal(fs.readFileSync(stateFile, 'utf8'), beforeState);
+          return;
+        }
+        assert.equal(repair().changed, true);
+        assert.equal(repair().changed, false);
+        const checksums = JSON.parse(fs.readFileSync(files.product, 'utf8')).checksums;
+        for (const [key, file] of Object.entries(files)) {
+          const rel = path.relative(path.join(root, 'out'), file).split(path.sep).join('/');
+          if (checksums[rel]) assert.equal(checksums[rel], vscodeChecksum(fs.readFileSync(file, 'utf8')), key);
+        }
+        const repaired = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        assert.ok(repaired.files.sessionsBundle && repaired.files.sessionsHtml && repaired.files.sessionsLoader);
+        assert.equal(fs.readFileSync(agentsBackup, 'utf8'), originals.sessionsBundle);
+        assert.equal(restorePatch(root, state), true);
+        for (const [key, file] of Object.entries(files)) assert.equal(fs.readFileSync(file, 'utf8'), originals[key], key);
+      } finally {
+        fs.rmSync(temp, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
 test('patch lock serializes windows and recovers from stale locks', async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'imt-test-'));
   try {

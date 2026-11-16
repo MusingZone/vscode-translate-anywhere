@@ -239,29 +239,37 @@ function applyPatch(root, stateFolder, runtime, config) {
   const files = Object.fromEntries(Object.entries(pathsFor(root)).filter(([key, file]) => !OPTIONAL.has(key) || fs.existsSync(file)));
   const stateFile = path.join(stateFolder, `patch-${digest(root).slice(0, 16)}.json`);
   const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : null;
+  const productRecord = state?.files.product;
+  const productBackup = productRecord && fs.existsSync(productRecord.backup) ? fs.readFileSync(productRecord.backup, 'utf8') : undefined;
+  const originalChecksums = productBackup !== undefined && digest(productBackup) === productRecord.originalHash
+    ? JSON.parse(productBackup).checksums : undefined;
   const originals = {};
   const current = {};
   for (const [key, file] of Object.entries(files)) {
     current[key] = fs.readFileSync(file, 'utf8');
     // State written by older versions has no record for newly managed files (e.g. product.json).
     const record = state?.files[key];
-    const backup = record && fs.existsSync(record.backup) ? fs.readFileSync(record.backup, 'utf8') : undefined;
-    const backupValid = backup !== undefined && digest(backup) === record.originalHash;
+    // An older window can drop Agents records while leaving their patched files and backups behind.
+    // Only trust an untracked backup when the verified original product.json authenticates its contents.
+    const backupFile = record?.backup || (OPTIONAL.has(key) ? path.join(stateFolder, `${digest(root).slice(0, 16)}-${key}.original`) : undefined);
+    const backup = backupFile && fs.existsSync(backupFile) ? fs.readFileSync(backupFile, 'utf8') : undefined;
+    const backupValid = backup !== undefined && (record ? digest(backup) === record.originalHash
+      : vscodeChecksum(backup) === originalChecksums?.[CHECKSUMMED[key]]);
     if (record && digest(current[key]) === record.patchedHash) {
       if (!backupValid) throw new Error(`Backup corrupted: ${file}`);
       originals[key] = backup;
-    } else if (record && backupValid && withoutOurPatch(key, current[key], config.endpoint) === withoutOurPatch(key, backup, config.endpoint)) {
+    } else if (backupValid && withoutOurPatch(key, current[key], config.endpoint) === withoutOurPatch(key, backup, config.endpoint)) {
       // Only our own patch differs from the verified pristine backup: an earlier/interrupted run of this extension
       // (e.g. an older UI version or two windows patching concurrently). Rebuild from the backup instead of failing.
       originals[key] = backup;
-    } else if (current[key].includes(BEGIN) || (record && digest(current[key]) !== record.originalHash)) {
+    } else if (current[key].includes(BEGIN) || (record && digest(current[key]) !== record.originalHash) || (backupValid && current[key] !== backup)) {
       throw new Error(`Installation changed outside this extension: ${file}. Restore or reinstall VS Code before repair.`);
     } else {
       originals[key] = current[key];
     }
   }
   const patched = patchSources(originals, runtime, config);
-  if (Object.keys(files).every(key => current[key] === patched[key])) return { changed: false, stateFile };
+  if (Object.keys(files).every(key => current[key] === patched[key] && state?.files[key])) return { changed: false, stateFile };
   // Preflight every target before changing any file.
   for (const file of Object.values(files)) {
     fs.accessSync(file, fs.constants.W_OK);

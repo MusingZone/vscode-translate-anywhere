@@ -1,8 +1,8 @@
-# Translate Anywhere - Select & Hover Translator
+# Translate Anywhere - VS Code Translator for Chat & Markdown
 
 **English** | [简体中文](README.zh-CN.md)
 
-Select text in VS Code's **Chat**, **Markdown preview**, **Release Notes**, **Settings**, **extension pages** and other built-in pages. A small red dot appears next to the selection; hover it for an instant translation. Single words come from an offline dictionary; phrases, sentences and paragraphs are translated by the AI model you choose: GitHub Copilot through VS Code, or OpenAI, Claude, Gemini, DeepSeek, Qwen and other providers with your own API key. No Copilot and no key? Use the token-free online engine instead.
+Translate Anywhere is a **VS Code translator** for **Chat**, the **Agents window**, **Markdown preview**, **Release Notes**, **Settings**, **extension pages** and other built-in pages. Select text and hover the small red dot for a translation. Single words come from an offline dictionary; phrases, sentences and paragraphs are translated by the AI model you choose: GitHub Copilot through VS Code, or OpenAI, Claude, Gemini, DeepSeek, Qwen and other providers with your own API key. No Copilot and no key? Use the token-free online engine instead.
 
 Press **Alt+Z** to translate the paragraph under the mouse, or **Alt+W** to translate the whole page while keeping its links, buttons and layout.
 
@@ -14,6 +14,8 @@ Text editors are never touched. The extension does nothing while you edit code.
 
 ## What's new
 
+- **0.8.1:** fixes automatic integration after an extension update when an older window has dropped the Agents patch records. Verified backups are recovered without overwriting external edits.
+- **0.8.0:** translation in the separate **Agents window**, a model list that follows your active Chat picker, and no saved model choice until you choose one.
 - **0.7.1: Full-page translation keeps the page intact.** Links, clickable settings such as `workbench.browser.enableRemoteProxy`, inline code, the Release Notes **In this update** contents, checkboxes and buttons stay in place and keep working after **Alt+W**; pressing it again restores the page exactly. See the [changelog](CHANGELOG.md).
 - **0.7.0:** no Copilot and no API key? Choose **Online (no API key)** as the **Translation engine** in the sidebar. It uses Google Translate (experimental) or MyMemory, after a one-time permission for each service. Without a Copilot / VS Code model, AI mode offers this switch itself. Dictionary hits stay local; everything else uses only the engine you selected. Existing installations keep AI. See [setup, research, privacy and limitations](docs/ONLINE-TRANSLATION.md).
 
@@ -23,7 +25,7 @@ Text editors are never touched. The extension does nothing while you edit code.
 2. Click **Enable…** in the welcome notification, or **Enable / Repair** in the Translate Anywhere sidebar (the **文A** icon in the Activity Bar). Read the disclosure, then confirm. [Why is this needed?](#how-it-works-please-read)
 3. Reload the window when prompted.
 4. Click **Try it on a sample page** in the sidebar, or select some text in Chat or a Markdown preview, then hover the red dot.
-5. Pick a [translation engine](#translation-engines). The default is AI through **VS Code language models**: the extension picks a visible lightweight model (luna, haiku, flash, mini…), and the first AI translation asks for permission to use it. If you dismissed that prompt, click **Allow access** next to the model in the sidebar.
+5. Pick a [translation engine](#translation-engines). The default is AI through **VS Code language models**: choose a model in the sidebar. Until you choose, a request temporarily borrows a visible lightweight model (luna, haiku, flash, mini…) and labels it as temporary; no model preference is saved. The first AI translation asks for permission to use the model. If you dismissed that prompt, click **Allow access** next to the model in the sidebar.
 
 ## Features
 
@@ -51,7 +53,7 @@ Each surface can be switched off with `translateAnywhere.surfaces` (sidebar foot
 
 - Markdown preview
 - Release Notes
-- Chat (responses, the question box shown when an agent asks you something, tool confirmations and input notices)
+- Chat and the separate Agents window (responses, the question box shown when an agent asks you something, tool confirmations and input notices)
 - Settings and Keyboard Shortcuts editors
 - Extension details pages (README and changelog)
 - Welcome page and walkthroughs
@@ -230,6 +232,7 @@ All commands are under **Translate Anywhere:** in the Command Palette. Most are 
 | AI translation fails | Click **Allow access** next to the model, choose another model, or switch to the online engine. **Show Log** has the details. |
 | A paragraph shows original and translation after Alt+W in "translation only" mode | The engine dropped the paragraph's format markers, so it was shown bilingually to keep its links. Try another model or service. |
 | VS Code warns about a "corrupt installation" after disabling | Fully quit and restart VS Code once. |
+| After updating, integration reports "Installation changed outside this extension" for `sessions.desktop.main.js` | Close windows still running an older extension version, update to the latest fixed build, then run **Enable / Repair Integration** and reload. Repair can recover lost Agents records from verified original backups; genuine external edits still require restoring or reinstalling VS Code. |
 
 ## Requirements and limitations
 

@@ -2,6 +2,14 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] - Repair after automatic updates
+
+### Changed
+- Refined Marketplace descriptions and keywords around Chat, Markdown, full-page and offline translation. The publisher website now has the extension icon as its favicon and logo, a canonical URL, social previews and structured application metadata.
+
+### Fixed
+- Updating while an older window is still running can discard the Agents window's patch records and reset its checksums, causing automatic integration to fail with "Installation changed outside this extension" and VS Code to report a corrupt installation. Repair now recovers those records only when the original backups match the verified original product checksums and no changes outside this extension's patch are present.
+
 ## [0.8.0] - Agents window, and the model list you actually see
 
 ### Added
