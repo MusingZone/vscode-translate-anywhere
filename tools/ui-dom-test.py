@@ -29,7 +29,14 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8"></head><body style="f
 </body></html>"""
 
 
-CHAT_PAGE = """<!doctype html><html><head><meta charset="utf-8"></head><body style="font:13px sans-serif;width:600px;margin:0">
+CHAT_PAGE = """<!doctype html><html><head><meta charset="utf-8">
+<style>
+ .chat-question-list-item { user-select: none; -webkit-user-select: none; display: flex; padding: 6px 8px; }
+ .chat-question-list-label { display: flex; flex-direction: column; }
+ .chat-confirmation-widget-title { user-select: none; -webkit-user-select: none; }
+ .chat-question-answer-collapsible .monaco-button { user-select: none; -webkit-user-select: none; }
+ .chat-question-answer-collapsible:not(.chat-question-answer-expandable) > .chat-used-context-label .monaco-button { pointer-events: none; }
+</style></head><body style="font:13px sans-serif;width:600px;margin:0">
 <div class="interactive-session"><div class="monaco-list">
  <div class="interactive-item-container"><div class="rendered-markdown">
   <p id="c1">The assistant answer paragraph explains the change in detail.</p>
@@ -40,15 +47,25 @@ CHAT_PAGE = """<!doctype html><html><head><meta charset="utf-8"></head><body sty
  <div class="chat-question-carousel-widget-container"><div class="chat-question-carousel-container">
   <div class="chat-question-header-row"><div class="chat-question-title" id="q1">Switch this chat to the new workspace folder?</div></div>
   <div class="chat-question-carousel-message" id="q2">The old folder stays for now and you will be asked again before deleting it.</div>
-  <div class="chat-question-list"><div class="chat-question-list-item"><span class="chat-question-list-label-title" id="q3">Confirm the switch</span></div></div>
+  <div class="chat-question-message" id="qmessage">Choose the workspace that should receive this chat.</div>
+  <div class="chat-question-list" role="listbox" tabindex="0">
+   <div class="chat-question-list-item" id="qsingle" role="option" aria-selected="false"><span class="chat-question-list-number">1</span><div class="chat-question-list-label" id="qplain">Keep the current workspace</div></div>
+   <div class="chat-question-list-item" id="qoption" role="option" aria-selected="false"><span class="chat-question-list-number">2</span><div class="chat-question-list-label"><span class="chat-question-list-label-title" id="q3">Confirm the switch</span><span class="chat-question-list-label-desc" id="qdesc">Move this chat without deleting the old folder</span></div></div>
+   <div class="chat-question-list-item multi-select" id="qmulti" role="option" aria-selected="false" tabindex="-1"><input type="checkbox" id="qcheck"><div class="chat-question-list-label" id="qmultiLabel">Remember this choice</div></div>
+  </div>
+  <div class="chat-question-validation-message" id="qvalidation">Select at least one workspace.</div>
+  <div class="chat-question-answer-collapsible"><div class="chat-used-context-label"><button class="monaco-button" id="qsummaryDisabled" aria-disabled="true" tabindex="-1"><span class="chat-question-summary-answer-value" id="qsummaryDisabledText">The freeform answer was saved.</span></button></div></div>
+  <div class="chat-question-answer-collapsible chat-question-answer-expandable"><div class="chat-used-context-label"><button class="monaco-button" id="qsummaryExpandable" aria-expanded="false"><span class="chat-question-summary-answer-value" id="qsummaryExpandableText">Review the selected options.</span></button></div></div>
   <div class="chat-question-input-container"><textarea class="chat-question-freeform-textarea" id="qfree">Free form answer</textarea></div>
  </div></div>
+ <div class="chat-confirmation-widget"><button class="chat-confirmation-widget-title" id="ctitle" aria-expanded="false"><span class="chat-confirmation-widget-title-inner" id="ctitleText">Allow this tool to continue?</span></button><div class="chat-confirmation-widget-message" id="cmessage">The tool needs permission to read the workspace.</div></div>
+ <div class="chat-input-notification-widget"><div class="chat-input-notification-title" id="ntitle">Additional permission required</div></div>
  <div class="monaco-editor"><textarea id="input">chat input</textarea></div>
 </div></div>
 <p id="outside">Outside chat text paragraph.</p>
 <div class="notifications-toasts"><div class="notification-list-item"><div class="notification-list-item-message" id="n1">Extension host terminated unexpectedly three times.</div></div></div>
 <div class="monaco-dialog-box"><div class="dialog-message-row"><div class="dialog-message-text" id="d1">Do you want to save the changes you made?</div></div></div>
-<div class="monaco-editor"><div class="monaco-hover" id="eh">Editor hover documentation text</div></div>
+<div class="monaco-editor"><div class="monaco-hover"><div class="hover-contents" id="eh">Editor hover documentation text</div></div></div>
 </body></html>"""
 
 
@@ -58,7 +75,7 @@ def select_text(page, element_id, start=0, end=None):
                   [element_id, start, end])
 
 
-def chat_test(browser, handle, ui):
+def chat_test(browser, handle, ui, status):
     """Workbench Chat surface: same runtime, 'chat' scope, with a workbench-like global key listener."""
     page = browser.new_page(viewport={"width": 800, "height": 600}, screen={"width": 800, "height": 600})
 
@@ -74,7 +91,83 @@ def chat_test(browser, handle, ui):
     # Registered after the runtime, like VS Code's keybinding dispatcher (the runtime loads with the bundle).
     page.evaluate("window.wbKeys = []; window.addEventListener('keydown', e => wbKeys.push(e.code + (e.defaultPrevented ? ':consumed' : '')), true)")
     page.wait_for_timeout(200)
+    page.evaluate("""() => {
+      window.optionClicks = 0;
+      window.optionNode = document.getElementById('qoption');
+      window.optionText = document.getElementById('q3').firstChild;
+      window.checkboxNode = document.getElementById('qcheck');
+      for (const id of ['qsingle', 'qoption']) document.getElementById(id).addEventListener('click', e => {
+        e.currentTarget.setAttribute('aria-selected', 'true'); window.optionClicks++;
+      });
+      checkboxNode.addEventListener('change', () => document.getElementById('qmulti').setAttribute('aria-selected', String(checkboxNode.checked)));
+      document.getElementById('qmulti').addEventListener('click', e => {
+        if (e.target !== checkboxNode) checkboxNode.click();
+      });
+      document.getElementById('qmulti').addEventListener('keydown', e => {
+        if (e.code === 'Space') { e.preventDefault(); checkboxNode.click(); }
+      });
+      window.titleClicks = 0; window.summaryClicks = 0; window.disabledSummaryClicks = 0;
+      document.getElementById('ctitle').addEventListener('click', () => titleClicks++);
+      document.getElementById('qsummaryExpandable').addEventListener('click', () => summaryClicks++);
+      document.getElementById('qsummaryDisabled').addEventListener('click', () => disabledSummaryClicks++);
+    }""")
     out = {}
+    # VS Code disables selection on each option and submits single-select choices on click.
+    # Exercise actual mouse input: a programmatic Range ignores user-select and hid the original bug.
+    def drag_question_text(element_id):
+        page.locator("#" + element_id).scroll_into_view_if_needed()
+        rect = page.locator("#" + element_id).evaluate("""el => {
+          const r = document.createRange(); r.selectNodeContents(el);
+          const box = r.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height };
+        }""")
+        page.mouse.move(rect["x"] + 2, rect["y"] + rect["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(rect["x"] + rect["width"] - 2, rect["y"] + rect["height"] / 2, steps=12)
+        page.mouse.up()
+        selection = page.evaluate("getSelection().toString()")
+        assert len(selection) > 2, f"{element_id} could not be selected by dragging; clicks={page.evaluate('optionClicks')}"
+        page.locator(".imt-dot").wait_for(state="visible", timeout=3000)
+        page.locator(".imt-dot").hover()
+        page.wait_for_function("document.querySelector('.imt-panel p').textContent.startsWith('译')")
+        page.keyboard.press("Escape")
+
+    drag_question_text("qdesc")
+    assert page.evaluate("optionClicks === 0 && optionNode.getAttribute('aria-selected') === 'false'"), "drag must not submit a single-select option"
+    page.locator("#q3").click()
+    assert page.evaluate("optionClicks === 1 && optionNode.getAttribute('aria-selected') === 'true'"), "ordinary option clicks must still work"
+    page.evaluate("optionClicks = 0; optionNode.setAttribute('aria-selected', 'false')")
+    drag_question_text("qmultiLabel")
+    assert not page.locator("#qcheck").is_checked(), "drag must not toggle a multi-select checkbox"
+    page.locator("#qmultiLabel").click()
+    assert page.locator("#qcheck").is_checked(), "ordinary multi-select clicks must still work"
+    page.locator("#qmulti").focus()
+    page.keyboard.press("Space")
+    assert not page.locator("#qcheck").is_checked(), "keyboard activation must still work"
+    drag_question_text("ctitleText")
+    assert page.evaluate("titleClicks === 0"), "drag must not toggle the confirmation"
+    page.locator("#ctitleText").click()
+    assert page.evaluate("titleClicks === 1"), "the confirmation must remain clickable"
+    drag_question_text("qsummaryExpandableText")
+    assert page.evaluate("summaryClicks === 0"), "drag must not expand the answer summary"
+    page.locator("#qsummaryExpandableText").click()
+    page.locator("#qsummaryExpandable").press("Enter")
+    assert page.evaluate("summaryClicks === 2"), "summary clicks and keyboard activation must still work"
+    drag_question_text("qsummaryDisabledText")
+    box = page.locator("#qsummaryDisabledText").bounding_box()
+    page.mouse.click(box["x"] + 5, box["y"] + box["height"] / 2)
+    assert page.evaluate("disabledSummaryClicks === 0"), "a non-expandable summary must remain disabled"
+    status["surfaces"] = {"chat": False}
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    page.wait_for_timeout(150)
+    assert page.locator("#qdesc").evaluate("el => getComputedStyle(el).userSelect") == "none"
+    assert page.locator("#ctitleText").evaluate("el => getComputedStyle(el).userSelect") == "none"
+    assert page.locator("#qsummaryDisabledText").evaluate("el => getComputedStyle(el).pointerEvents") == "none"
+    page.locator("#q3").click()
+    assert page.evaluate("optionClicks === 1"), "disabling Chat translation must restore normal option behavior"
+    status.pop("surfaces")
+    page.evaluate("optionClicks = 0; optionNode.setAttribute('aria-selected', 'false'); window.dispatchEvent(new Event('focus'))")
+    page.wait_for_timeout(150)
+    out["real_option_drag"] = "ok"
     # Selection -> dot -> panel -> star, panel and selection survive the click.
     page.evaluate("""(() => { const t = document.getElementById('c1').firstChild; const r = document.createRange();
       r.setStart(t, 4); r.setEnd(t, 13); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()""")
@@ -130,7 +223,9 @@ def chat_test(browser, handle, ui):
     page.keyboard.press("Escape")
     page.evaluate("getSelection().removeAllRanges()")
     # Question box (ask-user carousel in the input part), notifications and dialogs get the dot too.
-    for element_id in ("q1", "q2", "n1", "d1"):
+    for element_id in ("q1", "q2", "qplain", "q3", "qdesc", "n1", "d1"):
+        page.locator("#" + element_id).scroll_into_view_if_needed()
+        page.wait_for_timeout(100)
         select_text(page, element_id, 0, 6)
         page.locator(".imt-dot").wait_for(state="visible", timeout=3000)
         page.keyboard.press("Escape")
@@ -146,7 +241,9 @@ def chat_test(browser, handle, ui):
         assert page.evaluate("document.querySelector('.imt-dot').hidden"), f"{element_id} must be ignored"
         page.evaluate("document.activeElement.blur(); getSelection().removeAllRanges()")
     # Alt+Z over the question message and over a notification translates that paragraph.
-    for element_id in ("q2", "n1"):
+    for element_id in ("q2", "qplain", "q3", "qdesc", "qmultiLabel", "qmessage", "ctitle", "cmessage", "n1",
+                       "qsummaryDisabledText", "qsummaryExpandableText"):
+        page.locator("#" + element_id).scroll_into_view_if_needed()
         box = page.locator("#" + element_id).bounding_box()
         page.mouse.move(box["x"] + 10, box["y"] + box["height"] / 2)
         page.keyboard.press("Alt+z")
@@ -154,6 +251,85 @@ def chat_test(browser, handle, ui):
         page.keyboard.press("Alt+z")
         page.wait_for_function(f"!document.querySelector('#{element_id} > .imt-trans')")
     out["question_box_and_workbench_ui"] = "ok"
+    # Full-page mode includes option labels, direct-text confirmation roots and arriving questions.
+    page.evaluate("""() => {
+      const summary = document.createElement('div'); summary.className = 'chat-question-carousel-summary';
+      summary.innerHTML = '<div class="chat-question-summary-label" id="qsummaryLabel">Question: Which workspace?</div>' +
+        '<div class="chat-question-summary-answer-title" id="qsummaryTitle">Answer: Keep the current workspace</div>' +
+        '<div class="chat-question-summary-question"><span class="chat-question-summary-question-value" id="qsummaryQuestion">Which workspace?</span></div>' +
+        '<div class="chat-question-summary-decision"><span class="chat-question-summary-answer-value" id="qsummaryAnswer">Keep the current workspace</span></div>' +
+        '<ul><li class="chat-question-summary-option"><span class="chat-question-summary-option-label" id="qsummaryOption">Keep the current workspace</span></li></ul>';
+      document.querySelector('.chat-question-carousel-container').append(summary);
+    }""")
+    ids = ["q1", "q2", "qplain", "q3", "qdesc", "qmultiLabel", "qmessage", "qvalidation", "ctitle", "cmessage", "ntitle",
+           "qsummaryDisabledText", "qsummaryExpandableText"]
+    ids += ["qsummaryLabel", "qsummaryTitle", "qsummaryQuestion", "qsummaryAnswer", "qsummaryOption"]
+    original_text = page.evaluate("ids => Object.fromEntries(ids.map(id => [id, document.getElementById(id).textContent]))", ids)
+    previous_mode = status["fullPageMode"]
+    for mode in ("translationOnly", "bilingual"):
+        status["fullPageMode"] = mode
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+        page.wait_for_timeout(150)
+        page.locator("#input").focus()
+        page.keyboard.press("Alt+w")
+        for element_id in ids:
+            page.locator("#" + element_id).scroll_into_view_if_needed()
+            page.wait_for_function("""([id, mode]) => {
+              const el = document.getElementById(id);
+              return mode === 'translationOnly' ? el.dataset.imtPlaced === '1' : !!el.querySelector(':scope > .imt-trans:not(.imt-loading)');
+            }""", arg=[element_id, mode], timeout=6000)
+        page.locator("#q3 .imt-trans" if mode == "bilingual" else "#q3").click()
+        assert page.evaluate("optionClicks === 1 && optionNode === document.getElementById('qoption') && optionNode.getAttribute('aria-selected') === 'true'")
+        page.locator("#qmultiLabel .imt-trans" if mode == "bilingual" else "#qmultiLabel").click()
+        assert page.evaluate("checkboxNode === document.getElementById('qcheck') && checkboxNode.checked")
+        assert page.locator("#qmulti").get_attribute("aria-selected") == "true"
+        assert page.locator("#qfree").input_value() == "Free form answer"
+        assert page.locator(".chat-question-list-number").all_text_contents() == ["1", "2"]
+        page.evaluate("""() => {
+          const el = document.createElement('div'); el.id = 'qnew'; el.className = 'chat-question-list-label';
+          el.textContent = 'Newly arrived question option'; document.querySelector('.chat-question-list').append(el);
+        }""")
+        page.locator("#qnew").scroll_into_view_if_needed()
+        page.wait_for_function("""mode => {
+          const el = document.getElementById('qnew');
+          return mode === 'translationOnly' ? el.dataset.imtPlaced === '1' : !!el.querySelector('.imt-trans:not(.imt-loading)');
+        }""", arg=mode, timeout=6000)
+        original_text["qnew"] = "Newly arrived question option"
+        page.locator("#input").focus()
+        page.keyboard.press("Alt+w")
+        page.wait_for_function("document.querySelectorAll('.imt-trans,.imt-only,[data-imt-placed]').length === 0")
+        assert page.evaluate("document.getElementById('q3').firstChild === optionText && optionText.data === 'Confirm the switch'")
+        assert page.locator("#qdesc").inner_text() == "Move this chat without deleting the old folder"
+        restored = page.evaluate("ids => Object.fromEntries(ids.map(id => [id, document.getElementById(id).textContent]))", list(original_text))
+        assert restored == original_text, {key: (original_text[key], restored[key]) for key in original_text if original_text[key] != restored[key]}
+        del original_text["qnew"]
+        page.evaluate("document.getElementById('qnew').remove(); optionClicks = 0")
+        page.locator("#qcheck").uncheck()
+    status["fullPageMode"] = previous_mode
+    out["question_options_full_page"] = "ok"
+    # A supported root can itself be the paragraph, not just contain paragraphs.
+    status["fullPageMode"] = "translationOnly"
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    page.wait_for_timeout(150)
+    page.evaluate("""() => {
+      const view = document.createElement('div'); view.className = 'search-view';
+      view.innerHTML = '<div class="message" id="viewMessage" tabindex="0">No search results were found.</div>';
+      document.body.append(view);
+      const hover = document.createElement('div'); hover.className = 'workbench-hover-container';
+      hover.innerHTML = '<div class="hover-contents" id="hoverMessage">More information about this action.</div>';
+      document.body.append(hover);
+    }""")
+    page.locator("#viewMessage").focus()
+    page.keyboard.press("Alt+w")
+    for element_id in ("viewMessage", "hoverMessage"):
+        page.locator("#" + element_id).scroll_into_view_if_needed()
+        page.wait_for_function("id => document.getElementById(id).dataset.imtPlaced === '1'", arg=element_id)
+    page.keyboard.press("Alt+w")
+    assert page.locator("#viewMessage").inner_text() == "No search results were found."
+    assert page.locator("#hoverMessage").inner_text() == "More information about this action."
+    assert page.locator("#eh").inner_text() == "Editor hover documentation text"
+    status["fullPageMode"] = previous_mode
+    out["workbench_direct_text"] = "ok"
     page.close()
     return out
 
@@ -162,6 +338,7 @@ SETTINGS_PAGE = """<!doctype html><html><head><meta charset="utf-8"></head><body
 <div class="settings-editor"><div class="setting-item">
  <div class="setting-item-title">Editor: Word Wrap</div>
  <div class="setting-item-description"><div class="setting-item-markdown" id="s1"><p id="s1p">Controls how lines should wrap in the editor.</p></div></div>
+ <div class="setting-item-description" id="splain">Plain text setting description without Markdown.</div>
  <input id="sinput" value="text input value">
 </div></div>
 <div class="monaco-editor"><p id="editor">Editor text must never be translated.</p></div>
@@ -205,6 +382,12 @@ def settings_test(browser, handle, ui, status):
     assert page.evaluate("document.querySelector('.imt-dot').hidden"), "editor text must be ignored"
     page.evaluate("getSelection().removeAllRanges()")
     out["select"] = "ok"
+    box = page.locator("#splain").bounding_box()
+    page.mouse.move(box["x"] + 5, box["y"] + box["height"] / 2)
+    page.keyboard.press("Alt+z")
+    page.wait_for_function("document.querySelector('#splain > .imt-trans:not(.imt-loading)')")
+    page.keyboard.press("Alt+z")
+    page.wait_for_function("!document.querySelector('#splain > .imt-trans')")
     # Paragraph shortcut over a setting description.
     box = page.locator("#s1p").bounding_box()
     page.mouse.move(box["x"] + 5, box["y"] + box["height"] / 2)
@@ -704,7 +887,7 @@ def main():
         status.pop("tip")
         results["tip"] = "ok"
         results["ai_calls"] = sum(1 for c in calls if c[0] == "/ai")
-        results["chat"] = chat_test(browser, handle, ui)
+        results["chat"] = chat_test(browser, handle, ui, status)
         results["settings"] = settings_test(browser, handle, ui, status)
         results["webviews"] = webview_test(browser, handle, ui)
         results["release_notes"] = release_notes_test(browser, handle, ui, status)

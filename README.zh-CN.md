@@ -57,7 +57,7 @@
 
 - Markdown 预览
 - Release Notes（更新说明）
-- Chat 与独立 Agents 窗口（回复、Agent 向你提问时的提问框、工具确认、输入区提示）
+- Chat 与独立 Agents 窗口（回复、Agent 提问及可划选的选项文字与说明、回答摘要、工具确认、输入区提示）
 - 设置与键盘快捷方式编辑器
 - 扩展详情页（README 与更新日志）
 - 欢迎页与演练（Walkthrough）

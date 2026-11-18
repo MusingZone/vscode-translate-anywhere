@@ -221,7 +221,12 @@ function immersiveUI(config) {
   // [surface, where selection is allowed, where paragraph / full-page translation applies].
   // The list mirrors the workbench CSS rules that opt into `user-select: text` (VS Code 1.144); text editors,
   // inputs and editor-attached widgets stay excluded by eligible() / SKIP.
-  const CHAT_EXTRA = '.chat-question-carousel-container,.chat-confirmation-widget-message,.chat-input-notification-widget';
+  const CHAT_EXTRA = '.chat-question-carousel-container,.chat-confirmation-widget,.chat-input-notification-widget';
+  const CHAT_OPTION_LABEL = '.chat-question-carousel-container .chat-question-list-item .chat-question-list-label';
+  const CHAT_SELECTABLE = `${CHAT_OPTION_LABEL},.chat-confirmation-widget-title-inner,` +
+    '.chat-question-answer-collapsible .chat-question-summary-answer-value';
+  const CHAT_SELECTION_CONTROL = '.chat-question-list-item,.chat-confirmation-widget-title,' +
+    '.chat-question-answer-collapsible .monaco-button';
   const WORKBENCH_UI = '.notifications-toasts,.notifications-center,.monaco-dialog-box,.workbench-hover-container,' +
     '.monaco-hover,.workspace-trust-editor,.tree-explorer-viewlet-tree-view .message,.search-view .message,' +
     '.ai-customization-management-editor,.monaco-editor-pane-placeholder,.browser-error-content';
@@ -272,6 +277,8 @@ function immersiveUI(config) {
       .imt-tip-actions{display:flex!important;gap:12px!important;justify-content:flex-end!important;margin-top:4px!important}
       .imt-tip-actions button{padding:0!important;margin:0!important;border:0!important;background:transparent!important;color:var(--vscode-textLink-foreground,#4daafc)!important;font:12px/1.5 var(--vscode-font-family,system-ui)!important;cursor:pointer!important}
       .imt-tip-actions button:hover{text-decoration:underline!important}
+      html.imt-chat-selection :is(${CHAT_SELECTABLE}){user-select:text!important;-webkit-user-select:text!important}
+      html.imt-chat-selection .chat-question-answer-collapsible:not(.chat-question-answer-expandable) .chat-question-summary-answer-value{pointer-events:auto!important}
       .imt-only{font-size:0!important;line-height:0!important}
       .imt-only::marker{font-size:var(--imt-fs)!important}
       .imt-only>:not(.imt-trans):not(:is(${NESTED_CSS})){display:none!important}
@@ -280,6 +287,11 @@ function immersiveUI(config) {
       .imt-toast{position:fixed!important;left:50%!important;bottom:24px!important;transform:translateX(-50%)!important;padding:6px 14px!important;border-radius:6px!important;background:var(--vscode-editorWidget-background,#252526)!important;color:var(--vscode-editorWidget-foreground,#eee)!important;border:1px solid var(--vscode-widget-border,#777)!important;z-index:2147483647!important;font:13px/1.5 var(--vscode-font-family,system-ui)!important;pointer-events:none!important}
     `;
     doc.head.appendChild(style);
+    if (scope === 'workbench') {
+      const updateChatSelection = () => doc.documentElement.classList.toggle('imt-chat-selection', surfaceOn('chat'));
+      updateChatSelection();
+      statusListeners.push(updateChatSelection);
+    }
     // Which surface (and which container instance) an element belongs to; null when not translatable here.
     function regionOf(element) {
       if (!element?.closest) return null;
@@ -605,6 +617,35 @@ function immersiveUI(config) {
     };
     win.addEventListener('pointerdown', startDrag, { passive: true, capture: true });
     win.addEventListener('mousedown', startDrag, { passive: true, capture: true });
+    // VS Code activates these controls on click, including the click generated at the end of a text drag.
+    let chatTextPress;
+    win.addEventListener('pointerdown', event => {
+      const label = scope === 'workbench' && surfaceOn('chat') && event.button === 0
+        ? event.target.closest?.(CHAT_SELECTABLE) : null;
+      const selection = label && win.getSelection();
+      chatTextPress = label && {
+        label, x: event.clientX, y: event.clientY, anchor: selection?.anchorNode, anchorOffset: selection?.anchorOffset,
+        focus: selection?.focusNode, focusOffset: selection?.focusOffset
+      };
+    }, true);
+    win.addEventListener('click', event => {
+      const press = chatTextPress;
+      chatTextPress = null;
+      if (!press || !event.detail || !surfaceOn('chat')) return;
+      const selection = win.getSelection();
+      const { label } = press;
+      const control = label.closest(CHAT_SELECTION_CONTROL);
+      if (!control?.contains(event.target)) return;
+      const nonExpandable = label.closest('.chat-question-answer-collapsible:not(.chat-question-answer-expandable)');
+      const changed = selection && (selection.anchorNode !== press.anchor || selection.anchorOffset !== press.anchorOffset ||
+        selection.focusNode !== press.focus || selection.focusOffset !== press.focusOffset);
+      const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y) >= 4;
+      if (nonExpandable || (selection && !selection.isCollapsed && (changed || moved) &&
+          (label.contains(selection.anchorNode) || label.contains(selection.focusNode)))) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, true);
     win.addEventListener('mouseup', endDrag, true);
     win.addEventListener('dragend', endDrag, true);
     win.addEventListener('pointerup', () => {
@@ -763,10 +804,14 @@ function immersiveUI(config) {
     // ---- Paragraph translation (default keys match Chrome Immersive Translate):
     //      the page shortcut toggles the whole surface, the paragraph shortcut the paragraph under the mouse. ----
     const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,dt,dd,summary,figcaption,caption' + (scope === 'workbench'
-      ? ',.setting-item-markdown,.setting-item-enumDescription,.setting-item-deprecation-message,.step-description-container,.extension-editor .description' +
-        ',.chat-question-title,.chat-question-carousel-message,.chat-question-description,.chat-question-detailed-message' +
-        ',.chat-confirmation-widget-message,.chat-input-notification-title,.chat-input-notification-description' +
-        ',.notification-list-item-message,.dialog-message-text,.dialog-message-detail,.workspace-trust-description' +
+      ? ',.setting-item-description,.setting-item-markdown,.setting-item-enumDescription,.setting-item-deprecation-message,.step-description-container,.extension-editor .description' +
+        ',.chat-question-title,.chat-question-carousel-message,.chat-question-message,.chat-question-description,.chat-question-detailed-message' +
+        ',.chat-question-list-label,.chat-question-list-label-title,.chat-question-list-label-desc,.chat-question-validation-message' +
+        ',.chat-question-summary-label,.chat-question-summary-answer-title' +
+        ',.chat-question-summary-question-value,.chat-question-summary-answer-value,.chat-question-summary-option-label' +
+        ',.chat-confirmation-widget-title,.chat-confirmation-widget-message,.chat-confirmation-message-terminal-reason' +
+        ',.chat-input-notification-title,.chat-input-notification-description' +
+        ',.notification-list-item-message,.dialog-message-text,.dialog-message-detail,.workspace-trust-description,.hover-contents' +
         ',.tree-explorer-viewlet-tree-view .message,.search-view .message,.editor-placeholder-label-container'
       : '');
     const SKIP = 'pre,script,style,.imt-panel,.imt-dot,.imt-trans,.imt-toast,.monaco-editor,input,textarea,select,[contenteditable="true"]';
@@ -1160,9 +1205,9 @@ function immersiveUI(config) {
       const roots = scope === 'workbench'
         ? REGIONS.filter(([key]) => fullSurfaces.has(key)).flatMap(([, , content]) => [...doc.querySelectorAll(content)])
         : [doc.body];
-      return roots.flatMap(root => [...root.querySelectorAll(BLOCKS),
-        ...(scope === 'workbench' ? [] : [...root.querySelectorAll('div')].filter(looseBlock))])
-        .filter(block => inContent(block) && fullFor(block));
+      const blocks = roots.flatMap(root => [...(root.matches(BLOCKS) ? [root] : []), ...root.querySelectorAll(BLOCKS),
+        ...(scope === 'workbench' ? [] : [...root.querySelectorAll('div')].filter(looseBlock))]);
+      return [...new Set(blocks)].filter(block => inContent(block) && fullFor(block));
     }
     function observeAll() {
       rescanTimer = 0;

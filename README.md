@@ -53,7 +53,7 @@ Each surface can be switched off with `translateAnywhere.surfaces` (sidebar foot
 
 - Markdown preview
 - Release Notes
-- Chat and the separate Agents window (responses, the question box shown when an agent asks you something, tool confirmations and input notices)
+- Chat and the separate Agents window (responses, agent questions including selectable option labels/descriptions and answer summaries, tool confirmations and input notices)
 - Settings and Keyboard Shortcuts editors
 - Extension details pages (README and changelog)
 - Welcome page and walkthroughs

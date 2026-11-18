@@ -2,6 +2,14 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.2] - Chat question options
+
+### Fixed
+- Chat question options, answer summaries and tool-confirmation titles can now be selected for hover translation despite VS Code's default restrictions. Dragging to select no longer submits or toggles a control; normal clicks and keyboard selection still work.
+- Paragraph and full-page translation now include Chat question options (single- and multi-select labels and descriptions), question messages, validation messages and answer summaries. Option numbers, selection state, checkboxes and freeform inputs stay intact.
+- Include tool-confirmation titles and terminal explanations, plain-text setting descriptions and workbench hover text that were missing from paragraph translation.
+- Full-page translation now includes a supported container's own text, not just its descendants, fixing skipped view messages and other direct-text containers. Overlapping containers are scanned only once; editor text and editor-attached hovers remain excluded.
+
 ## [0.8.1] - Repair after automatic updates
 
 ### Changed
