@@ -483,6 +483,116 @@ def webview_test(browser, handle, ui):
     return out
 
 
+COMPANION = """<!DOCTYPE html><html><head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-hub'; script-src 'nonce-hub'">
+<title>Update Companion</title><style nonce="hub">body{font:16px sans-serif}</style></head><body>
+<main id="main" class="wrap">
+<div class="banner"><span class="grow" id="banner">Showing the English structure for now.</span><button>Generate Now</button></div>
+<article class="card"><button class="title" id="title" aria-expanded="false">Improve your editor experience</button>
+<p id="summary">Pick a feature that suits your workspace.</p>
+<pre class="en-text" id="detail">Read the original feature description here.</pre>
+<textarea id="note">Private note text</textarea><pre id="code">some code stays untouched</pre></article>
+</main>
+<script nonce="hub">
+const title = document.querySelector('#title');
+title.addEventListener('click', () => title.setAttribute('aria-expanded', 'true'));
+</script></body></html>"""
+
+
+def companion_test(browser, handle, ui, status):
+    def route(r):
+        if "/pre?" in r.request.url:
+            body = WEBVIEW_PRELOAD.replace("SANDBOX", json.dumps("allow-same-origin allow-scripts"))
+            # Escape the nested closing script tag in the preload's JS string.
+            return r.fulfill(content_type="text/html", body=body.replace("CONTENT", json.dumps(COMPANION).replace("<", "\\u003c")))
+        if "/fake.html" in r.request.url:
+            return r.fulfill(content_type="text/html", body="<!doctype html><html><head></head><body></body></html>")
+        return handle(r)
+
+    page = browser.new_page(viewport={"width": 900, "height": 600})
+    page.route(ORIGIN + "/**", route)
+
+    def open_hub(owner):
+        page.goto(f"{ORIGIN}/pre?extensionId={owner}")
+        frame = page.frame_locator("#active-frame")
+        frame.locator("#summary").wait_for()
+        page.add_script_tag(content=f"({ui})({json.dumps({'endpoint': ORIGIN, 'token': 't'})});")
+        return frame
+
+    # Identical HTML is not enough: only the VS Code-owned extension identity enables this surface.
+    other = open_hub("example.other-extension")
+    other.locator("#summary").hover()
+    page.keyboard.press("Alt+w")
+    assert other.locator(".imt-dot,.imt-trans").count() == 0
+
+    hub = open_hub("Local.vscode-update-companion")
+    summary = hub.locator("#summary")
+    dot = hub.locator(".imt-dot")
+    dot.wait_for(state="attached", timeout=4000)
+    assert dot.evaluate("(el) => getComputedStyle(el).position") == "fixed", "CSP must permit the runtime's UI styles"
+    box = summary.bounding_box()
+    y = box["y"] + box["height"] / 2
+    page.mouse.move(box["x"] + 1, y)
+    page.mouse.down()
+    page.mouse.move(box["x"] + 120, y, steps=10)
+    page.mouse.up()
+    dot.wait_for(state="visible", timeout=3000)
+    page.mouse.move(box["x"] + 180, y)
+    dot.hover()
+    hub.locator(".imt-panel").get_by_text("译(selection):", exact=False).wait_for(timeout=4000)
+    page.keyboard.press("Escape")
+    summary.evaluate("el => el.ownerDocument.getSelection().removeAllRanges()")
+
+    title = hub.locator("#title")
+    title.hover()
+    page.keyboard.press("Alt+z")
+    title.locator(".imt-trans:not(.imt-loading)").wait_for()
+    title.click()
+    assert title.get_attribute("aria-expanded") == "true"
+    title.hover()
+    page.keyboard.press("Alt+z")
+    assert title.inner_text() == "Improve your editor experience"
+
+    note = hub.locator("#note")
+    note.focus()
+    page.keyboard.press("Alt+w")
+    assert hub.locator(".imt-trans").count() == 0
+    summary.click()
+    page.keyboard.press("Alt+w")
+    for selector in ("#title", "#summary", "#detail", "#banner"):
+        hub.locator(f"{selector} > .imt-trans:not(.imt-loading)").wait_for()
+    assert note.input_value() == "Private note text"
+    assert hub.locator("#code").inner_text() == "some code stays untouched"
+    hub.locator("#main").evaluate("el => el.insertAdjacentHTML('beforeend', '<p id=\"later\">A newly loaded review description.</p>')")
+    hub.locator("#later > .imt-trans:not(.imt-loading)").wait_for()
+    page.keyboard.press("Alt+w")
+    assert summary.inner_text() == "Pick a feature that suits your workspace."
+    assert hub.locator("#later").inner_text() == "A newly loaded review description."
+
+    page.keyboard.press("Alt+w")
+    summary.locator(".imt-trans:not(.imt-loading)").wait_for()
+    status["surfaces"] = {"extensionPages": False}
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    summary.locator(".imt-trans").wait_for(state="detached")
+    page.keyboard.press("Alt+w")
+    assert hub.locator(".imt-trans").count() == 0
+    status.pop("surfaces")
+    previous_mode = status["fullPageMode"]
+    status["fullPageMode"] = "translationOnly"
+    with page.expect_response(lambda response: response.url.endswith("/status")):
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+    summary.click()
+    page.keyboard.press("Alt+w")
+    hub.locator("#title[data-imt-placed='1']").wait_for()
+    title.click()
+    assert title.get_attribute("aria-expanded") == "true"
+    page.keyboard.press("Alt+w")
+    assert title.inner_text() == "Improve your editor experience"
+    status["fullPageMode"] = previous_mode
+    page.close()
+    return "ok"
+
+
 RELEASE_NOTES = """<!doctype html><html><head><meta charset="utf-8"></head><body style="font:14px sans-serif;width:800px">
 <div id="release-notes-tokenization"></div>
 <nav id="toc-nav"><div id="toc-title">In this update</div>
@@ -890,6 +1000,7 @@ def main():
         results["chat"] = chat_test(browser, handle, ui, status)
         results["settings"] = settings_test(browser, handle, ui, status)
         results["webviews"] = webview_test(browser, handle, ui)
+        results["update_companion"] = companion_test(browser, handle, ui, status)
         results["release_notes"] = release_notes_test(browser, handle, ui, status)
         results["cross_page_dismiss"] = cross_page_test(browser, handle, ui, select)
         # New pages get the selected engine from /status; the same flow serves online and AI.

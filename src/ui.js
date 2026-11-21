@@ -208,6 +208,7 @@ function immersiveUI(config) {
   }
 
   // Webview documents are one surface each; the workbench document hosts several, told apart by container.
+  const isUpdateCompanion = new URLSearchParams(location.search).get('extensionId')?.toLowerCase() === 'local.vscode-update-companion';
   function scopeFor(doc) {
     if (doc.querySelector('#vscode-markdown-preview-data')) return 'markdownPreview';
     if (doc.querySelector('#release-notes-tokenization')) return 'releaseNotes';
@@ -215,6 +216,8 @@ function immersiveUI(config) {
     if (doc !== document && doc.querySelector('body > #scroll-to-top')) return 'extensionPages';
     // Welcome walkthrough steps render their Markdown in a webview wrapped in this custom element.
     if (doc !== document && doc.querySelector('body > vertically-centered')) return 'welcome';
+    // VS Code puts the owning extension ID on the preload URL, not in the content's HTML.
+    if (doc !== document && isUpdateCompanion) return 'extensionPages';
     if (doc === document && location.protocol === 'vscode-file:') return 'workbench';
     return null;
   }
@@ -246,6 +249,7 @@ function immersiveUI(config) {
     // Timers and observers always come from this runtime's realm: extension README/changelog webviews are
     // sandboxed without allow-scripts, and callbacks scheduled on such a frame's window never run.
     const win = doc.defaultView;
+    const companion = doc !== document && isUpdateCompanion;
     const style = doc.createElement('style');
     const nonceStyle = doc.querySelector('style[nonce], script[nonce]');
     if (nonceStyle?.nonce) style.nonce = nonceStyle.nonce;
@@ -427,8 +431,9 @@ function immersiveUI(config) {
       aiController = undefined;
       dot.hidden = panel.hidden = true;
     };
+    const EDITABLE = 'input,textarea,select,[contenteditable]:not([contenteditable="false"]),.monaco-editor';
     function eligible(element) {
-      if (!element || element.closest('.imt-panel,.imt-dot,input,textarea,select,[contenteditable="true"],.monaco-editor')) return false;
+      if (!element || element.closest(`.imt-panel,.imt-dot,${EDITABLE}`)) return false;
       return !!regionOf(element);
     }
     // Anchor the dot at the last selected character (or the first one for a backward drag), i.e. where the
@@ -803,7 +808,9 @@ function immersiveUI(config) {
 
     // ---- Paragraph translation (default keys match Chrome Immersive Translate):
     //      the page shortcut toggles the whole surface, the paragraph shortcut the paragraph under the mouse. ----
-    const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,dt,dd,summary,figcaption,caption' + (scope === 'workbench'
+    const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,dt,dd,summary,figcaption,caption' + (companion
+      ? ',.card button.title,.banner > .grow,pre.en-text'
+      : '') + (scope === 'workbench'
       ? ',.setting-item-description,.setting-item-markdown,.setting-item-enumDescription,.setting-item-deprecation-message,.step-description-container,.extension-editor .description' +
         ',.chat-question-title,.chat-question-carousel-message,.chat-question-message,.chat-question-description,.chat-question-detailed-message' +
         ',.chat-question-list-label,.chat-question-list-label-title,.chat-question-list-label-desc,.chat-question-validation-message' +
@@ -814,7 +821,8 @@ function immersiveUI(config) {
         ',.notification-list-item-message,.dialog-message-text,.dialog-message-detail,.workspace-trust-description,.hover-contents' +
         ',.tree-explorer-viewlet-tree-view .message,.search-view .message,.editor-placeholder-label-container'
       : '');
-    const SKIP = 'pre,script,style,.imt-panel,.imt-dot,.imt-trans,.imt-toast,.monaco-editor,input,textarea,select,[contenteditable="true"]';
+    const SKIP = (companion ? 'pre:not(.en-text)' : 'pre') +
+      `,script,style,.imt-panel,.imt-dot,.imt-trans,.imt-toast,${EDITABLE}`;
     // Inline content kept exactly as it is: code, setting links, keys, icons, media and form controls.
     const ATOMIC = 'code,kbd,samp,var,tt,img,svg,picture,video,audio,canvas,iframe,object,embed,input,select,textarea,' +
       'math,br,wbr,hr,meter,progress,script,style,template,.codicon,.codesetting,.monaco-keybinding,.monaco-icon-label,' +
@@ -1300,6 +1308,7 @@ function immersiveUI(config) {
     }
     win.addEventListener('keydown', event => {
       if (disabled || event.repeat) return;
+      if (companion && doc.activeElement?.closest(EDITABLE)) return;
       if (pressed(event, settings.shortcuts.paragraph)) {
         // Toggle the paragraph under the mouse. Elsewhere, leave the key to VS Code (Alt+Z = Toggle Word Wrap).
         const target = hovered();

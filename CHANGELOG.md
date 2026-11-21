@@ -2,6 +2,14 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.3] - Update Companion
+
+### Changed
+- Rewrote the English and Chinese READMEs (also the Marketplace page) to be shorter and easier to scan, with a table of supported surfaces, a shortcuts section and a privacy and security summary. Corrected stale details: the VS Code model setting is no longer filled in automatically, the sidebar button is **Test speed**, and the German dictionary setting is now listed.
+
+### Fixed
+- Selection, paragraph and full-page translation now work in Update Companion, including feature titles and expanded English descriptions. Other third-party webviews are not enabled by this change.
+
 ## [0.8.2] - Chat question options
 
 ### Fixed

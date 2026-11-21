@@ -25,7 +25,7 @@
   "config.surfaces.releaseNotes": "Release Notes",
   "config.surfaces.chat": "Chat (responses, question boxes, tool confirmations, input notices)",
   "config.surfaces.settings": "Settings and Keyboard Shortcuts editors",
-  "config.surfaces.extensionPages": "Extension details pages (README, changelog)",
+  "config.surfaces.extensionPages": "Extension details pages (README, changelog) and Update Companion",
   "config.surfaces.welcome": "Welcome page and walkthroughs",
   "config.surfaces.workbenchUI": "Notifications, dialogs, hover cards, Workspace Trust and view messages",
   "config.shortcuts.paragraph": "Shortcut that translates (or restores) the paragraph under the mouse, e.g. `Alt+Z` or `Ctrl+Shift+Y`. Leave empty to disable. Outside supported surfaces the key keeps its normal VS Code meaning. These shortcuts are handled inside the page, so they are configured here rather than in Keyboard Shortcuts. [Set it in the sidebar](command:translateAnywhere.openSidebar?%5B%22scParagraph%22%5D).",

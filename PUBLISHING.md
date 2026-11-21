@@ -105,6 +105,7 @@ curl.exe -sIL https://cdn.jsdelivr.net/gh/MusingZone/vscode-translate-anywhere@d
    - Use **All accessible organizations** with the **Marketplace → Manage** scope.
    - Then run `npx @vscode/vsce login MusingZone`.
    - Never commit the token.
+   - Such "All accessible organizations" tokens are global PATs, which Azure DevOps decommissions on **January 27, 2027** (postponed from December 1, 2026). After that, publish through the Release workflow or by web upload instead.
 
 ### Verified publisher badge
 
@@ -172,7 +173,9 @@ Test locally with `code --install-extension dist\vscode-translate-anywhere-win32
 
 ## 7. Publish
 
-**Marketplace, from the command line (recommended).** Publish the exact lite files you tested:
+The normal path is the tag-triggered Release workflow below (Trusted Publishing, no token). The two manual options are fallbacks.
+
+**Marketplace, from the command line (needs the PAT from section 4 until global PATs are decommissioned).** Publish the exact lite files you tested:
 
 ```powershell
 npx @vscode/vsce publish --packagePath dist/vscode-translate-anywhere-win32-x64-<ver>.vsix dist/vscode-translate-anywhere-win32-arm64-<ver>.vsix dist/vscode-translate-anywhere-darwin-x64-<ver>.vsix dist/vscode-translate-anywhere-darwin-arm64-<ver>.vsix dist/vscode-translate-anywhere-linux-x64-<ver>.vsix dist/vscode-translate-anywhere-linux-arm64-<ver>.vsix dist/vscode-translate-anywhere-linux-armhf-<ver>.vsix
