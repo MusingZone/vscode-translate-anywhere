@@ -8,6 +8,8 @@ function immersiveUI(config) {
   let disabled = false;
   const NESTED_CSS = 'p,ul,ol,pre,table,blockquote,div,dl,h1,h2,h3,h4,h5,h6,li,dt,dd,td,th,figure,details,summary,' +
     'figcaption,section,article,nav,aside,header,footer,form,fieldset,hr';
+  // Controls whose label is translated on its own in extension webviews, when it is long enough to be prose.
+  const CONTROLS = 'button,[role="button"],[role="tab"],[role="menuitem"],[role="option"],[role="treeitem"]';
   // User settings arrive from the extension through /status (polled), so changes apply without a reload.
   const DEFAULTS = {
     targetLanguage: 'zh-CN', uiLanguage: 'en', fullPageMode: 'translationOnly', autoAI: true, translationEngine: 'ai',
@@ -208,7 +210,8 @@ function immersiveUI(config) {
   }
 
   // Webview documents are one surface each; the workbench document hosts several, told apart by container.
-  const isUpdateCompanion = new URLSearchParams(location.search).get('extensionId')?.toLowerCase() === 'local.vscode-update-companion';
+  // VS Code puts the owning extension ID on the webview preload URL, not in the content's HTML.
+  const isOwnWebview = new URLSearchParams(location.search).get('extensionId')?.toLowerCase() === 'musingzone.vscode-translate-anywhere';
   function scopeFor(doc) {
     if (doc.querySelector('#vscode-markdown-preview-data')) return 'markdownPreview';
     if (doc.querySelector('#release-notes-tokenization')) return 'releaseNotes';
@@ -216,8 +219,8 @@ function immersiveUI(config) {
     if (doc !== document && doc.querySelector('body > #scroll-to-top')) return 'extensionPages';
     // Welcome walkthrough steps render their Markdown in a webview wrapped in this custom element.
     if (doc !== document && doc.querySelector('body > vertically-centered')) return 'welcome';
-    // VS Code puts the owning extension ID on the preload URL, not in the content's HTML.
-    if (doc !== document && isUpdateCompanion) return 'extensionPages';
+    // Any other extension's webview. This extension's own sidebar is a settings form, not content.
+    if (doc !== document) return isOwnWebview ? null : 'extensionPages';
     if (doc === document && location.protocol === 'vscode-file:') return 'workbench';
     return null;
   }
@@ -249,7 +252,10 @@ function immersiveUI(config) {
     // Timers and observers always come from this runtime's realm: extension README/changelog webviews are
     // sandboxed without allow-scripts, and callbacks scheduled on such a frame's window never run.
     const win = doc.defaultView;
-    const companion = doc !== document && isUpdateCompanion;
+    // Webviews of other extensions (editor panels, sidebar views, custom editors) have arbitrary markup.
+    const generic = scope === 'extensionPages' && doc !== document && !doc.querySelector('body > #scroll-to-top');
+    // Kept visible while a translation-only paragraph streams: child blocks translated on their own.
+    const KEPT = generic ? `${NESTED_CSS},main,${CONTROLS}` : NESTED_CSS;
     const style = doc.createElement('style');
     const nonceStyle = doc.querySelector('style[nonce], script[nonce]');
     if (nonceStyle?.nonce) style.nonce = nonceStyle.nonce;
@@ -285,12 +291,25 @@ function immersiveUI(config) {
       html.imt-chat-selection .chat-question-answer-collapsible:not(.chat-question-answer-expandable) .chat-question-summary-answer-value{pointer-events:auto!important}
       .imt-only{font-size:0!important;line-height:0!important}
       .imt-only::marker{font-size:var(--imt-fs)!important}
-      .imt-only>:not(.imt-trans):not(:is(${NESTED_CSS})){display:none!important}
-      .imt-only>.imt-trans,.imt-only>:is(${NESTED_CSS}){font-size:var(--imt-fs)!important;line-height:var(--imt-lh)!important}
+      .imt-only>:not(.imt-trans):not(:is(${KEPT})){display:none!important}
+      .imt-only>.imt-trans,.imt-only>:is(${KEPT}){font-size:var(--imt-fs)!important;line-height:var(--imt-lh)!important}
       .imt-only>.imt-trans{display:inline!important;margin:0!important;opacity:1!important;font-weight:inherit!important}
       .imt-toast{position:fixed!important;left:50%!important;bottom:24px!important;transform:translateX(-50%)!important;padding:6px 14px!important;border-radius:6px!important;background:var(--vscode-editorWidget-background,#252526)!important;color:var(--vscode-editorWidget-foreground,#eee)!important;border:1px solid var(--vscode-widget-border,#777)!important;z-index:2147483647!important;font:13px/1.5 var(--vscode-font-family,system-ui)!important;pointer-events:none!important}
     `;
-    doc.head.appendChild(style);
+    // An extension's CSP may permit no inline styles at all. Constructed style sheets are not subject to
+    // style-src, so other extensions' webviews get the rules that way, falling back to the <style> element.
+    let adopted = false;
+    if (generic) {
+      try {
+        const sheet = new win.CSSStyleSheet();
+        sheet.replaceSync(style.textContent);
+        doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
+        adopted = true;
+      } catch (error) {
+        console.warn('[Translate Anywhere] Constructed styles unavailable in this webview:', error.message);
+      }
+    }
+    if (!adopted) doc.head.appendChild(style);
     if (scope === 'workbench') {
       const updateChatSelection = () => doc.documentElement.classList.toggle('imt-chat-selection', surfaceOn('chat'));
       updateChatSelection();
@@ -808,9 +827,7 @@ function immersiveUI(config) {
 
     // ---- Paragraph translation (default keys match Chrome Immersive Translate):
     //      the page shortcut toggles the whole surface, the paragraph shortcut the paragraph under the mouse. ----
-    const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,dt,dd,summary,figcaption,caption' + (companion
-      ? ',.card button.title,.banner > .grow,pre.en-text'
-      : '') + (scope === 'workbench'
+    const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,dt,dd,summary,figcaption,caption' + (scope === 'workbench'
       ? ',.setting-item-description,.setting-item-markdown,.setting-item-enumDescription,.setting-item-deprecation-message,.step-description-container,.extension-editor .description' +
         ',.chat-question-title,.chat-question-carousel-message,.chat-question-message,.chat-question-description,.chat-question-detailed-message' +
         ',.chat-question-list-label,.chat-question-list-label-title,.chat-question-list-label-desc,.chat-question-validation-message' +
@@ -821,14 +838,16 @@ function immersiveUI(config) {
         ',.notification-list-item-message,.dialog-message-text,.dialog-message-detail,.workspace-trust-description,.hover-contents' +
         ',.tree-explorer-viewlet-tree-view .message,.search-view .message,.editor-placeholder-label-container'
       : '');
-    const SKIP = (companion ? 'pre:not(.en-text)' : 'pre') +
-      `,script,style,.imt-panel,.imt-dot,.imt-trans,.imt-toast,${EDITABLE}`;
+    const SKIP = `script,style,.imt-panel,.imt-dot,.imt-trans,.imt-toast,${EDITABLE}`;
+    // Code blocks stay as they are. Extension webviews may also show wrapped prose in a <pre> without code.
+    const prosePre = pre => generic && !pre.querySelector('code,kbd,samp') &&
+      /^(pre-wrap|pre-line|break-spaces)$/.test(win.getComputedStyle(pre).whiteSpace);
     // Inline content kept exactly as it is: code, setting links, keys, icons, media and form controls.
     const ATOMIC = 'code,kbd,samp,var,tt,img,svg,picture,video,audio,canvas,iframe,object,embed,input,select,textarea,' +
       'math,br,wbr,hr,meter,progress,script,style,template,.codicon,.codesetting,.monaco-keybinding,.monaco-icon-label,' +
       '.chat-inline-anchor-widget,[translate="no"],.notranslate,[contenteditable]:not([contenteditable="false"])';
     // Child blocks are translated on their own and stay where they are.
-    const NESTED = `${BLOCKS},${NESTED_CSS}`;
+    const NESTED = `${BLOCKS},${KEPT}`;
     // Elements a reader clicks, or whose state page scripts toggle (e.g. the Release Notes contents highlight).
     const INTERACTIVE = 'a,button,label,summary,input,select,textarea,[role],[tabindex],[href],[onclick]';
     const MIRRORED = ['class', 'aria-current', 'aria-selected', 'aria-expanded', 'aria-pressed', 'aria-checked', 'aria-disabled', 'hidden', 'disabled'];
@@ -870,11 +889,23 @@ function immersiveUI(config) {
     if (scope === 'workbench') toasters.push(toast);
     function inContent(element) {
       if (!element?.closest || element.closest(SKIP)) return false;
+      const pre = element.closest('pre');
+      if (pre && !prosePre(pre)) return false;
+      if (generic && invisibleText(element)) return false;
       const region = regionOf(element);
       return !!region?.content;
     }
+    // Invisible text overlays (e.g. the pdf.js text layer over a rendered PDF page) can be selected and looked
+    // up, but a translation placed into them could not be read.
+    function invisibleText(element) {
+      const walker = doc.createTreeWalker(element, win.NodeFilter.SHOW_TEXT);
+      for (let node; (node = walker.nextNode());) {
+        if (/\p{L}/u.test(node.data)) return /^transparent$|^rgba\(.*,\s*0\)$/.test(win.getComputedStyle(node.parentElement).color);
+      }
+      return false;
+    }
     const nestedChild = node => node.nodeType === 1 &&
-      (node.matches(NESTED) || node.classList.contains('imt-trans') || !!node.querySelector(BLOCKS));
+      (node.matches(NESTED) || node.classList.contains('imt-trans') || !!node.querySelector(generic ? NESTED : BLOCKS));
     // A block's own inline content (nested blocks excluded) as numbered-tag markup, e.g.
     // "<g1>Setting</g1>: <x2/>": <gN> wraps translatable formatting or links, <xN/> stands for content kept
     // as it is. Also returns the nodes behind the tags so the translation can be rebuilt from them.
@@ -1060,11 +1091,28 @@ function immersiveUI(config) {
       block.replaceChildren(...state.children);
     }
     // Webviews also keep short text directly in a <div>, e.g. "In this update" above the Release Notes contents.
-    const looseBlock = el => scope !== 'workbench' && el.tagName === 'DIV' && !el.parentElement?.closest(BLOCKS) &&
-      [...el.childNodes].some(node => node.nodeType === 3 && /\p{L}{2}/u.test(node.data));
+    // Other extensions' webviews put prose in any container, often wrapped in <span>s, and in long control labels
+    // (e.g. a card title button). Short control labels ("Save", "Generate now") are left alone.
+    const LOOSE = generic ? `div,pre,section,article,main,header,footer,aside,nav,form,fieldset,details,figure,${CONTROLS}` : 'div';
+    function looseBlock(el) {
+      if (scope === 'workbench' || !el.matches(LOOSE)) return false;
+      if (!generic) {
+        return !el.parentElement?.closest(BLOCKS) && [...el.childNodes].some(node => node.nodeType === 3 && /\p{L}{2}/u.test(node.data));
+      }
+      if (el.matches('pre') && !prosePre(el)) return false;
+      const { text } = structure(el);
+      if (!/\p{L}{2}/u.test(text)) return false;
+      return !el.matches(CONTROLS) || (text.match(/[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}]|[\p{L}\p{N}'’-]+/gu) || []).length >= 3;
+    }
     function blockOf(element) {
+      if (scope === 'workbench') return element?.closest?.(BLOCKS) || null;
+      if (generic) {
+        const any = `${BLOCKS},${LOOSE}`;
+        for (let el = element?.closest?.(any); el; el = el.parentElement?.closest(any)) if (el.matches(BLOCKS) || looseBlock(el)) return el;
+        return null;
+      }
       const block = element?.closest?.(BLOCKS);
-      if (block || scope === 'workbench') return block || null;
+      if (block) return block;
       for (let el = element?.closest?.('div'); el; el = el.parentElement?.closest('div')) if (looseBlock(el)) return el;
       return null;
     }
@@ -1214,7 +1262,7 @@ function immersiveUI(config) {
         ? REGIONS.filter(([key]) => fullSurfaces.has(key)).flatMap(([, , content]) => [...doc.querySelectorAll(content)])
         : [doc.body];
       const blocks = roots.flatMap(root => [...(root.matches(BLOCKS) ? [root] : []), ...root.querySelectorAll(BLOCKS),
-        ...(scope === 'workbench' ? [] : [...root.querySelectorAll('div')].filter(looseBlock))]);
+        ...(scope === 'workbench' ? [] : [...root.querySelectorAll(LOOSE)].filter(looseBlock))]);
       return [...new Set(blocks)].filter(block => inContent(block) && fullFor(block));
     }
     function observeAll() {
@@ -1308,7 +1356,7 @@ function immersiveUI(config) {
     }
     win.addEventListener('keydown', event => {
       if (disabled || event.repeat) return;
-      if (companion && doc.activeElement?.closest(EDITABLE)) return;
+      if (generic && doc.activeElement?.closest(EDITABLE)) return;
       if (pressed(event, settings.shortcuts.paragraph)) {
         // Toggle the paragraph under the mouse. Elsewhere, leave the key to VS Code (Alt+Z = Toggle Word Wrap).
         const target = hovered();

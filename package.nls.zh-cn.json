@@ -25,7 +25,7 @@
   "config.surfaces.releaseNotes": "Release Notes（版本说明）",
   "config.surfaces.chat": "Chat（回复、提问框、工具确认、输入区提示）",
   "config.surfaces.settings": "设置与键盘快捷方式编辑器",
-  "config.surfaces.extensionPages": "扩展详情页（README、更新日志）及 Update Companion",
+  "config.surfaces.extensionPages": "扩展详情页（README、更新日志）及其他扩展的 Webview（面板、侧边栏视图、自定义编辑器）",
   "config.surfaces.welcome": "欢迎页与演练",
   "config.surfaces.workbenchUI": "通知、对话框、悬停卡片、工作区信任页与视图提示文字",
   "config.shortcuts.paragraph": "翻译（或还原）鼠标下段落的快捷键，例如 `Alt+Z`、`Ctrl+Shift+Y`。留空表示禁用。在不支持的界面中该按键保持 VS Code 原有功能。该快捷键在页面内处理，因此在此处设置，而非“键盘快捷方式”。 [在侧边栏中设置](command:translateAnywhere.openSidebar?%5B%22scParagraph%22%5D)。",

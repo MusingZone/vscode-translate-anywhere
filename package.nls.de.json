@@ -25,7 +25,7 @@
   "config.surfaces.releaseNotes": "Release Notes",
   "config.surfaces.chat": "Chat (Antworten, Rückfragen, Tool-Bestätigungen, Hinweise im Eingabebereich)",
   "config.surfaces.settings": "Einstellungs- und Tastenkombinations-Editor",
-  "config.surfaces.extensionPages": "Detailseiten von Erweiterungen (README, Änderungsprotokoll) und Update Companion",
+  "config.surfaces.extensionPages": "Detailseiten von Erweiterungen (README, Änderungsprotokoll) und Webviews anderer Erweiterungen (Panels, Seitenleistenansichten, benutzerdefinierte Editoren)",
   "config.surfaces.welcome": "Willkommensseite und Anleitungen",
   "config.surfaces.workbenchUI": "Benachrichtigungen, Dialoge, Hover-Karten, Arbeitsbereichsvertrauen und Ansichtsmeldungen",
   "config.shortcuts.paragraph": "Tastenkombination, die den Absatz unter der Maus übersetzt (oder wiederherstellt), z. B. `Alt+Z` oder `Ctrl+Shift+Y`. Leer lassen zum Deaktivieren. Außerhalb unterstützter Bereiche behält die Taste ihre normale Funktion in VS Code. Diese Tastenkombinationen werden in der Seite verarbeitet und daher hier statt unter „Tastenkombinationen“ festgelegt. [In der Seitenleiste festlegen](command:translateAnywhere.openSidebar?%5B%22scParagraph%22%5D).",

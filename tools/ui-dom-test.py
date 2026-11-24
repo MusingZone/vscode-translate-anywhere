@@ -483,28 +483,38 @@ def webview_test(browser, handle, ui):
     return out
 
 
-COMPANION = """<!DOCTYPE html><html><head>
+# A third-party extension webview with arbitrary markup (modelled on Update Companion's hub).
+EXTENSION_WEBVIEW = """<!DOCTYPE html><html><head>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-hub'; script-src 'nonce-hub'">
-<title>Update Companion</title><style nonce="hub">body{font:16px sans-serif}</style></head><body>
+<title>Some extension</title><style nonce="hub">body{font:16px sans-serif} pre.en-text{white-space:pre-wrap} .layer span{color:transparent}</style></head><body>
 <main id="main" class="wrap">
-<div class="banner"><span class="grow" id="banner">Showing the English structure for now.</span><button>Generate Now</button></div>
+<div class="banner" id="banner"><span class="grow">Showing the English structure for now.</span><button id="short">Generate Now</button></div>
 <article class="card"><button class="title" id="title" aria-expanded="false">Improve your editor experience</button>
 <p id="summary">Pick a feature that suits your workspace.</p>
 <pre class="en-text" id="detail">Read the original feature description here.</pre>
+<ul><li><div id="item">Review the change before you accept it.</div></li></ul>
+<div id="spans"><span>Wrapped words</span> <span>inside plain spans.</span></div>
+<div class="layer" id="overlay"><span>Invisible overlay text like a PDF text layer.</span></div>
 <textarea id="note">Private note text</textarea><pre id="code">some code stays untouched</pre></article>
 </main>
 <script nonce="hub">
 const title = document.querySelector('#title');
 title.addEventListener('click', () => title.setAttribute('aria-expanded', 'true'));
 </script></body></html>"""
+# A webview whose CSP allows no inline styles at all: no nonce, no 'unsafe-inline'.
+STRICT_WEBVIEW = """<!DOCTYPE html><html><head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'">
+</head><body><section><div id="summary">Pick a feature that suits your workspace.</div></section></body></html>"""
 
 
-def companion_test(browser, handle, ui, status):
+def extension_webview_test(browser, handle, ui, status):
+    content = {"html": EXTENSION_WEBVIEW}
+
     def route(r):
         if "/pre?" in r.request.url:
             body = WEBVIEW_PRELOAD.replace("SANDBOX", json.dumps("allow-same-origin allow-scripts"))
             # Escape the nested closing script tag in the preload's JS string.
-            return r.fulfill(content_type="text/html", body=body.replace("CONTENT", json.dumps(COMPANION).replace("<", "\\u003c")))
+            return r.fulfill(content_type="text/html", body=body.replace("CONTENT", json.dumps(content["html"]).replace("<", "\\u003c")))
         if "/fake.html" in r.request.url:
             return r.fulfill(content_type="text/html", body="<!doctype html><html><head></head><body></body></html>")
         return handle(r)
@@ -512,20 +522,30 @@ def companion_test(browser, handle, ui, status):
     page = browser.new_page(viewport={"width": 900, "height": 600})
     page.route(ORIGIN + "/**", route)
 
-    def open_hub(owner):
+    def open_hub(owner, html=EXTENSION_WEBVIEW):
+        content["html"] = html
         page.goto(f"{ORIGIN}/pre?extensionId={owner}")
         frame = page.frame_locator("#active-frame")
         frame.locator("#summary").wait_for()
         page.add_script_tag(content=f"({ui})({json.dumps({'endpoint': ORIGIN, 'token': 't'})});")
         return frame
 
-    # Identical HTML is not enough: only the VS Code-owned extension identity enables this surface.
-    other = open_hub("example.other-extension")
-    other.locator("#summary").hover()
+    # This extension's own sidebar webview is a settings form and stays untouched.
+    own = open_hub("MusingZone.vscode-translate-anywhere")
+    own.locator("#summary").hover()
     page.keyboard.press("Alt+w")
-    assert other.locator(".imt-dot,.imt-trans").count() == 0
+    page.wait_for_timeout(300)
+    assert own.locator(".imt-dot,.imt-trans").count() == 0
 
-    hub = open_hub("Local.vscode-update-companion")
+    strict = open_hub("other.strict-csp", STRICT_WEBVIEW)
+    strict.locator(".imt-dot").wait_for(state="attached", timeout=4000)
+    assert strict.locator(".imt-dot").evaluate("(el) => getComputedStyle(el).position") == "fixed", "styles must apply without a nonce"
+    strict.locator("#summary").click()
+    page.keyboard.press("Alt+w")
+    strict.locator("#summary > .imt-trans:not(.imt-loading)").wait_for()
+
+    # Any other extension's webview, identified by nothing but being a webview.
+    hub = open_hub("example.other-extension")
     summary = hub.locator("#summary")
     dot = hub.locator(".imt-dot")
     dot.wait_for(state="attached", timeout=4000)
@@ -559,8 +579,11 @@ def companion_test(browser, handle, ui, status):
     assert hub.locator(".imt-trans").count() == 0
     summary.click()
     page.keyboard.press("Alt+w")
-    for selector in ("#title", "#summary", "#detail", "#banner"):
+    for selector in ("#title", "#summary", "#detail", "#banner", "#item", "#spans"):
         hub.locator(f"{selector} > .imt-trans:not(.imt-loading)").wait_for()
+    assert hub.locator("#short .imt-trans").count() == 0, "short control labels stay as they are"
+    assert hub.locator("#overlay .imt-trans").count() == 0, "invisible text layers stay as they are"
+    assert hub.locator("#short").is_visible()
     assert note.input_value() == "Private note text"
     assert hub.locator("#code").inner_text() == "some code stays untouched"
     hub.locator("#main").evaluate("el => el.insertAdjacentHTML('beforeend', '<p id=\"later\">A newly loaded review description.</p>')")
@@ -1000,7 +1023,7 @@ def main():
         results["chat"] = chat_test(browser, handle, ui, status)
         results["settings"] = settings_test(browser, handle, ui, status)
         results["webviews"] = webview_test(browser, handle, ui)
-        results["update_companion"] = companion_test(browser, handle, ui, status)
+        results["extension_webviews"] = extension_webview_test(browser, handle, ui, status)
         results["release_notes"] = release_notes_test(browser, handle, ui, status)
         results["cross_page_dismiss"] = cross_page_test(browser, handle, ui, select)
         # New pages get the selected engine from /status; the same flow serves online and AI.

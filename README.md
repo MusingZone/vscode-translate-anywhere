@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Translate what you read in VS Code: **Chat**, the **Agents window**, **Markdown preview**, **Release Notes**, **Settings**, extension pages and other built-in pages. Select text and hover the small red dot, press **Alt+Z** for the paragraph under the mouse, or **Alt+W** for the whole page.
+Translate what you read in VS Code: **Chat**, the **Agents window**, **Markdown preview**, **Release Notes**, **Settings**, extension pages and other built-in pages, plus the pages and views of **other extensions** (webview panels, sidebar views, custom editors such as a PDF viewer). Select text and hover the small red dot, press **Alt+Z** for the paragraph under the mouse, or **Alt+W** for the whole page.
 
 - **Words** come from an offline dictionary.
 - **Phrases, sentences and pages** go to the engine you choose: an AI model (GitHub Copilot through VS Code, or your own OpenAI, Claude, Gemini, DeepSeek, Qwen… key), a token-free online service, or nothing at all in offline-only mode.
@@ -27,6 +27,7 @@ Translate what you read in VS Code: **Chat**, the **Agents window**, **Markdown 
 | **Select & hover** | Select text, then hover the red dot. Words use the offline dictionary; anything else uses the selected engine. Click ☆ to save the entry to your vocabulary book. |
 | **Paragraph translation** | Hover a paragraph and press **Alt+Z**. Press again to remove the translation. |
 | **Full-page translation** | Press **Alt+W** to translate the Chat conversation, preview or page you are working in; press again to restore. Show the translation only (default) or both languages. |
+| **Other extensions too** | Any extension page built on a webview (dashboards, release hubs, sidebar views, custom editors such as a PDF viewer) works like a built-in page: select & hover, **Alt+Z** and **Alt+W**. No per-extension setup. Code, inputs and buttons keep working. |
 | **Three engines** | AI, token-free online translation (Google Translate or MyMemory), or the offline dictionary only. |
 | **Settings sidebar** | Engines, models, API keys, shortcuts, the look of the dot, vocabulary and dictionaries in one panel. |
 | **Markdown as preview** | One click in the sidebar makes `.md` files open as a rendered preview by default; **Open as text again** undoes it. |
@@ -48,7 +49,7 @@ Each surface can be switched off under **Where to translate…** in the sidebar 
 | Release Notes | Including the **In this update** contents. |
 | Chat | Chat and the separate Agents window: responses, agent questions with their selectable options and answer summaries, tool confirmations and input notices. |
 | Settings | Settings and Keyboard Shortcuts editors. |
-| Extension pages | Extension details pages (README and changelog) and Update Companion. Other third-party webviews are not translated. |
+| Extension pages | Extension details pages (README and changelog) and pages and views of any other extension that uses a webview, such as panels, sidebar views and custom editors (for example a PDF viewer). Text the page draws invisibly (like the selectable layer over a PDF page) can be selected and looked up but is not translated in place. |
 | Welcome | Welcome page and walkthroughs. |
 | Workbench UI | Notifications, dialogs, hover cards, the Workspace Trust page and view messages. |
 

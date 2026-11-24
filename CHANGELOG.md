@@ -2,13 +2,20 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.8.3] - Update Companion
+## [0.9.0] - Translate inside other extensions
+
+### Highlights
+- **Translate inside other extensions.** Until now only VS Code's built-in pages were covered; pages from other extensions stayed untranslated. Selection, paragraph (Alt+Z) and full-page (Alt+W) translation now work in the webviews of every other extension: editor panels, sidebar views and custom editors, such as Update Companion or a PDF viewer. No per-extension list is involved; each page is recognised as an extension webview, and the **Extension pages** switch covers them all.
+  - Paragraphs are found in any markup: text in plain containers or wrapped in `<span>`s, list items, long control labels such as a card title button, and wrapped prose shown in a `<pre>` without code. Code blocks, inputs, short control labels ("Save", "Generate now") and this extension's own sidebar stay unchanged, and page buttons keep working.
+  - Works under strict Content Security Policies that allow no inline styles.
+  - Invisible text layers (like the selectable text over a rendered PDF page) can be selected and looked up, but paragraph and full-page translation leave them alone.
 
 ### Changed
 - Rewrote the English and Chinese READMEs (also the Marketplace page) to be shorter and easier to scan, with a table of supported surfaces, a shortcuts section and a privacy and security summary. Corrected stale details: the VS Code model setting is no longer filled in automatically, the sidebar button is **Test speed**, and the German dictionary setting is now listed.
 
-### Fixed
-- Selection, paragraph and full-page translation now work in Update Companion, including feature titles and expanded English descriptions. Other third-party webviews are not enabled by this change.
+## [0.8.3] - Superseded
+
+Replaced by 0.9.0, which includes all of its changes and extends translation to every extension's webview.
 
 ## [0.8.2] - Chat question options
 
