@@ -39,11 +39,11 @@ Turn any surface off under **Where to translate…** in the sidebar footer.
 | --- | --- |
 | Markdown preview | The built-in preview. |
 | Release Notes | Including the **In this update** contents. |
-| Chat | Chat and the separate Agents window: responses, agent questions and their options, tool confirmations and input notices. |
+| Chat | Chat and the separate Agents window: welcome and empty states, responses, agent questions and their options, tool confirmations, banners and input notices. |
 | Settings | Settings and Keyboard Shortcuts editors. |
 | Extension pages | Extension details pages, and panels, sidebar views and custom editors of any extension that uses a webview. Invisible text layers (like the selectable text over a PDF page) can be looked up but are not translated in place. |
 | Welcome | Welcome page and walkthroughs. |
-| Workbench UI | Notifications, dialogs, hover cards, the Workspace Trust page and view messages. |
+| Workbench UI | Chat Customizations (including Migrations), notifications, dialogs, hover cards, the Workspace Trust page and view messages. |
 
 </details>
 

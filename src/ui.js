@@ -225,23 +225,18 @@ function immersiveUI(config) {
     return null;
   }
   // [surface, where selection is allowed, where paragraph / full-page translation applies].
-  // The list mirrors the workbench CSS rules that opt into `user-select: text` (VS Code 1.144); text editors,
-  // inputs and editor-attached widgets stay excluded by eligible() / SKIP.
-  const CHAT_EXTRA = '.chat-question-carousel-container,.chat-confirmation-widget,.chat-input-notification-widget';
-  const CHAT_OPTION_LABEL = '.chat-question-carousel-container .chat-question-list-item .chat-question-list-label';
-  const CHAT_SELECTABLE = `${CHAT_OPTION_LABEL},.chat-confirmation-widget-title-inner,` +
-    '.chat-question-answer-collapsible .chat-question-summary-answer-value';
-  const CHAT_SELECTION_CONTROL = '.chat-question-list-item,.chat-confirmation-widget-title,' +
-    '.chat-question-answer-collapsible .monaco-button';
+  // VS Code sets `body { user-select: none }` and opts in only scattered subtrees; each enabled surface makes
+  // its prose selectable while editors, inputs, scrollbars, sashes, draggable items and icons stay excluded.
+  const CHAT_SURFACE = '.interactive-session,.agent-sessions-get-started,.no-agent-host-empty-state,.connection-diagnostics-content';
   const WORKBENCH_UI = '.notifications-toasts,.notifications-center,.monaco-dialog-box,.workbench-hover-container,' +
     '.monaco-hover,.workspace-trust-editor,.tree-explorer-viewlet-tree-view .message,.search-view .message,' +
-    '.ai-customization-management-editor,.monaco-editor-pane-placeholder,.browser-error-content';
+    '.pane-body .welcome-view-content,.ai-customization-management-editor,.monaco-editor-pane-placeholder,.browser-error-content';
   const REGIONS = [
-    // The whole Chat view: answers, the question box (ask-user carousel), tool confirmations and input notices.
-    ['chat', '.interactive-session', `.interactive-item-container .rendered-markdown,${CHAT_EXTRA}`],
+    // The whole Chat view and Agents window: welcome/notices, answers, question carousels, confirmations and onboarding.
+    ['chat', CHAT_SURFACE, CHAT_SURFACE],
     ['settings', '.settings-editor,.keybindings-editor', '.settings-editor,.keybindings-editor'],
-    ['extensionPages', '.extension-editor', '.extension-editor > .header'],
-    ['welcome', '.gettingStartedContainer', '.gettingStartedContainer'],
+    ['extensionPages', '.extension-editor', '.extension-editor'],
+    ['welcome', '.gettingStartedContainer,.walkThroughContent', '.gettingStartedContainer,.walkThroughContent'],
     ['workbenchUI', WORKBENCH_UI, WORKBENCH_UI]
   ];
   const surfaceOn = key => !disabled && settings.surfaces?.[key] !== false;
@@ -252,10 +247,27 @@ function immersiveUI(config) {
     // Timers and observers always come from this runtime's realm: extension README/changelog webviews are
     // sandboxed without allow-scripts, and callbacks scheduled on such a frame's window never run.
     const win = doc.defaultView;
+    const WB_CONTROLS = 'button:not(.button-link,.migration-link-button),.monaco-button:not(.button-link,.migration-link-button),' +
+      '.action-label,[role="tab"],[role="menuitem"]';
     // Webviews of other extensions (editor panels, sidebar views, custom editors) have arbitrary markup.
     const generic = scope === 'extensionPages' && doc !== document && !doc.querySelector('body > #scroll-to-top');
+    const hasLoose = generic || scope === 'workbench';
     // Kept visible while a translation-only paragraph streams: child blocks translated on their own.
-    const KEPT = generic ? `${NESTED_CSS},main,${CONTROLS}` : NESTED_CSS;
+    const KEPT = generic ? `${NESTED_CSS},main,${CONTROLS}`
+      : scope === 'workbench' ? `${NESTED_CSS},main,${WB_CONTROLS}` : NESTED_CSS;
+    const NO_SELECT_OVERRIDE = '.monaco-editor,.monaco-editor *,.xterm,.xterm *,input,textarea,select,' +
+      '.monaco-sash,.monaco-sash *,.scrollbar,.scrollbar *,[draggable="true"],[draggable="true"] *,.draggable,.draggable *,' +
+      '.codicon,img,svg,canvas,.imt-panel,.imt-panel *,.imt-dot,.imt-toast';
+    const workbenchSelectionCSS = scope === 'workbench' ? [
+      'html[class*="imt-surface-"] :is(.monaco-editor,.xterm,.monaco-sash,.scrollbar,[draggable="true"],.draggable){user-select:none;-webkit-user-select:none}',
+      ...REGIONS.map(([key, container]) =>
+        `html.imt-surface-${key} :is(${container}):not(${NO_SELECT_OVERRIDE}),` +
+        `html.imt-surface-${key} :is(${container}) :not(${NO_SELECT_OVERRIDE}){user-select:text!important;-webkit-user-select:text!important}` +
+        `html.imt-surface-${key} :is(${container}) :is(a,button,.monaco-button,.monaco-link):not([draggable="true"],.draggable){-webkit-user-drag:none}`
+      ),
+      'html.imt-surface-chat .chat-question-answer-collapsible:not(.chat-question-answer-expandable) .chat-question-summary-answer-value{pointer-events:auto!important}',
+      'html.imt-surface-workbenchUI .plugin-list-widget .plugin-search-header{pointer-events:auto!important}'
+    ].join('\n      ') : '';
     const style = doc.createElement('style');
     const nonceStyle = doc.querySelector('style[nonce], script[nonce]');
     if (nonceStyle?.nonce) style.nonce = nonceStyle.nonce;
@@ -287,8 +299,7 @@ function immersiveUI(config) {
       .imt-tip-actions{display:flex!important;gap:12px!important;justify-content:flex-end!important;margin-top:4px!important}
       .imt-tip-actions button{padding:0!important;margin:0!important;border:0!important;background:transparent!important;color:var(--vscode-textLink-foreground,#4daafc)!important;font:12px/1.5 var(--vscode-font-family,system-ui)!important;cursor:pointer!important}
       .imt-tip-actions button:hover{text-decoration:underline!important}
-      html.imt-chat-selection :is(${CHAT_SELECTABLE}){user-select:text!important;-webkit-user-select:text!important}
-      html.imt-chat-selection .chat-question-answer-collapsible:not(.chat-question-answer-expandable) .chat-question-summary-answer-value{pointer-events:auto!important}
+      ${workbenchSelectionCSS}
       .imt-only{font-size:0!important;line-height:0!important}
       .imt-only::marker{font-size:var(--imt-fs)!important}
       .imt-only>:not(.imt-trans):not(:is(${KEPT})){display:none!important}
@@ -311,9 +322,11 @@ function immersiveUI(config) {
     }
     if (!adopted) doc.head.appendChild(style);
     if (scope === 'workbench') {
-      const updateChatSelection = () => doc.documentElement.classList.toggle('imt-chat-selection', surfaceOn('chat'));
-      updateChatSelection();
-      statusListeners.push(updateChatSelection);
+      const updateSelection = () => {
+        for (const [key] of REGIONS) doc.documentElement.classList.toggle(`imt-surface-${key}`, surfaceOn(key));
+      };
+      updateSelection();
+      statusListeners.push(updateSelection);
     }
     // Which surface (and which container instance) an element belongs to; null when not translatable here.
     function regionOf(element) {
@@ -641,31 +654,41 @@ function immersiveUI(config) {
     };
     win.addEventListener('pointerdown', startDrag, { passive: true, capture: true });
     win.addEventListener('mousedown', startDrag, { passive: true, capture: true });
-    // VS Code activates these controls on click, including the click generated at the end of a text drag.
-    let chatTextPress;
+    // VS Code activates buttons, links and list/tree rows on click, including the click generated at the end of a text drag.
+    const CLICKABLE_CONTROLS = 'a,button,label,summary,[role="button"],[role="link"],[role="tab"],[role="menuitem"],' +
+      '[role="option"],[role="treeitem"],[role="row"],[role="checkbox"],[role="switch"],' +
+      '.monaco-button,.monaco-link,.monaco-list-row,.ai-customization-group-header,.dialog-checkbox-message,' +
+      '.setting-item-bool .setting-item-description,[onclick]';
+    const elementAt = node => node?.nodeType === 1 ? node : node?.parentElement || null;
+    let textPress;
     win.addEventListener('pointerdown', event => {
-      const label = scope === 'workbench' && surfaceOn('chat') && event.button === 0
-        ? event.target.closest?.(CHAT_SELECTABLE) : null;
-      const selection = label && win.getSelection();
-      chatTextPress = label && {
-        label, x: event.clientX, y: event.clientY, anchor: selection?.anchorNode, anchorOffset: selection?.anchorOffset,
-        focus: selection?.focusNode, focusOffset: selection?.focusOffset
+      const target = elementAt(event.target);
+      const region = scope === 'workbench' && event.button === 0 && eligible(target) ? regionOf(target) : null;
+      const selection = region && win.getSelection();
+      textPress = region && {
+        region, x: event.clientX, y: event.clientY, anchor: selection?.anchorNode, anchorOffset: selection?.anchorOffset,
+        focus: selection?.focusNode, focusOffset: selection?.focusOffset,
+        nonExpandable: target.closest('.chat-question-answer-collapsible:not(.chat-question-answer-expandable)')
       };
     }, true);
     win.addEventListener('click', event => {
-      const press = chatTextPress;
-      chatTextPress = null;
-      if (!press || !event.detail || !surfaceOn('chat')) return;
+      const press = textPress;
+      textPress = null;
+      if (!press || !event.detail || !surfaceOn(press.region.key)) return;
+      const target = elementAt(event.target);
+      if (target && press.nonExpandable?.contains(target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      const control = target?.closest(CLICKABLE_CONTROLS);
+      if (!control || !press.region.root.contains(control)) return;
       const selection = win.getSelection();
-      const { label } = press;
-      const control = label.closest(CHAT_SELECTION_CONTROL);
-      if (!control?.contains(event.target)) return;
-      const nonExpandable = label.closest('.chat-question-answer-collapsible:not(.chat-question-answer-expandable)');
       const changed = selection && (selection.anchorNode !== press.anchor || selection.anchorOffset !== press.anchorOffset ||
         selection.focusNode !== press.focus || selection.focusOffset !== press.focusOffset);
       const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y) >= 4;
-      if (nonExpandable || (selection && !selection.isCollapsed && (changed || moved) &&
-          (label.contains(selection.anchorNode) || label.contains(selection.focusNode)))) {
+      if (selection && !selection.isCollapsed && (changed || moved) &&
+          (control.contains(selection.anchorNode) || control.contains(selection.focusNode))) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
@@ -887,8 +910,11 @@ function immersiveUI(config) {
       toastTimer = setTimeout(() => { node.hidden = true; }, duration);
     }
     if (scope === 'workbench') toasters.push(toast);
+    const WORKBENCH_CHROME = '.monaco-toolbar,.monaco-action-bar,.chat-input-toolbars,.chat-secondary-toolbar,' +
+      '.chat-attached-context,.chat-editing-session,.interactive-item-container>.header,.management-sidebar,.settings-toc-container';
     function inContent(element) {
       if (!element?.closest || element.closest(SKIP)) return false;
+      if (scope === 'workbench' && element.closest(WORKBENCH_CHROME)) return false;
       const pre = element.closest('pre');
       if (pre && !prosePre(pre)) return false;
       if (generic && invisibleText(element)) return false;
@@ -905,7 +931,7 @@ function immersiveUI(config) {
       return false;
     }
     const nestedChild = node => node.nodeType === 1 &&
-      (node.matches(NESTED) || node.classList.contains('imt-trans') || !!node.querySelector(generic ? NESTED : BLOCKS));
+      (node.matches(NESTED) || node.classList.contains('imt-trans') || !!node.querySelector(hasLoose ? NESTED : BLOCKS));
     // A block's own inline content (nested blocks excluded) as numbered-tag markup, e.g.
     // "<g1>Setting</g1>: <x2/>": <gN> wraps translatable formatting or links, <xN/> stands for content kept
     // as it is. Also returns the nodes behind the tags so the translation can be rebuilt from them.
@@ -1031,7 +1057,7 @@ function immersiveUI(config) {
     // A click on a copied control that is not a plain link runs the page's own control.
     function forwardClick(event, span) {
       const target = event.target.closest?.(INTERACTIVE);
-      if (!target || !span.contains(target) || target.matches('a[href]')) return;
+      if (!target || !span.contains(target) || (scope !== 'workbench' && target.matches('a[href]'))) return;
       let base = target;
       const path = [];
       while (base && base !== span && !originals.has(base)) {
@@ -1090,25 +1116,30 @@ function immersiveUI(config) {
       for (const [el, children] of state.wrappers) el.replaceChildren(...children);
       block.replaceChildren(...state.children);
     }
-    // Webviews also keep short text directly in a <div>, e.g. "In this update" above the Release Notes contents.
-    // Other extensions' webviews put prose in any container, often wrapped in <span>s, and in long control labels
-    // (e.g. a card title button). Short control labels ("Save", "Generate now") are left alone.
-    const LOOSE = generic ? `div,pre,section,article,main,header,footer,aside,nav,form,fieldset,details,figure,${CONTROLS}` : 'div';
+    // Webviews and workbench surfaces also put prose in plain containers (often wrapped in <span>s) and in long
+    // control labels. Bare filenames/paths, 1-word chrome badges and short button labels are left alone.
+    const LOOSE = generic ? `div,pre,section,article,main,header,footer,aside,nav,form,fieldset,details,figure,${CONTROLS}`
+      : scope === 'workbench' ? `div,section,article,main,header,footer,aside,nav,form,fieldset,details,figure,${WB_CONTROLS}` : 'div';
     function looseBlock(el) {
-      if (scope === 'workbench' || !el.matches(LOOSE)) return false;
-      if (!generic) {
+      if (!el.matches(LOOSE)) return false;
+      if (!hasLoose) {
         return !el.parentElement?.closest(BLOCKS) && [...el.childNodes].some(node => node.nodeType === 3 && /\p{L}{2}/u.test(node.data));
       }
       if (el.matches('pre') && !prosePre(el)) return false;
       const { text } = structure(el);
       if (!/\p{L}{2}/u.test(text)) return false;
-      return !el.matches(CONTROLS) || (text.match(/[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}]|[\p{L}\p{N}'’-]+/gu) || []).length >= 3;
+      if (generic) {
+        return !el.matches(CONTROLS) || (text.match(/[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}]|[\p{L}\p{N}'’-]+/gu) || []).length >= 3;
+      }
+      const words = text.match(/[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}]|\S*\p{L}\S*/gu) || [];
+      return words.length >= (el.matches(WB_CONTROLS) ? 5 : 2);
     }
     function blockOf(element) {
-      if (scope === 'workbench') return element?.closest?.(BLOCKS) || null;
-      if (generic) {
+      if (hasLoose) {
         const any = `${BLOCKS},${LOOSE}`;
-        for (let el = element?.closest?.(any); el; el = el.parentElement?.closest(any)) if (el.matches(BLOCKS) || looseBlock(el)) return el;
+        for (let el = element?.closest?.(any); el; el = el.parentElement?.closest(any)) {
+          if ((el.matches(BLOCKS) && (scope !== 'workbench' || /\p{L}/u.test(structure(el).text))) || looseBlock(el)) return el;
+        }
         return null;
       }
       const block = element?.closest?.(BLOCKS);
@@ -1192,7 +1223,7 @@ function immersiveUI(config) {
       span.lang = settings.targetLanguage || 'zh-CN';
       span.textContent = t('translating');
       span.addEventListener('click', event => forwardClick(event, span));
-      block.insertBefore(span, [...block.childNodes].find(nestedChild) || null);
+      block.insertBefore(span, s.inline[s.inline.length - 1]?.nextSibling || null);
       block.dataset.imtSrc = s.plain;
       const controller = new AbortController();
       jobs.set(block, controller);
@@ -1261,8 +1292,11 @@ function immersiveUI(config) {
       const roots = scope === 'workbench'
         ? REGIONS.filter(([key]) => fullSurfaces.has(key)).flatMap(([, , content]) => [...doc.querySelectorAll(content)])
         : [doc.body];
-      const blocks = roots.flatMap(root => [...(root.matches(BLOCKS) ? [root] : []), ...root.querySelectorAll(BLOCKS),
-        ...(scope === 'workbench' ? [] : [...root.querySelectorAll(LOOSE)].filter(looseBlock))]);
+      const blocks = roots.flatMap(root => [
+        ...(root.matches(BLOCKS) || looseBlock(root) ? [root] : []),
+        ...root.querySelectorAll(BLOCKS),
+        ...[...root.querySelectorAll(LOOSE)].filter(looseBlock)
+      ]);
       return [...new Set(blocks)].filter(block => inContent(block) && fullFor(block));
     }
     function observeAll() {
@@ -1346,12 +1380,12 @@ function immersiveUI(config) {
       if (scope !== 'workbench') return surfaceOn(scope) ? scope : null;
       const focus = doc.activeElement;
       // The Chat input is a code editor too, but the page shortcut there clearly means "the Chat view".
-      if (focus?.closest?.('.interactive-session') && surfaceOn('chat')) return 'chat';
+      if (focus?.closest?.(CHAT_SURFACE) && surfaceOn('chat')) return 'chat';
       const focused = focus && focus !== doc.body ? regionOf(focus) : null;
       if (focused) return focused.key;
       if (focus?.closest?.('.monaco-editor')) return null;
       const target = hovered();
-      if (target?.closest?.('.interactive-session') && surfaceOn('chat')) return 'chat';
+      if (target?.closest?.(CHAT_SURFACE) && surfaceOn('chat')) return 'chat';
       return regionOf(target)?.key || null;
     }
     win.addEventListener('keydown', event => {
@@ -1362,7 +1396,7 @@ function immersiveUI(config) {
         const target = hovered();
         const block = blockAt(target);
         if (!block) {
-          if (regionOf(target) || (scope === 'workbench' && target?.closest?.('.interactive-session'))) toast(t('noParagraph'));
+          if (regionOf(target) || (scope === 'workbench' && target?.closest?.(CHAT_SURFACE) && surfaceOn('chat'))) toast(t('noParagraph'));
           return;
         }
         event.preventDefault();

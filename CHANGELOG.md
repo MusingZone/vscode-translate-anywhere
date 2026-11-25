@@ -4,6 +4,13 @@ All notable changes to this extension are documented here. The format follows [K
 
 ## [Unreleased]
 
+## [0.9.2] - Chat customization migrations and workbench prose
+
+### Fixed
+- **Chat customization migration notices and the Chat Customizations editor.** The migration notice above the Chat input ("1 customization needs an update to keep working." and **Review Migrations**) and every page of the Chat Customizations editor (**Migrations**, **Agent Migration Recovery**, **Locations**, **Agents**, **Skills**, **Instructions**, **Prompts**, **Hooks**, **MCP Servers**, **Plugins**, **Tools**, **Models**, empty states and organization policy notices) can now be selected for lookup and translated by paragraph (**Alt+Z**) or full page (**Alt+W**).
+- **Broader workbench selection and prose coverage.** Enabled workbench surfaces now override VS Code's default `user-select: none` on prose and controls without touching code editors, inputs, scrollbars or draggable items, and drag-selecting text on buttons, links or list/tree rows no longer triggers an accidental click while preserving normal clicks and keyboard activation.
+- **Additional surface gaps closed:** Chat welcome/new-session views, onboarding/archive/goal/tip banners and v2 confirmations; Agents window get-started cards, disconnected empty states and connection diagnostics; Extension details **Features** / **Dependencies** / **Runtime Status** tabs; Welcome walkthrough step buttons and empty-recent prompts; **Keyboard Shortcuts** command names; dialog checkbox labels; Workspace Trust headings and folder descriptions; and sidebar view empty/welcome messages.
+
 ## [0.9.1] - Vocabulary sync
 
 ### Added

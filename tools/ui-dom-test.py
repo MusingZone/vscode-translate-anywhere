@@ -751,6 +751,361 @@ def cross_page_test(browser, handle, ui, select):
     return "ok"
 
 
+MIGRATION_AND_SURFACES_PAGE = """<!doctype html><html><head><meta charset="utf-8">
+<style>
+  body { margin: 0; font: 13px sans-serif; user-select: none; -webkit-user-select: none; }
+  .monaco-list.mouse-support { user-select: none; -webkit-user-select: none; }
+  .ai-customization-group-header { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; -webkit-user-select: none; }
+  .ai-customization-management-editor .ai-customization-embedded-detail { user-select: text; -webkit-user-select: text; }
+  .chat-customization-migration-notice { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
+  .chat-customization-migration-notice-content { flex: 1; display: flex; flex-wrap: wrap; column-gap: 8px; row-gap: 2px; }
+  .monaco-dialog-box .dialog-message-container { user-select: text; -webkit-user-select: text; }
+  .monaco-dialog-box .dialog-checkbox-message { cursor: pointer; user-select: none; -webkit-user-select: none; }
+  .gettingStartedContainer { user-select: initial; -webkit-user-select: initial; }
+  .agent-sessions-get-started { user-select: none; -webkit-user-select: none; }
+  .agent-sessions-get-started .get-started-item-description { user-select: text; -webkit-user-select: text; }
+</style></head><body style="width:860px">
+<div class="interactive-session">
+  <div class="chat-welcome-view-container"><div class="chat-welcome-view">
+    <div class="chat-welcome-view-title" id="cwTitle">Build with Agent</div>
+    <div class="chat-welcome-view-disclaimer" id="cwDisclaimer">AI-generated responses may contain mistakes.</div>
+  </div></div>
+  <div class="interactive-input-part">
+    <div class="chat-customization-migration-notice-container chat-input-stack-standalone">
+      <div class="chat-customization-migration-notice" role="group" aria-label="Customization migrations">
+        <div class="chat-customization-migration-notice-content" id="migNotice">
+          <span id="migNoticeText">1 customization needs an update to keep working.</span>
+          <a class="monaco-link" id="migReviewLink" tabindex="0" href="command:aiCustomization.openManagementEditor">Review Migrations</a>
+        </div>
+        <div class="monaco-action-bar"><ul class="actions-container"><li class="action-item"><a class="action-label codicon codicon-close" id="migDismiss" role="button" aria-label="Dismiss Migration Notice for This Workspace">Dismiss</a></li></ul></div>
+      </div>
+    </div>
+    <div class="chat-input-toolbars"><span id="modelPickerLabel">GPT-4o mini</span></div>
+    <div class="monaco-editor"><textarea id="chatEditorInput">ask something</textarea></div>
+  </div>
+</div>
+
+<div class="agent-sessions-get-started">
+  <div class="get-started-header"><div class="get-started-toggle" id="gsToggle" role="button" tabindex="0"><span class="get-started-title" id="gsTitle">Get started with Agents</span></div></div>
+  <div class="get-started-item-details"><div class="get-started-item-description" id="gsDesc">Connect a repository to run background coding tasks.</div></div>
+</div>
+<div class="no-agent-host-empty-state">
+  <h2 class="no-agent-host-title" id="nahTitle">No agent host connected</h2>
+  <p class="no-agent-host-description" id="nahDesc">Run <code id="nahCode">code tunnel</code> to connect this machine. <a class="no-agent-host-link" id="nahLink" href="https://aka.ms/VSCode/Agents/docs">Learn more</a></p>
+</div>
+
+<div class="ai-customization-management-editor">
+  <div class="management-sidebar">
+    <button class="sidebar-home-button" id="sideHome" type="button"><span class="sidebar-home-label">Overview</span></button>
+    <div class="monaco-list mouse-support"><div class="monaco-list-row" role="listitem"><div class="section-list-item"><div class="section-label" id="sideAgents">Agents</div></div></div></div>
+    <div class="sidebar-migration-shortcut"><button class="sidebar-migration-button" id="sideMigBtn" type="button"><span class="sidebar-migration-label">Migrations</span><span class="sidebar-migration-count">1</span></button></div>
+  </div>
+  <div class="management-content"><div class="content-inner">
+    <div class="prompt-migration-content-container"><div class="customization-migration-dashboard">
+      <div class="migration-page">
+        <div class="migration-page-header" id="migHeader">
+          <div class="migration-page-title-row">
+            <h1 id="migH1" tabindex="-1">Keep your customizations working</h1>
+            <div class="migration-page-title-actions"><button class="monaco-button migration-secondary-button" id="migAgentBtn" type="button">Migrate with Agent</button></div>
+          </div>
+          <p class="migration-intro" id="migIntro">Copilot's new agent runtime uses different formats and locations for some customizations.</p>
+          <a class="monaco-link" id="migLearnLink" role="link" tabindex="0" href="https://aka.ms/vscode-migrate-customizations">Learn About Migrations</a>
+        </div>
+        <section class="mcp-detail-diagnostic-card migration warning migration-warning-banner">
+          <div class="mcp-detail-diagnostic-header"><div class="mcp-detail-diagnostic-summary" id="migWarnSummary">Prompt-to-skill conversion changes</div></div>
+          <div class="mcp-detail-diagnostic-details"><p class="mcp-detail-diagnostic-message" id="migWarnMsg">Prompt files are converted into skills inside your workspace.</p></div>
+        </section>
+        <div class="migration-tree customization-tree-container"><div class="monaco-list mouse-support">
+          <div class="monaco-list-row" id="migGroupRow" role="treeitem">
+            <div class="ai-customization-group-header" id="migGroupHeader">
+              <div class="group-label-group">
+                <div class="group-title-row"><div class="group-label" id="migGroupLabel">Prompt Files (Workspace)</div><div class="group-count">1</div></div>
+                <div class="group-description" id="migGroupDesc"><span class="migration-tree-group-destination" id="migGroupDest">Destination: .github/skills</span></div>
+              </div>
+              <div class="group-actions"><div class="migration-tree-group-actions"><button class="monaco-button migration-secondary-button" id="migIgnoreBtn" type="button">Ignore</button></div></div>
+            </div>
+          </div>
+          <div class="monaco-list-row" id="migItemRow" role="treeitem">
+            <div class="migration-tree-item">
+              <div class="migration-tree-item-checkbox"><input type="checkbox" id="migItemCheck" checked></div>
+              <div class="migration-tree-item-content">
+                <div class="migration-tree-item-header"><div class="migration-tree-item-label" id="migItemFile">legacy-review.prompt.md</div></div>
+                <div class="migration-tree-item-metadata"><div class="migration-tree-item-source" id="migItemSource">.github/prompts</div></div>
+                <div class="migration-tree-item-changes" id="migItemChanges">Converts prompt file to a skill and disables automatic model invocation</div>
+              </div>
+              <button class="monaco-button migration-tree-item-review" id="migItemReviewBtn" type="button">Review</button>
+            </div>
+          </div>
+        </div></div>
+        <p class="migration-empty" id="migEmpty">No migrations are needed.</p>
+        <section class="migration-recoveries">
+          <h2 id="migRecTitle">Agent Migration Recovery</h2>
+          <p id="migRecDesc">Restore original customization sources from before an agent migration.</p>
+        </section>
+      </div>
+    </div></div>
+    <div class="ai-customization-list-widget">
+      <div class="organization-policy-notice" role="note"><div class="organization-policy-notice-message" id="orgNotice">Your organization only allows skills from plugins. Other skills are hidden.</div></div>
+      <div class="list-empty-state"><div class="empty-state-text" id="emptyTitle">No agents yet</div><div class="empty-state-subtext" id="emptySubtext">Create your first custom agent to get started</div></div>
+    </div>
+    <div class="monaco-editor"><div class="view-lines" id="custRawEditor">raw customization markdown</div></div>
+  </div></div>
+</div>
+
+<div class="monaco-dialog-box"><div class="dialog-message-row"><div class="dialog-message-container">
+  <div class="dialog-message"><div class="dialog-message-text" id="dlgText">Delete this agent migration backup?</div></div>
+  <div class="dialog-checkbox-row"><input type="checkbox" id="dlgCheck"><div class="dialog-checkbox-message" id="dlgCheckLabel">Do not ask me again for this workspace</div></div>
+</div></div></div>
+
+<div class="workspace-trust-editor">
+  <div class="workspace-trust-header"><div class="workspace-trust-title"><div class="workspace-trust-title-text" id="wtTitle">Restricted Mode is intended for safe code browsing</div></div>
+  <div class="workspace-trust-description"><div id="wtDesc1">Some features are disabled until you trust this folder.</div><div id="wtDesc2">You can configure trusted folders in <a class="monaco-link" id="wtLink" href="command:workbench.trust.configure">Settings</a>.</div></div></div>
+</div>
+
+<div class="gettingStartedContainer">
+  <div class="empty-recent" id="gsEmptyRecent">You have no recent folders, <button class="button-link" id="gsOpenFolderBtn" type="button">open a folder</button> to start.</div>
+  <button class="getting-started-step" id="gsStepBtn" type="button"><div class="step-container"><h3 class="step-title" id="gsStepTitle">Choose your color theme</h3><div class="step-description-container"><p id="gsStepDesc">Make the editor feel like home.</p></div></div></button>
+</div>
+
+<div class="extension-editor">
+  <div class="header"><div class="details"><div class="description" id="extHeaderDesc">Translate text in VS Code surfaces.</div></div></div>
+  <div class="body"><div class="content"><div class="feature-Contributions" id="extFeatureDesc">Contributes configuration settings for translation engines.</div></div></div>
+</div>
+
+<div class="keybindings-editor"><div class="keybindings-body"><div class="keybindings-table-container"><div class="monaco-list mouse-support"><div class="monaco-list-row" id="kbRow" role="row"><div class="monaco-table-tr"><div class="monaco-table-td" id="kbCommand">View: Toggle Word Wrap</div><div class="monaco-table-td"><span class="monaco-keybinding" id="kbKey">Alt+Z</span></div></div></div></div></div></div></div>
+</body></html>"""
+
+
+def customization_and_surfaces_test(browser, handle, ui, status):
+    """Real CSS/DOM regression coverage for the Chat customization migration notice, the Migrations &
+    Chat Customizations editor, Agents window views, and workbench surface gaps."""
+    page = browser.new_page(viewport={"width": 900, "height": 800}, screen={"width": 900, "height": 800})
+
+    def route(r):
+        if r.request.url.endswith("/migrations"):
+            return r.fulfill(status=200, content_type="text/html", body=MIGRATION_AND_SURFACES_PAGE)
+        return handle(r)
+
+    page.route(ORIGIN + "/**", route)
+    page.goto(ORIGIN + "/migrations")
+    wb_ui = ui.replace("location.protocol === 'vscode-file:'", "true")
+    page.add_script_tag(content=f"({wb_ui})({json.dumps({'endpoint': ORIGIN, 'token': 't'})});")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+      window.counts = { review: 0, learn: 0, agent: 0, group: 0, item: 0, dlgCheck: 0, step: 0, openFolder: 0, wtLink: 0, kb: 0 };
+      const bind = (id, key, prevent = true) => document.getElementById(id).addEventListener('click', e => {
+        if (prevent) e.preventDefault();
+        counts[key]++;
+      });
+      bind('migReviewLink', 'review');
+      bind('migLearnLink', 'learn');
+      bind('migAgentBtn', 'agent');
+      bind('migGroupRow', 'group', false);
+      bind('migItemRow', 'item', false);
+      bind('gsStepBtn', 'step', false);
+      bind('gsOpenFolderBtn', 'openFolder');
+      bind('wtLink', 'wtLink');
+      bind('kbRow', 'kb', false);
+      document.getElementById('dlgCheckLabel').addEventListener('click', () => {
+        const c = document.getElementById('dlgCheck'); c.checked = !c.checked; counts.dlgCheck++;
+      });
+    }""")
+
+    def drag_select(element_id):
+        page.evaluate("getSelection().removeAllRanges()")
+        page.locator("#" + element_id).evaluate("el => el.scrollIntoView({ block: 'center' })")
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        rect = page.locator("#" + element_id).evaluate("""el => {
+          const r = document.createRange(); r.selectNodeContents(el);
+          const b = r.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height };
+        }""")
+        y = rect["y"] + rect["height"] / 2
+        page.mouse.move(rect["x"] + 2, y)
+        page.mouse.down()
+        page.mouse.move(rect["x"] + min(rect["width"] - 2, 140), y, steps=10)
+        page.mouse.up()
+        selected = page.evaluate("getSelection().toString().trim()")
+        assert len(selected) >= 3, f"real drag failed to select #{element_id}: {selected!r}"
+        page.locator(".imt-dot").wait_for(state="visible", timeout=3000)
+        page.mouse.move(5, 5)
+        page.locator(".imt-dot").hover()
+        page.wait_for_function("!document.querySelector('.imt-panel').hidden && document.querySelector('.imt-panel p').textContent.startsWith('译')")
+        page.keyboard.press("Escape")
+        page.evaluate("getSelection().removeAllRanges()")
+
+    def refresh():
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+        page.wait_for_timeout(150)
+
+    # 1. Chat migration notice & "Review Migrations" link: real mouse drag-to-select -> red dot, no accidental click.
+    drag_select("migNoticeText")
+    drag_select("migReviewLink")
+    assert page.evaluate("counts.review === 0"), "dragging 'Review Migrations' must not open the editor"
+    page.locator("#migReviewLink").click()
+    page.locator("#migReviewLink").press("Enter")
+    assert page.evaluate("counts.review === 2"), "normal click and Enter on 'Review Migrations' must work"
+
+    # Alt+Z on the migration notice & Agents window views.
+    for eid in ("migNoticeText", "cwDisclaimer", "gsTitle", "nahDesc"):
+        page.locator("#" + eid).scroll_into_view_if_needed()
+        box = page.locator("#" + eid).bounding_box()
+        page.mouse.move(box["x"] + 8, box["y"] + box["height"] / 2)
+        page.keyboard.press("Alt+z")
+        block_id = {"migNoticeText": "migNotice", "gsTitle": "gsToggle"}.get(eid, eid)
+        page.wait_for_function(f"document.querySelector('#{block_id} > .imt-trans:not(.imt-loading)')")
+        page.keyboard.press("Alt+z")
+        page.wait_for_function(f"!document.querySelector('#{block_id} > .imt-trans')")
+
+    # Alt+W on Chat (both modes): translates welcome + notice + Agents views, preserves links, ignores chrome/input, restores.
+    chat_ids = ["cwTitle", "cwDisclaimer", "migNotice", "gsToggle", "gsDesc", "nahTitle", "nahDesc"]
+    chat_orig = page.evaluate("ids => Object.fromEntries(ids.map(id => [id, document.getElementById(id).innerHTML]))", chat_ids)
+    prev_mode = status["fullPageMode"]
+    for mode in ("translationOnly", "bilingual"):
+        status["fullPageMode"] = mode
+        refresh()
+        page.locator("#chatEditorInput").blur()
+        page.locator("#chatEditorInput").focus()
+        page.keyboard.press("Alt+w")
+        for eid in chat_ids:
+            page.locator("#" + eid).scroll_into_view_if_needed()
+            page.wait_for_function("""([id, m]) => {
+              const el = document.getElementById(id);
+              return m === 'translationOnly' ? el.dataset.imtPlaced === '1' : !!el.querySelector(':scope > .imt-trans:not(.imt-loading)');
+            }""", arg=[eid, mode], timeout=6000)
+        assert page.evaluate("!document.getElementById('migDismiss').dataset.imtPlaced && !document.querySelector('#migDismiss .imt-trans')")
+        assert page.evaluate("!document.getElementById('modelPickerLabel').dataset.imtPlaced && !document.querySelector('#modelPickerLabel .imt-trans')")
+        assert page.locator("#nahCode").inner_text() == "code tunnel"
+        page.evaluate("counts.review = 0")
+        page.locator("#migNotice .imt-trans a" if mode == "bilingual" else "#migReviewLink").click()
+        assert page.evaluate("counts.review === 1"), f"notice link must stay clickable in {mode}"
+        page.locator("#chatEditorInput").blur()
+        page.locator("#chatEditorInput").focus()
+        page.keyboard.press("Alt+w")
+        page.wait_for_function("document.querySelectorAll('.imt-trans,.imt-only,[data-imt-placed]').length === 0")
+        restored = page.evaluate("ids => Object.fromEntries(ids.map(id => [id, document.getElementById(id).innerHTML]))", chat_ids)
+        assert restored == chat_orig, restored
+
+    # Surface switch off for Chat restores user-select: none.
+    status["surfaces"] = {"chat": False}
+    refresh()
+    assert page.locator("#migNoticeText").evaluate("el => getComputedStyle(el).userSelect") == "none"
+    assert page.locator("#gsTitle").evaluate("el => getComputedStyle(el).userSelect") == "none"
+    status.pop("surfaces")
+    refresh()
+
+    # 2. Migrations page & Chat Customizations editor: real drag-to-select without triggering tree rows or buttons.
+    drag_select("migIntro")
+    drag_select("migItemChanges")
+    assert page.evaluate("counts.item === 0"), "dragging migration item text must not open the item"
+    drag_select("migGroupLabel")
+    assert page.evaluate("counts.group === 0"), "dragging group header must not collapse/expand the group"
+    drag_select("migAgentBtn")
+    assert page.evaluate("counts.agent === 0"), "dragging a short button label must not click the button"
+    page.locator("#migAgentBtn").click()
+    page.locator("#migItemRow").click()
+    assert page.evaluate("counts.agent === 1 && counts.item === 1"), "ordinary button and tree clicks must still work"
+
+    # Alt+Z on Migrations page non-<p> prose.
+    for eid in ("migItemChanges", "migWarnSummary", "migEmpty", "emptySubtext"):
+        page.locator("#" + eid).scroll_into_view_if_needed()
+        box = page.locator("#" + eid).bounding_box()
+        page.mouse.move(box["x"] + 8, box["y"] + box["height"] / 2)
+        page.keyboard.press("Alt+z")
+        page.wait_for_function(f"document.querySelector('#{eid} > .imt-trans:not(.imt-loading)')")
+        page.keyboard.press("Alt+z")
+        page.wait_for_function(f"!document.querySelector('#{eid} > .imt-trans')")
+
+    # Focus-first Alt+W: with focus in Chat input, hovering the Migrations page still toggles Chat;
+    # after clicking (focusing) the Migrations page, Alt+W toggles workbenchUI.
+    wb_ids = ["migH1", "migIntro", "migHeader", "migWarnSummary", "migWarnMsg", "migGroupLabel", "migGroupDesc",
+              "migItemChanges", "migEmpty", "migRecTitle", "migRecDesc", "orgNotice", "emptyTitle", "emptySubtext",
+              "dlgText", "dlgCheckLabel", "wtTitle", "wtDesc1", "wtDesc2"]
+    wb_orig = page.evaluate("ids => Object.fromEntries(ids.map(id => [id, document.getElementById(id).innerHTML]))", wb_ids)
+    for mode in ("translationOnly", "bilingual"):
+        status["fullPageMode"] = mode
+        refresh()
+        page.locator("#chatEditorInput").focus()
+        page.locator("#migIntro").scroll_into_view_if_needed()
+        box = page.locator("#migIntro").bounding_box()
+        page.mouse.move(box["x"] + 10, box["y"] + box["height"] / 2)
+        page.keyboard.press("Alt+w")
+        page.wait_for_function("""m => {
+          const el = document.getElementById('migNotice');
+          return m === 'translationOnly' ? el.dataset.imtPlaced === '1' : !!el.querySelector(':scope > .imt-trans:not(.imt-loading)');
+        }""", arg=mode, timeout=6000)
+        assert page.evaluate("!document.getElementById('migIntro').dataset.imtPlaced && !document.querySelector('#migIntro .imt-trans')"), \
+            "with focus in Chat, Alt+W must toggle Chat rather than the hovered Migrations page"
+        page.keyboard.press("Alt+w")
+        page.wait_for_function("document.querySelectorAll('.imt-trans,.imt-only,[data-imt-placed]').length === 0")
+        page.mouse.click(box["x"] + 10, box["y"] + box["height"] / 2)
+        page.keyboard.press("Alt+w")
+        for eid in wb_ids:
+            page.locator("#" + eid).scroll_into_view_if_needed()
+            page.wait_for_function("""([id, m]) => {
+              const el = document.getElementById(id);
+              return m === 'translationOnly' ? el.dataset.imtPlaced === '1' : !!el.querySelector(':scope > .imt-trans:not(.imt-loading)');
+            }""", arg=[eid, mode], timeout=6000)
+        # Bare filenames, paths, left sidebar chrome, short buttons and embedded editors stay untouched.
+        for untouched in ("migItemFile", "migItemSource", "sideAgents", "sideHome", "sideMigBtn", "migAgentBtn", "migItemReviewBtn", "custRawEditor"):
+            assert page.evaluate(f"!document.getElementById('{untouched}').dataset.imtPlaced && !document.querySelector('#{untouched} .imt-trans')"), untouched
+        page.evaluate("counts.learn = 0; counts.wtLink = 0")
+        page.locator("#migHeader .imt-trans a" if mode == "bilingual" else "#migLearnLink").click()
+        page.locator("#wtDesc2 .imt-trans a" if mode == "bilingual" else "#wtLink").click()
+        assert page.evaluate("counts.learn === 1 && counts.wtLink === 1"), f"workbench links must work in {mode}"
+        page.locator("#migIntro").scroll_into_view_if_needed()
+        box = page.locator("#migIntro").bounding_box()
+        page.mouse.move(box["x"] + 10, box["y"] + box["height"] / 2)
+        page.keyboard.press("Alt+w")
+        page.wait_for_function("document.querySelectorAll('.imt-trans,.imt-only,[data-imt-placed]').length === 0")
+        restored = page.evaluate("ids => Object.fromEntries(ids.map(id => [id, document.getElementById(id).innerHTML]))", wb_ids)
+        assert restored == wb_orig, {k: (wb_orig[k], restored[k]) for k in wb_orig if wb_orig[k] != restored[k]}
+
+    # 3. Dialog checkbox, Welcome step button & inline button-link, Extension body tab, and Keybindings table.
+    drag_select("dlgCheckLabel")
+    assert page.evaluate("counts.dlgCheck === 0 && !document.getElementById('dlgCheck').checked"), "drag must not toggle dialog checkbox"
+    page.locator("#dlgCheckLabel").click()
+    assert page.evaluate("counts.dlgCheck === 1 && document.getElementById('dlgCheck').checked")
+
+    drag_select("gsStepTitle")
+    assert page.evaluate("counts.step === 0"), "dragging walkthrough step button must not activate step"
+    page.locator("#gsStepTitle").click()
+    assert page.evaluate("counts.step === 1")
+
+    drag_select("kbCommand")
+    assert page.evaluate("counts.kb === 0"), "dragging keybinding command must not activate row"
+
+    status["fullPageMode"] = "translationOnly"
+    refresh()
+    for surface_el, target_ids in [
+        ("gsEmptyRecent", ["gsEmptyRecent", "gsStepTitle", "gsStepDesc"]),
+        ("extFeatureDesc", ["extHeaderDesc", "extFeatureDesc"]),
+        ("kbCommand", ["kbCommand"])
+    ]:
+        page.locator("#" + surface_el).scroll_into_view_if_needed()
+        box = page.locator("#" + surface_el).bounding_box()
+        page.mouse.click(box["x"] + 10, box["y"] + box["height"] / 2)
+        page.keyboard.press("Alt+w")
+        for tid in target_ids:
+            page.wait_for_function("id => document.getElementById(id).dataset.imtPlaced === '1'", arg=tid, timeout=4000)
+        if surface_el == "gsEmptyRecent":
+            page.locator("#gsOpenFolderBtn").click()
+            assert page.evaluate("counts.openFolder === 1"), "inline button-link must stay in place and clickable"
+        assert page.locator("#kbKey").inner_text() == "Alt+Z"
+        page.keyboard.press("Alt+w")
+        page.wait_for_function("document.querySelectorAll('[data-imt-placed]').length === 0")
+
+    # Surface switch off for workbenchUI restores user-select: none on the Migrations page and dialogs.
+    status["surfaces"] = {"workbenchUI": False}
+    refresh()
+    assert page.locator("#migIntro").evaluate("el => getComputedStyle(el).userSelect") == "none"
+    assert page.locator("#migItemChanges").evaluate("el => getComputedStyle(el).userSelect") == "none"
+    assert page.locator("#dlgCheckLabel").evaluate("el => getComputedStyle(el).userSelect") == "none"
+    status.pop("surfaces")
+    status["fullPageMode"] = prev_mode
+    page.close()
+    return "ok"
+
+
 def main():
     ui = (ROOT / "src" / "ui.js").read_text(encoding="utf-8")
     ui = ui[:ui.rindex("if (typeof module")]  # production injects immersiveUI.toString() only
@@ -1025,6 +1380,7 @@ def main():
         results["webviews"] = webview_test(browser, handle, ui)
         results["extension_webviews"] = extension_webview_test(browser, handle, ui, status)
         results["release_notes"] = release_notes_test(browser, handle, ui, status)
+        results["customization_and_surfaces"] = customization_and_surfaces_test(browser, handle, ui, status)
         results["cross_page_dismiss"] = cross_page_test(browser, handle, ui, select)
         # New pages get the selected engine from /status; the same flow serves online and AI.
         status["translationEngine"] = "online"
