@@ -109,6 +109,7 @@ Data derived from HanDeDict must stay under CC BY-SA 3.0 and keep `data/HanDeDic
 - Keep changes focused. Never touch the code-editor surfaces: by design the extension does nothing in text editors.
 - Add or update tests for behavior changes, and update `README.md`, `README.zh-CN.md` and `CHANGELOG.md` (under a new version heading) when users will notice the change.
 - Documentation is written in English; the Chinese README mirrors the English one.
+- Keep the README an overview for users: what it does, the sidebar, the engines, how the integration works, privacy and troubleshooting. Put secondary detail in collapsed `<details>` blocks, and do not add tables of settings or commands; VS Code lists them on the extension's **Features** tab.
 - Files use LF line endings (enforced by `.gitattributes`).
 - Do not commit secrets, API keys, personal paths or generated `dist/` packages.
 - By contributing, you agree that your contribution is licensed under the [MIT License](LICENSE.txt). Contributions to the German dictionary data are licensed under CC BY-SA 3.0.

@@ -2,6 +2,14 @@
 
 All notable changes to this extension are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- Reorganized the English and Chinese READMEs (also the Marketplace page) around what readers need first: features, the settings sidebar, the three translation engines side by side, and how the integration works. Supported surfaces, shortcut details (both shortcuts are customizable), engine details and requirements are now collapsed. The quick start, uninstalling section and the long settings and commands tables are gone; VS Code lists every setting and command on the extension's **Features** tab.
+- The sidebar screenshot shows the whole panel in three columns instead of a long strip.
+- New demo GIF and screenshots: a short tour where each step translates the sentence that explains it. The GIF is rendered at twice the resolution with smoother pointer movement and an on-screen key badge.
+- Troubleshooting is now a symptom-and-fix table covering the common problems.
+
 ## [0.9.0] - Translate inside other extensions
 
 ### Highlights

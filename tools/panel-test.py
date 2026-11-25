@@ -169,18 +169,33 @@ def main():
         assert page.is_visible("#deBox") == (lang == "de"), "German dictionary block shows only for a German UI"
         assert not page.is_visible("#speedInfo")
         if shot:
-            # A configured, speed-tested model; clipped below the vocabulary so the README shows the main sections.
+            # A configured, speed-tested model. The sections flow into three columns so the README picture is wide, not a tall strip.
             pretty = state("vscode", lang)
-            pretty["modelId"] = "gpt-5-mini"
+            pretty["version"] = "0.6.6"
+            pretty["vscodeModels"][0].update(id="gpt-6-luna", name="GPT-6 Luna", detail="copilot · gpt-6-luna")
+            pretty["modelId"] = "gpt-6-luna"
             pretty["modelAuthorized"] = True
             for model, ms in zip(pretty["vscodeModels"], (820, 1150, 3900)):
                 model["timing"] = {"status": "ok", "median": ms, "first": ms // 2}
             post({"type": "state", "state": pretty})
-            wait("document.getElementById('modelId').value === 'gpt-5-mini'")
+            wait("document.getElementById('modelId').value === 'gpt-6-luna' && document.getElementById('version').textContent === 'v0.6.6'")
+            page.set_viewport_size({"width": 3 * 320 + 2 * 32, "height": 1180})
+            page.evaluate("""() => {
+                const s = document.body.style;
+                s.columnCount = '3'; s.columnGap = '32px'; s.columnRule = '1px solid rgba(128, 128, 128, 0.25)';
+                for (const e of document.querySelectorAll('body > *')) { e.style.breakInside = 'avoid'; }
+                const top = document.querySelector('details.sec').getBoundingClientRect().top;
+                for (const e of document.querySelectorAll('body > *')) { if (Math.abs(e.getBoundingClientRect().top - top) < 4) e.style.borderTop = 'none'; }
+            }""")
             page.mouse.move(0, 0)
             page.wait_for_timeout(200)
-            bottom = page.eval_on_selector("details[data-sec='vocabulary']", "d => d.getBoundingClientRect().bottom + window.scrollY")
-            page.screenshot(path=shot, clip={"x": 0, "y": 0, "width": 320, "height": bottom + 12}, full_page=True)
+            bottom = page.evaluate("Math.max(...[...document.querySelectorAll('body > *')].map(e => e.getBoundingClientRect().bottom + window.scrollY))")
+            page.screenshot(path=shot, clip={"x": 0, "y": 0, "width": 3 * 320 + 2 * 32, "height": bottom + 12}, full_page=True)
+            page.evaluate("""() => {
+                document.body.removeAttribute('style');
+                for (const e of document.querySelectorAll('body > *')) { e.style.breakInside = ''; e.style.borderTop = ''; }
+            }""")
+            page.set_viewport_size({"width": 320, "height": 1180})
             post({"type": "state", "state": state("vscode", lang)})
             wait("document.getElementById('modelId').value === ''")
         posted()

@@ -227,7 +227,7 @@ To publish a pre-release, run `vsce publish --pre-release --packagePath …` man
 
 - **Installation patching.** The extension modifies files inside the VS Code installation, as “Custom CSS and JS Loader”, “Apc Customize UI++” and “Background” do. Because this is sensitive, keep the following true:
   - it stays off until the user consents;
-  - it is disclosed in the README (“How it works”), in the consent dialog and in `SECURITY.md`;
+  - it is disclosed in the README (“How the integration works”), in the consent dialog and in `SECURITY.md`;
   - Disable restores the original files.
 
   Misleading listings can be removed by Microsoft.

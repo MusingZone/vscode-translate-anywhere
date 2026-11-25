@@ -48,60 +48,75 @@ CURSOR = ('<svg id="cursor" viewBox="0 0 18 24"><path d="M1 1v19l5-4.5 3.4 7.3 3
 CURSOR_JS = """addEventListener('mousemove', e => { const c = document.getElementById('cursor');
   c.style.left = e.clientX + 'px'; c.style.top = e.clientY + 'px'; document.body.appendChild(c); }, true);"""
 
-RELEASE_NOTES = f"""<!doctype html><html><head><meta charset="utf-8"><style>{STYLE}</style></head><body>
-<div id="release-notes-tokenization"></div>
-<div class="tabs"><div class="tab">extension.ts</div><div class="tab on">Release Notes: 1.99</div><div class="tab">README.md</div></div>
+KEYCAST = ('<svg id="keycast" viewBox="0 0 120 44" width="120" height="44" style="position:fixed;left:50%;bottom:26px;'
+           'margin-left:-60px;display:none;z-index:2147483646;pointer-events:none"><rect x="1" y="1" width="118" height="42" rx="8" '
+           'fill="#2b2b2b" stroke="#6b6b6b" stroke-width="1.5"/><text x="60" y="29" text-anchor="middle" fill="#ffffff" '
+           'font-family="Segoe UI,sans-serif" font-size="19" font-weight="600"></text></svg>')
+KEYCAST_JS = """window.__key = label => { const k = document.getElementById('keycast');
+  k.querySelector('text').textContent = label || ''; k.style.display = label ? 'block' : 'none'; document.body.appendChild(k); };"""
+
+# Every step of the demo translates the sentence that explains that step.
+TOUR = f"""<!doctype html><html><head><meta charset="utf-8"><style>{STYLE}</style></head><body>
+<div id="vscode-markdown-preview-data"></div>
+<div class="tabs"><div class="tab">extension.ts</div><div class="tab on">Preview TOUR.md</div><div class="tab">settings.json</div></div>
 <main>
-<h1 id="title">Release notes for the sample update</h1>
-<p class="muted">A demo page for Translate Anywhere screenshots.</p>
-<h2 id="h-perf">Faster workspace search</h2>
-<p id="p1">Search now streams results as soon as they are found, which noticeably improves <b>throughput</b> in very large repositories.</p>
-<p id="p2">Indexing runs in the background, so you can keep typing while the cache warms up.</p>
-<h2 id="h-term">Terminal improvements</h2>
-<p id="p3">Commands that take longer than a few seconds now show a progress indicator in the tab, and you can hover it to see the elapsed time.</p>
-<ul><li id="li1">Sticky scroll keeps the current command visible.</li><li id="li2">Links to files open in the existing editor group.</li></ul>
-</main>{CURSOR}<script>{CURSOR_JS}</script></body></html>"""
+<h1 id="title">A quick tour of Translate Anywhere</h1>
+<p id="intro" class="muted">Each step below translates the sentence that explains it.</p>
+<h2 id="h-word">Look up a word</h2>
+<p id="p1">Select a single word, such as vocabulary, and point at the red dot: the offline dictionary explains it instantly.</p>
+<h2 id="h-sentence">Translate a sentence</h2>
+<p id="p2">Select a whole sentence and point at the red dot, and the AI engine translates it in context.</p>
+<h2 id="h-paragraph">Translate a paragraph</h2>
+<p id="p3">Point at a paragraph and press the paragraph key: the translation appears in place, and pressing the key again restores the original.</p>
+<h2 id="h-page">Translate the whole page</h2>
+<p id="p4">Press the full-page key to translate everything you are reading, including content that appears later.</p>
+<ul><li id="li1">Links, code and buttons keep working.</li><li id="li2">Press the key again to switch back to the original.</li></ul>
+</main>{CURSOR}{KEYCAST}<script>{CURSOR_JS}{KEYCAST_JS}</script></body></html>"""
 
 CHAT = f"""<!doctype html><html><head><meta charset="utf-8"><style>{STYLE}</style></head><body>
 <div class="chat"><div class="editor">
-<div>export function activate(context) {{</div><div>&nbsp;&nbsp;const output = createOutput();</div>
-<div>&nbsp;&nbsp;context.subscriptions.push(output);</div><div>}}</div></div>
+<div>{{</div><div>&nbsp;&nbsp;"translateAnywhere.targetLanguage": "zh-CN",</div>
+<div>&nbsp;&nbsp;"translateAnywhere.fullPage.mode": "bilingual"</div><div>}}</div></div>
 <div class="pane interactive-session"><div class="monaco-list">
- <div class="interactive-item-container"><div class="who">You</div><div class="rendered-markdown"><p>Why does my extension activate so late?</p></div></div>
+ <div class="interactive-item-container"><div class="who">You</div><div class="rendered-markdown"><p>How do I translate an answer in Chat?</p></div></div>
  <div class="interactive-item-container"><div class="who">Copilot</div><div class="rendered-markdown">
-  <p id="c1">Your extension uses the <code>onStartupFinished</code> activation event, so VS Code waits until the window has fully loaded before starting it.</p>
-  <p id="c2">If you need it earlier, contribute a more specific activation event, such as a command or a language, instead of activating on every startup.</p>
+  <p id="c1">Select any sentence in this answer and point at the red dot; the translation appears without leaving Chat.</p>
+  <p id="c2">To translate the whole conversation, point at it and press the full-page key. Code blocks stay exactly as they are.</p>
  </div></div></div></div></div>{CURSOR}<script>{CURSOR_JS}</script></body></html>"""
 
 DICT = {
-    "throughput": {"phonetic": "'θruːpʊt", "translation": "n. 吞吐量；生产量；处理能力"},
-    "indexing": {"phonetic": "'ɪndeksɪŋ", "translation": "n. 索引；编制索引"},
+    "vocabulary": {"phonetic": "vəˈkæbjələri", "translation": "n. 词汇；词汇量；词汇表"},
 }
 AI = {
-    "Search now streams results as soon as they are found": "搜索现在会在找到结果后立即以流式方式返回",
-    "Search now streams results as soon as they are found, which noticeably improves throughput in very large repositories.":
-        "搜索现在会在找到结果后立即以流式方式返回，显著提升了超大型仓库中的吞吐量。",
-    "Indexing runs in the background, so you can keep typing while the cache warms up.": "索引在后台运行，因此在缓存预热期间你可以继续输入。",
-    "Commands that take longer than a few seconds now show a progress indicator in the tab, and you can hover it to see the elapsed time.":
-        "运行超过几秒的命令现在会在标签页中显示进度指示器，将鼠标悬停其上即可查看已用时间。",
-    "Release notes for the sample update": "示例更新的发行说明",
-    "A demo page for Translate Anywhere screenshots.": "用于 Translate Anywhere 截图的演示页面。",
-    "Faster workspace search": "更快的工作区搜索",
-    "Terminal improvements": "终端改进",
-    "Sticky scroll keeps the current command visible.": "粘性滚动让当前命令始终可见。",
-    "Links to files open in the existing editor group.": "文件链接会在现有编辑器组中打开。",
-    "Your extension uses the onStartupFinished activation event, so VS Code waits until the window has fully loaded before starting it.":
-        "你的扩展使用了 onStartupFinished 激活事件，因此 VS Code 会等到窗口完全加载后才启动它。",
-    "If you need it earlier, contribute a more specific activation event, such as a command or a language, instead of activating on every startup.":
-        "如果需要更早激活，请贡献更具体的激活事件（例如命令或语言），而不是在每次启动时激活。",
+    "extension.ts": "extension.ts", "Preview TOUR.md": "预览 TOUR.md", "settings.json": "settings.json",
+    "A quick tour of Translate Anywhere": "Translate Anywhere 快速导览",
+    "Each step below translates the sentence that explains it.": "下面每一步都会翻译讲解这一步的那句话。",
+    "Look up a word": "查单词",
+    "Select a single word, such as vocabulary, and point at the red dot: the offline dictionary explains it instantly.":
+        "选中一个单词（例如 vocabulary），再指向小红点：离线词典会立即给出释义。",
+    "Translate a sentence": "翻译句子",
+    "Select a whole sentence and point at the red dot, and the AI engine translates it in context.":
+        "选中一整句话再指向小红点，AI 引擎会结合上下文翻译它。",
+    "Translate a paragraph": "翻译段落",
+    "Point at a paragraph and press the paragraph key: the translation appears in place, and pressing the key again restores the original.":
+        "指向一个段落并按下段落快捷键：译文直接显示在原处，再按一次即恢复原文。",
+    "Translate the whole page": "翻译整页",
+    "Press the full-page key to translate everything you are reading, including content that appears later.":
+        "按下全文快捷键即可翻译正在阅读的全部内容，之后新出现的内容也会翻译。",
+    "Links, code and buttons keep working.": "链接、代码和按钮照常可用。",
+    "Press the key again to switch back to the original.": "再按一次即可切回原文。",
+    "Select any sentence in this answer and point at the red dot; the translation appears without leaving Chat.":
+        "选中这条回答中的任意一句再指向小红点，无需离开 Chat 就能看到译文。",
+    "To translate the whole conversation, point at it and press the full-page key. Code blocks stay exactly as they are.":
+        "要翻译整个对话，把鼠标移到对话上并按下全文快捷键。代码块保持原样。",
 }
 
 
 def handler(lang):
     def handle(route):
         url = route.request.url[len(ORIGIN):]
-        if url in ("/release", "/chat"):
-            return route.fulfill(status=200, content_type="text/html", body=RELEASE_NOTES if url == "/release" else CHAT)
+        if url in ("/tour", "/chat"):
+            return route.fulfill(status=200, content_type="text/html", body=TOUR if url == "/tour" else CHAT)
         body = json.loads(route.request.post_data or "{}")
         text = " ".join((body.get("text") or "").split())
         if url == "/status":
@@ -112,7 +127,10 @@ def handler(lang):
             data = {"found": bool(hit), "word": text, "phonetic": hit["phonetic"] if hit else "",
                     "translation": hit["translation"] if hit else "", "source": "ECDICT"}
         elif url == "/ai":
-            data = {"translation": AI.get(text, AI.get(text.rstrip("."), "（译文）")), "source": "AI · GPT-5 mini"}
+            translation = AI.get(text, AI.get(text.rstrip(".")))
+            if translation is None:
+                print("screenshots.py: no canned translation for", repr(text), file=sys.stderr)
+            data = {"translation": translation or "（译文）", "source": "AI · GPT-6 Luna"}
         elif url == "/vocab":
             data = {"saved": False}
         else:
@@ -122,24 +140,51 @@ def handler(lang):
 
 
 class Recorder:
-    """Collects GIF frames; each frame keeps its own display duration."""
+    """Collects GIF frames at the page's device pixel ratio; each frame keeps its own display duration."""
+
+    FRAME = 30  # ms; browsers slow down GIF frames shorter than 20 ms
 
     def __init__(self, page):
-        self.page, self.frames = page, []
+        self.page, self.frames, self.pos = page, [], (0, 0)
 
-    def snap(self, ms=80):
+    def snap(self, ms=FRAME):
         self.frames.append((Image.open(io.BytesIO(self.page.screenshot())).convert("RGB"), ms))
 
     def hold(self, ms):
         self.snap(ms)
 
-    def move(self, x0, y0, x1, y1, steps=8, ms=40):
-        for i in range(1, steps + 1):
-            self.page.mouse.move(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps)
-            self.snap(ms)
+    def move(self, x1, y1, ms=None, frames=None):
+        """Eased pointer movement; the number of frames follows the distance so speed stays even."""
+        x0, y0 = self.pos
+        dist = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
+        n = frames or max(4, min(22, round(dist / 28)))
+        for i in range(1, n + 1):
+            k = i / n
+            k = k * k * (3 - 2 * k)
+            self.page.mouse.move(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)
+            self.snap(ms or self.FRAME)
+        self.pos = (x1, y1)
+
+    def key(self, combo, wait=None):
+        """Shows the pressed key in an on-screen badge while the page reacts."""
+        self.page.evaluate("k => window.__key(k)", combo)
+        self.hold(350)
+        self.page.keyboard.press(combo)
+        if wait:
+            self.page.wait_for_function(wait)
+        self.page.wait_for_timeout(120)
+        self.hold(250)
+        self.page.evaluate("window.__key('')")
 
     def save(self, path):
-        frames = [f.quantize(colors=128, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE) for f, _ in self.frames]
+        # One shared palette from a sample of frames keeps colors stable from frame to frame (no flicker).
+        sample = [f for f, _ in self.frames[::max(1, len(self.frames) // 12)]]
+        w, h = sample[0].size
+        sheet = Image.new("RGB", (w, h * len(sample)))
+        for i, f in enumerate(sample):
+            sheet.paste(f, (0, h * i))
+        palette = sheet.quantize(colors=255, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+        frames = [f.quantize(palette=palette, dither=Image.Dither.NONE) for f, _ in self.frames]
         frames[0].save(path, save_all=True, append_images=frames[1:], duration=[d for _, d in self.frames], loop=0, optimize=True)
 
 
@@ -159,18 +204,18 @@ def dot_center(page):
     return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
 
 
-def drag_select(rec, page, box, start, steps=10):
-    rec.move(*start, box["x0"], box["y0"], steps=6)
+def drag_select(rec, page, box):
+    rec.move(box["x0"], box["y0"])
     page.mouse.down()
-    rec.move(box["x0"], box["y0"], box["x1"], box["y1"], steps=steps, ms=50)
+    dist = abs(box["x1"] - box["x0"]) + abs(box["y1"] - box["y0"]) * 4
+    rec.move(box["x1"], box["y1"], frames=max(5, min(26, round(dist / 30))))
     page.mouse.up()
     page.wait_for_timeout(150)
-    rec.snap(300)
-    return box["x1"], box["y1"]
+    rec.hold(250)
 
 
-def open_page(browser, lang, path, workbench=False):
-    page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
+def open_page(browser, lang, path, workbench=False, scale=1):
+    page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=scale)
     page.route(ORIGIN + "/**", handler(lang))
     page.goto(ORIGIN + path)
     ui = (ROOT / "src" / "ui.js").read_text(encoding="utf-8")
@@ -183,69 +228,75 @@ def open_page(browser, lang, path, workbench=False):
     return page
 
 
+def still(page, path):
+    """README stills: rendered at the GIF's 2x scale, stored at 1x for small files."""
+    img = Image.open(io.BytesIO(page.screenshot())).convert("RGB")
+    img.resize((W, H), Image.Resampling.LANCZOS).save(path, optimize=True)
+
+
+def popup(page, text):
+    page.wait_for_function(f"document.querySelector('.imt-panel:not([hidden])')?.textContent.includes({json.dumps(text)})")
+    page.wait_for_timeout(100)
+
+
+def dismiss(rec, page):
+    page.keyboard.press("Escape")
+    page.mouse.click(*rec.pos)
+    page.wait_for_timeout(100)
+    rec.hold(200)
+
+
 def render(browser, lang, out):
     out.mkdir(parents=True, exist_ok=True)
-    # Release Notes: word -> dictionary, sentence -> AI, Alt+Z, Alt+W. Recorded as the demo GIF.
-    page = open_page(browser, lang, "/release")
+    # The tour page: word -> dictionary, sentence -> AI, paragraph key, full-page key. Recorded as the demo GIF.
+    page = open_page(browser, lang, "/tour", scale=2)
     rec = Recorder(page)
-    rec.hold(600)
-    pos = drag_select(rec, page, word_box(page, "p1", "throughput"), (W - 60, H - 40), steps=6)
-    dot = dot_center(page)
-    rec.move(*pos, *dot, steps=6)
-    page.wait_for_function("document.querySelector('.imt-panel:not([hidden])')?.textContent.includes('吞吐量')")
-    page.wait_for_timeout(100)
-    rec.hold(1800)
-    page.screenshot(path=str(out / "dictionary.png"))
-    page.keyboard.press("Escape")
-    page.mouse.click(820, 120)
-    rec.snap(200)
+    rec.pos = (W - 60, H - 40)
+    rec.hold(700)
 
-    box = word_box(page, "p1", "Search now streams results as soon as they are found")
-    pos = drag_select(rec, page, box, (820, 120), steps=12)
-    dot = dot_center(page)
-    rec.move(*pos, *dot, steps=6)
-    page.wait_for_function("document.querySelector('.imt-panel:not([hidden])')?.textContent.includes('流式')")
-    page.wait_for_timeout(100)
-    rec.hold(1800)
-    page.screenshot(path=str(out / "ai-translation.png"))
-    page.keyboard.press("Escape")
-    page.mouse.click(820, 120)
-    rec.snap(200)
+    drag_select(rec, page, word_box(page, "p1", "vocabulary"))
+    rec.move(*dot_center(page))
+    popup(page, "词汇")
+    rec.hold(1700)
+    still(page, out / "dictionary.png")
+    dismiss(rec, page)
 
-    p3 = word_box(page, "p3", "progress indicator")
-    rec.move(820, 120, p3["x0"], p3["y0"], steps=8)
-    rec.hold(300)
-    page.keyboard.press("Alt+Z")
-    page.wait_for_function("document.querySelector('#p3 .imt-trans')?.textContent.includes('进度')")
-    page.wait_for_timeout(100)
-    rec.hold(1800)
-    page.screenshot(path=str(out / "paragraph.png"))
-    page.keyboard.press("Alt+Z")
-    page.wait_for_timeout(150)
-    rec.snap(300)
+    drag_select(rec, page, word_box(page, "p2", "Select a whole sentence and point at the red dot, and the AI engine translates it in context."))
+    rec.move(*dot_center(page))
+    popup(page, "上下文")
+    rec.hold(2000)
+    still(page, out / "ai-translation.png")
+    dismiss(rec, page)
 
-    page.keyboard.press("Alt+W")
-    page.wait_for_function("document.getElementById('title').textContent.includes('示例')")
+    p3 = word_box(page, "p3", "the translation appears")
+    rec.move(p3["x0"], p3["y0"])
+    rec.hold(250)
+    rec.key("Alt+Z", "document.querySelector('#p3 .imt-trans')?.textContent.includes('原处')")
+    rec.hold(1900)
+    still(page, out / "paragraph.png")
+    rec.key("Alt+Z")
+    rec.hold(400)
+
+    rec.key("Alt+W", "document.getElementById('title').textContent.includes('导览')")
     page.wait_for_timeout(300)
-    rec.hold(2200)
-    page.screenshot(path=str(out / "full-page.png"))
-    page.keyboard.press("Alt+W")
-    page.wait_for_timeout(300)
+    rec.hold(2600)
+    still(page, out / "full-page.png")
+    rec.key("Alt+W")
     rec.hold(900)
     rec.save(out / "demo.gif")
     page.close()
 
     # Chat: a sentence in an assistant answer, translated by AI automatically.
-    page = open_page(browser, lang, "/chat", workbench=True)
-    box = word_box(page, "c2", "If you need it earlier, contribute a more specific activation event, such as a command or a language, instead of activating on every startup.")
+    page = open_page(browser, lang, "/chat", workbench=True, scale=2)
+    box = word_box(page, "c1", "Select any sentence in this answer and point at the red dot; the translation appears without leaving Chat.")
     page.mouse.move(box["x0"], box["y0"])
     page.mouse.down()
     page.mouse.move(box["x1"], box["y1"], steps=12)
     page.mouse.up()
     page.mouse.move(*dot_center(page), steps=5)
-    page.wait_for_function("document.querySelector('.imt-panel:not([hidden])')?.textContent.includes('激活')")
+    popup(page, "Chat")
     page.wait_for_timeout(150)
-    page.screenshot(path=str(out / "chat.png"))
+    still(page, out / "chat.png")
     page.close()
 
 
@@ -255,7 +306,7 @@ def sidebar(lang, out):
         args.append("--zh")
     subprocess.run(args, check=True, env=os.environ)
     img = Image.open(out / "sidebar.png")
-    # panel-test.py already clips below the vocabulary section; this only guards against a runaway height.
+    # panel-test.py lays the sections out in three columns; this only guards against a runaway height.
     img.crop((0, 0, img.width, min(img.height, 3200))).save(out / "sidebar.png", optimize=True)
 
 
