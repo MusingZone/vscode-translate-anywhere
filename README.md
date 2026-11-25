@@ -145,7 +145,8 @@ VS Code gives extensions no API to read selections or draw popups inside Chat, R
 - **Dictionary lookups are local.** The only dictionary network access is the one-time download.
 - **AI translation** sends the selected text, or the paragraph or page being translated, only to the provider you chose. **Online translation** sends text only after you allow the service on this computer; MyMemory may retain it, so do not send confidential text or code there.
 - Page translation sends visible text with short markers such as `<g1>…</g1>` in place of links and other inline elements. Link targets, code and setting IDs are not sent.
-- The injected UI talks to the extension over `127.0.0.1:17865`, protected by a random per-installation token and an origin check. Your vocabulary stays on this computer.
+- The injected UI talks to the extension over `127.0.0.1:17865`, protected by a random per-installation token and an origin check.
+- **Vocabulary** is saved on this computer and, when VS Code Settings Sync is on (with **Extensions** included), synced through your Settings Sync account to your other computers. It is never sent anywhere else.
 
 Details: [SECURITY.md](SECURITY.md) and [docs/ONLINE-TRANSLATION.md](docs/ONLINE-TRANSLATION.md).
 

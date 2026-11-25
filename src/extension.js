@@ -12,7 +12,7 @@ const { compareVersions, createBridge, PORT } = require('./bridge');
 const { applyPatch, restorePatch, withPatchLock, patchConfig, patchedAfter, pruneStaleStates } = require('./patcher');
 const ui = require('./ui');
 const { elevatedMaintenance, readOnlyInstallReason } = require('./elevation');
-const { Vocabulary } = require('./vocabulary');
+const { Vocabulary, mergeVocabulary } = require('./vocabulary');
 const models = require('./models');
 
 const SECTION = 'translateAnywhere';
@@ -80,7 +80,30 @@ async function activate(context) {
   // The window's UI is loaded before its extension host starts: patches written after this moment are not running here.
   const uiLoadedBefore = Date.now() - process.uptime() * 1000;
   const runtimeConfig = () => patchConfig({ endpoint: `http://127.0.0.1:${PORT}`, token, runtime: ui.toString() });
-  const vocabulary = new Vocabulary(path.join(stateFolder, 'vocabulary.json'));
+  const VOCABULARY_SYNC_KEY = 'vocabulary.sync.v1';
+  context.globalState.setKeysForSync([VOCABULARY_SYNC_KEY]);
+  const vocabulary = new Vocabulary(path.join(stateFolder, 'vocabulary.json'), { onChange: () => syncVocabulary() });
+  // Settings Sync carries globalState keys, not files: mirror the vocabulary into one synced key and merge both ways.
+  let vocabularySyncing = false;
+  function syncVocabulary() {
+    if (vocabularySyncing) return;
+    vocabularySyncing = true;
+    try {
+      const local = vocabulary.snapshot();
+      const remote = context.globalState.get(VOCABULARY_SYNC_KEY);
+      const merged = mergeVocabulary(local, remote);
+      const text = JSON.stringify(merged);
+      if (text !== JSON.stringify(mergeVocabulary(local))) {
+        vocabulary.replace(merged);
+        panel?.refresh();
+      }
+      if (text !== JSON.stringify(remote)) context.globalState.update(VOCABULARY_SYNC_KEY, merged).then(undefined, logError);
+    } catch (error) {
+      logError(error);
+    } finally {
+      vocabularySyncing = false;
+    }
+  }
   let panel;
   let server;
   let sharedBridge = false;
@@ -1427,6 +1450,11 @@ async function activate(context) {
     if (sharedBridge) startBridge().catch(logError);
   }, 10000);
   context.subscriptions.push({ dispose: () => clearInterval(heartbeat) });
+  // globalState has no change event: pick up entries synced from other computers or saved in other windows.
+  syncVocabulary();
+  const vocabularyTimer = setInterval(syncVocabulary, 30000);
+  context.subscriptions.push({ dispose: () => clearInterval(vocabularyTimer) },
+    vscode.window.onDidChangeWindowState(state => { if (state.focused) syncVocabulary(); }));
   // Visibility changes do not fire onDidChangeChatModels. Poll only while the sidebar is
   // visible, and refresh only when the relevant profile state actually changes.
   let sidebarVisibility = '';

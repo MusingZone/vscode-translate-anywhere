@@ -4,6 +4,11 @@ All notable changes to this extension are documented here. The format follows [K
 
 ## [Unreleased]
 
+## [0.9.1] - Vocabulary sync
+
+### Added
+- **Vocabulary syncs across computers.** With VS Code Settings Sync turned on (with **Extensions** included), saved entries now follow your account to every computer, merged with what each one already has. Removing an entry on one computer removes it on the others; saving it again later brings it back. Entries saved before this version are uploaded the first time the new version starts.
+
 ### Changed
 - Reorganized the English and Chinese READMEs (also the Marketplace page) around what readers need first: features, the settings sidebar, the three translation engines side by side, and how the integration works. Supported surfaces, shortcut details (both shortcuts are customizable), engine details and requirements are now collapsed. The quick start, uninstalling section and the long settings and commands tables are gone; VS Code lists every setting and command on the extension's **Features** tab.
 - The sidebar screenshot shows the whole panel in three columns instead of a long strip.

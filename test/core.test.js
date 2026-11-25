@@ -9,7 +9,7 @@ const { Dictionary } = require('../src/dictionary');
 const { createBridge, allowedOrigin } = require('../src/bridge');
 const { patchSources, applyPatch, restorePatch, pathsFor, withPatchLock, patchConfig, patchedAfter, pruneStaleStates } = require('../src/patcher');
 const ui = require('../src/ui');
-const { Vocabulary } = require('../src/vocabulary');
+const { Vocabulary, mergeVocabulary } = require('../src/vocabulary');
 
 const vscodeChecksum = text => crypto.createHash('sha256').update(text).digest('base64').replace(/=+$/, '');
 const fixture = () => {
@@ -478,6 +478,37 @@ test('vocabulary toggles case-insensitively, removes, and exports markdown/csv',
     assert.match(vocab.toMarkdown('zh'), /还没有收藏/);
     assert.match(vocab.toMarkdown('de'), /# Vokabelliste \(0\)[\s\S]*Noch nichts gespeichert/);
     assert.match(vocab.toMarkdown(), /Nothing saved yet/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('vocabulary snapshots from two computers merge additions and deletions', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imt-vocab-sync-'));
+  try {
+    let changes = 0;
+    const laptop = new Vocabulary(path.join(dir, 'a', 'vocabulary.json'), { onChange: () => changes++ });
+    const desktop = new Vocabulary(path.join(dir, 'b', 'vocabulary.json'));
+    laptop.toggle({ text: 'alpha' });
+    laptop.toggle({ text: 'beta' });
+    desktop.toggle({ text: 'Gamma' });
+    assert.equal(changes, 2);
+    const synced = mergeVocabulary(laptop.snapshot(), desktop.snapshot());
+    assert.deepEqual(synced.entries.map(entry => entry.text).sort(), ['Gamma', 'alpha', 'beta']);
+    desktop.replace(synced);
+    // A deletion on one computer wins over the older entry still present on the other.
+    desktop.remove(['ALPHA']);
+    assert.deepEqual(Object.keys(desktop.removed()), ['alpha']);
+    const afterDelete = mergeVocabulary(laptop.snapshot(), desktop.snapshot());
+    assert.deepEqual(afterDelete.entries.map(entry => entry.text).sort(), ['Gamma', 'beta']);
+    // Saving the word again later beats the earlier deletion and clears its marker.
+    const readded = { text: 'alpha', addedAt: new Date(Date.now() + 60000).toISOString() };
+    const final = mergeVocabulary(afterDelete, { entries: [readded] });
+    assert.equal(final.entries[0].text, 'alpha');
+    assert.deepEqual(final.entries.map(entry => entry.text).sort(), ['Gamma', 'alpha', 'beta']);
+    assert.deepEqual(final.removed, {});
+    assert.equal(changes, 2, 'merging and replacing are not user edits');
+    assert.deepEqual(mergeVocabulary(undefined, { entries: 'bad', removed: null }), { entries: [], removed: {} });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

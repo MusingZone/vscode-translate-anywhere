@@ -35,7 +35,8 @@ async function activate(options = {}) {
     asAbsolutePath: file => path.join(root, file),
     globalState: {
       get: (key, fallback) => h.stored.has(key) ? h.stored.get(key) : fallback,
-      update: async (key, value) => { if (value === undefined) h.stored.delete(key); else h.stored.set(key, value); }
+      update: async (key, value) => { if (value === undefined) h.stored.delete(key); else h.stored.set(key, value); },
+      setKeysForSync: () => {}
     },
     secrets: { get: async () => undefined, onDidChange: disposable },
     languageModelAccessInformation: { onDidChange: disposable, canSendRequest: () => true }
@@ -45,7 +46,7 @@ async function activate(options = {}) {
     window: {
       state: { focused: true },
       createOutputChannel: () => ({ ...disposable(), appendLine() {}, show() {} }),
-      registerWebviewViewProvider: disposable, onDidChangeActiveTextEditor: disposable,
+      registerWebviewViewProvider: disposable, onDidChangeActiveTextEditor: disposable, onDidChangeWindowState: disposable,
       showWarningMessage: async (message, _options, ...items) => { h.warnings.push(message); return h.allow ? items[0] : undefined; },
       showInformationMessage: async (message, ...items) => { h.infos.push(message); return h.info ? h.info(items) : undefined; },
       showErrorMessage: async message => h.errors.push(message)
