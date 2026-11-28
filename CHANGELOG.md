@@ -4,6 +4,12 @@ All notable changes to this extension are documented here. The format follows [K
 
 ## [Unreleased]
 
+## [0.9.3] - Focused-pane full-page translation
+
+### Fixed
+- **Full-page translation stays scoped to the focused pane.** Full-page translation is triggered by its in-page shortcut (**Alt+W** by default, not a Command Palette command) and now tracks, queues and toggles each workbench pane root individually rather than every container matching a surface category, so invoking it in one pane (for example Copilot Chat next to a read-only Chat editor and an extension webview, or split Settings / Workbench UI panes) translates and restores only that pane and never leaks into adjacent editor groups, sidebars, dialogs or webviews—even when panes detach or virtualized list rows unmount and reattach while requests are queued or in flight.
+- **Accurate pane targeting across external command UI, intra-pane toolbars and tabs.** Moving focus from a workbench content pane to external command UI (Command Palette, menus, window chrome, or header/external toolbars) preserves that last workbench pane for **Alt+W**, while clicking a toolbar inside a different content pane or clicking an editor tab/pane header selects that pane, and closing/detaching the last pane clears it instead of falling back to whichever pane is under the pointer. Unhandled key events forwarded from a focused webview or code editor never leak into workbench panes; cross-origin webview panes handle **Alt+W** directly inside their own frame and cannot be toggled remotely while focus is in workbench command UI.
+
 ## [0.9.2] - Chat customization migrations and workbench prose
 
 ### Fixed

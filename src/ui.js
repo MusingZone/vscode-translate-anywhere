@@ -328,15 +328,31 @@ function immersiveUI(config) {
       updateSelection();
       statusListeners.push(updateSelection);
     }
-    // Which surface (and which container instance) an element belongs to; null when not translatable here.
-    function regionOf(element) {
+    // Outermost matching container within the same surface selector, so nested regions (e.g. .monaco-hover inside
+    // .workbench-hover-container) resolve to one pane root while sibling panes stay distinct.
+    function outermost(element, selector) {
+      let match = element?.closest?.(selector) || null;
+      while (match?.parentElement) {
+        const outer = match.parentElement.closest(selector);
+        if (!outer) break;
+        match = outer;
+      }
+      return match;
+    }
+    // Which surface (and which pane root) an element belongs to, ignoring enabled/disabled switches.
+    function rawRegionOf(element) {
       if (!element?.closest) return null;
-      if (scope !== 'workbench') return surfaceOn(scope) ? { key: scope, root: doc.body, content: doc.body } : null;
+      if (scope !== 'workbench') return { key: scope, root: doc.body, content: doc.body };
       for (const [key, container, content] of REGIONS) {
-        const root = element.closest(container);
-        if (root) return surfaceOn(key) ? { key, root, content: element.closest(content) } : null;
+        const root = outermost(element, container);
+        if (root) return { key, root, content: outermost(element, content) };
       }
       return null;
+    }
+    // Which enabled surface (and which container instance) an element belongs to; null when not translatable here.
+    function regionOf(element) {
+      const region = rawRegionOf(element);
+      return region && surfaceOn(region.key) ? region : null;
     }
     const dot = doc.createElement('button');
     dot.className = 'imt-dot';
@@ -887,9 +903,13 @@ function immersiveUI(config) {
     const queue = [];
     const settling = new WeakMap();
     let running = 0;
-    // Full-page translation is toggled per surface (e.g. Chat and Settings independently in the workbench).
-    const fullSurfaces = new Set();
-    let fullOnly = true;
+    // Full-page translation is toggled per pane root (root Element -> { root, key, only, blocks }), never
+    // across every container sharing a surface category.
+    const fullPanes = new Map();
+    // undefined = no click/focus observed yet; null = user moved to a non-translatable pane, webview or detached pane;
+    // { key, root } = most recently clicked/focused real translatable workbench pane.
+    let lastPane;
+    let lastPanePressAt = 0;
     let visibility;
     let mutations;
     let rescanTimer = 0;
@@ -1154,7 +1174,7 @@ function immersiveUI(config) {
     const transOf = block => [...block.children].find(child => child.classList.contains('imt-trans'));
     const translated = block => !!transOf(block) || placed.has(block) || jobs.has(block) || block.classList.contains('imt-only');
     function removeTranslation(block) {
-      jobs.get(block)?.abort();
+      jobs.get(block)?.controller.abort();
       jobs.delete(block);
       transOf(block)?.remove();
       restore(block);
@@ -1204,7 +1224,7 @@ function immersiveUI(config) {
       if (current.trim()) out.push(current);
       return out;
     }
-    function enqueue(block, priority, only = false) {
+    function enqueue(block, priority, only = false, owner = null) {
       if (jobs.has(block) || !inContent(block)) return;
       if (placed.has(block)) {
         if (ownText(block) === placed.get(block).out) return;
@@ -1225,28 +1245,52 @@ function immersiveUI(config) {
       span.addEventListener('click', event => forwardClick(event, span));
       block.insertBefore(span, s.inline[s.inline.length - 1]?.nextSibling || null);
       block.dataset.imtSrc = s.plain;
+      if (owner) owner.blocks.add(block);
+      const paneRoot = owner?.root || regionOf(block)?.root || null;
       const controller = new AbortController();
-      jobs.set(block, controller);
-      queue[priority ? 'unshift' : 'push']({ block, span, text: s.rich ? s.markup : s.text, rich: s.rich, controller, only });
+      jobs.set(block, { controller, paneRoot, owner });
+      queue[priority ? 'unshift' : 'push']({ block, span, text: s.rich ? s.markup : s.text, rich: s.rich, controller, only, paneRoot, owner });
       pump();
     }
+    const isJobValid = ({ block, controller, owner }) => {
+      if (controller.signal.aborted || disabled || !block.isConnected) return false;
+      if (owner) return fullPanes.get(owner.root) === owner && owner.root.isConnected && owner.root.contains(block) && surfaceOn(owner.key);
+      return !!regionOf(block);
+    };
     function pump() {
       while (running < 3 && queue.length) {
         const job = queue.shift();
         if (job.controller.signal.aborted) continue;
+        if (!isJobValid(job)) {
+          if (job.owner && !job.owner.root.isConnected) setFullMode(job.owner.root, job.owner.key, false, true);
+          else {
+            removeTranslation(job.block);
+            delete job.block.dataset.imtSeen;
+          }
+          continue;
+        }
         running++;
         runJob(job).finally(() => { running--; pump(); });
       }
     }
-    async function runJob({ block, span, text, rich, controller, only }) {
+    async function runJob(job) {
+      const { block, span, text, rich, controller, only } = job;
       let done = '';
       const show = value => { span.textContent = rich ? streamed(value) : value; };
+      const cancelStale = () => {
+        if (!controller.signal.aborted) {
+          removeTranslation(block);
+          delete block.dataset.imtSeen;
+        }
+      };
       try {
         for (const part of chunks(text, rich)) {
           for (let attempt = 0; ; attempt++) {
+            if (!isJobValid(job)) { cancelStale(); return; }
             let partial = '';
             try {
               const data = await streamAI(part, controller.signal, delta => {
+                if (!isJobValid(job)) { cancelStale(); return; }
                 partial += delta;
                 span.classList.remove('imt-loading');
                 show(done + partial);
@@ -1260,8 +1304,10 @@ function immersiveUI(config) {
               await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
             }
           }
+          if (!isJobValid(job)) { cancelStale(); return; }
           show(done);
         }
+        if (!isJobValid(job)) { cancelStale(); return; }
         span.classList.remove('imt-loading');
         if (only && place(block, span, done, text, rich)) return;
         // Bilingual, or a translation whose tags could not be matched safely: the original stays visible.
@@ -1269,29 +1315,53 @@ function immersiveUI(config) {
         render(block, span, done, text, rich);
       } catch (error) {
         if (controller.signal.aborted) return;
+        if (!isJobValid(job)) { cancelStale(); return; }
         span.classList.remove('imt-loading');
         showOriginal(block);
         span.textContent = t('paraFailed', error.message);
       } finally {
-        if (jobs.get(block) === controller) jobs.delete(block);
+        if (jobs.get(block)?.controller === controller) jobs.delete(block);
       }
     }
-    const surfaceOfBlock = block => regionOf(block)?.key;
-    const fullFor = block => fullSurfaces.has(surfaceOfBlock(block));
+    const paneEntryFor = block => {
+      const region = regionOf(block);
+      return region ? fullPanes.get(region.root) || null : null;
+    };
+    const fullFor = block => !!paneEntryFor(block);
     // Chat answers stream in; wait until a paragraph stops changing before spending a model call on it.
     function settle(block) {
-      if (surfaceOfBlock(block) !== 'chat') return enqueue(block, false, fullOnly);
+      const entry = paneEntryFor(block);
+      if (!entry) return;
+      entry.blocks.add(block);
+      if (entry.key !== 'chat') return enqueue(block, false, entry.only, entry);
       clearTimeout(settling.get(block));
       const snapshot = ownText(block);
-      settling.set(block, setTimeout(() => {
-        if (!fullFor(block) || !block.isConnected) return;
-        if (ownText(block) === snapshot) enqueue(block, false, fullOnly); else settle(block);
-      }, 1200));
+      const timer = setTimeout(() => {
+        if (settling.get(block) !== timer) return;
+        settling.delete(block);
+        const current = paneEntryFor(block);
+        if (!current || current !== entry || !block.isConnected) {
+          if (!jobs.has(block) && !translated(block)) {
+            delete block.dataset.imtSeen;
+            if (current && block.isConnected && visibility) {
+              block.dataset.imtSeen = '1';
+              visibility.observe(block);
+            }
+          }
+          return;
+        }
+        if (ownText(block) === snapshot) enqueue(block, false, current.only, current); else settle(block);
+      }, 1200);
+      settling.set(block, timer);
+    }
+    function pruneDisconnectedPanes() {
+      if (lastPane && !lastPane.root.isConnected) lastPane = null;
+      for (const [root, entry] of [...fullPanes]) {
+        if (!root.isConnected) setFullMode(root, entry.key, false, true);
+      }
     }
     function candidates() {
-      const roots = scope === 'workbench'
-        ? REGIONS.filter(([key]) => fullSurfaces.has(key)).flatMap(([, , content]) => [...doc.querySelectorAll(content)])
-        : [doc.body];
+      const roots = [...fullPanes.keys()].filter(root => root.isConnected);
       const blocks = roots.flatMap(root => [
         ...(root.matches(BLOCKS) || looseBlock(root) ? [root] : []),
         ...root.querySelectorAll(BLOCKS),
@@ -1301,8 +1371,12 @@ function immersiveUI(config) {
     }
     function observeAll() {
       rescanTimer = 0;
-      if (!fullSurfaces.size) return;
+      pruneDisconnectedPanes();
+      if (!fullPanes.size) return;
       for (const block of candidates()) {
+        const entry = paneEntryFor(block);
+        if (!entry) continue;
+        entry.blocks.add(block);
         if (block.dataset.imtSeen) {
           if (jobs.has(block)) continue;
           if (transOf(block) && block.dataset.imtSrc !== ownText(block)) settle(block);
@@ -1313,25 +1387,31 @@ function immersiveUI(config) {
         visibility.observe(block);
       }
     }
-    function clearTranslations(surface) {
-      for (const block of doc.querySelectorAll('[data-imt-seen],[data-imt-src],.imt-only')) {
-        const key = surfaceOfBlock(block);
-        if (surface && key && key !== surface) continue;
+    function clearTranslations(paneRoot, tracked) {
+      const selector = '[data-imt-seen],[data-imt-src],[data-imt-placed],.imt-only';
+      const nodes = new Set(paneRoot
+        ? [...(paneRoot.matches(selector) ? [paneRoot] : []), ...paneRoot.querySelectorAll(selector)]
+        : doc.querySelectorAll(selector));
+      if (tracked) for (const block of tracked) nodes.add(block);
+      for (const block of nodes) {
         visibility?.unobserve(block);
+        clearTimeout(settling.get(block));
+        settling.delete(block);
         removeTranslation(block);
         delete block.dataset.imtSeen;
       }
     }
-    function setFullMode(surface, on) {
+    function setFullMode(paneRoot, surface, on, silent = false) {
       if (on) {
-        fullOnly = settings.fullPageMode !== 'bilingual';
-        fullSurfaces.add(surface);
+        const only = settings.fullPageMode !== 'bilingual';
+        fullPanes.set(paneRoot, { root: paneRoot, key: surface, only, blocks: new Set() });
         if (!visibility) {
           visibility = new IntersectionObserver(entries => {
             for (const entry of entries) {
               if (!entry.isIntersecting) continue;
               visibility.unobserve(entry.target);
               if (fullFor(entry.target)) settle(entry.target);
+              else if (!entry.target.isConnected && !jobs.has(entry.target) && !translated(entry.target)) delete entry.target.dataset.imtSeen;
             }
           }, { rootMargin: '400px 0px' });
           mutations = new MutationObserver(() => {
@@ -1340,19 +1420,34 @@ function immersiveUI(config) {
           mutations.observe(doc.body, { childList: true, subtree: true, characterData: true });
         }
         observeAll();
-        toast(t('fullOn', fullOnly ? t('modeOnly') : t('modeBilingual'), settings.shortcuts.fullPage || ''));
+        if (!silent) toast(t('fullOn', only ? t('modeOnly') : t('modeBilingual'), settings.shortcuts.fullPage || ''));
       } else {
-        fullSurfaces.delete(surface);
-        for (let i = queue.length - 1; i >= 0; i--) if (surfaceOfBlock(queue[i].block) === surface) queue.splice(i, 1);
-        clearTranslations(surface);
-        if (!fullSurfaces.size) {
+        const entry = fullPanes.get(paneRoot);
+        fullPanes.delete(paneRoot);
+        if (lastPane?.root === paneRoot && !paneRoot.isConnected) lastPane = null;
+        for (let i = queue.length - 1; i >= 0; i--) {
+          if (queue[i].paneRoot === paneRoot || paneRoot.contains(queue[i].block)) {
+            const [item] = queue.splice(i, 1);
+            removeTranslation(item.block);
+            delete item.block.dataset.imtSeen;
+          }
+        }
+        for (const [block, job] of [...jobs]) {
+          if (job.paneRoot === paneRoot || paneRoot.contains(block)) {
+            removeTranslation(block);
+            delete block.dataset.imtSeen;
+          }
+        }
+        clearTranslations(paneRoot, entry?.blocks);
+        entry?.blocks.clear();
+        if (!fullPanes.size) {
           visibility?.disconnect();
           mutations?.disconnect();
           visibility = mutations = undefined;
           clearTimeout(rescanTimer);
           rescanTimer = 0;
         }
-        toast(t('fullOff'));
+        if (!silent) toast(t('fullOff'));
       }
     }
     // When a surface is switched off in settings, drop its translations and its full-page mode.
@@ -1362,31 +1457,151 @@ function immersiveUI(config) {
       if (currentEngine !== lastEngine) {
         lastEngine = currentEngine;
         hide();
-        for (const key of [...fullSurfaces]) setFullMode(key, false);
-        for (const controller of jobs.values()) controller.abort();
+        for (const [root, entry] of [...fullPanes]) setFullMode(root, entry.key, false);
+        for (const block of [...jobs.keys()]) removeTranslation(block);
         queue.length = 0;
         clearTranslations();
         applyLabels();
       }
-      for (const key of [...fullSurfaces]) if (!surfaceOn(key)) setFullMode(key, false);
+      pruneDisconnectedPanes();
+      for (const [root, entry] of [...fullPanes]) {
+        if (!surfaceOn(entry.key)) setFullMode(root, entry.key, false);
+      }
       if (disabled) hide();
     });
     // Registered on the window in the capture phase so they run before VS Code's own workbench handlers.
     const track = event => { pointerX = event.clientX; pointerY = event.clientY; };
     win.addEventListener('pointermove', track, { passive: true, capture: true });
     win.addEventListener('pointerdown', track, { passive: true, capture: true });
-    // The surface the user is working in: the focused one, else the hovered one unless typing in an editor.
-    function activeSurface() {
-      if (scope !== 'workbench') return surfaceOn(scope) ? scope : null;
+    // Floating / window-level command UI always retains the last real content pane rather than targeting itself.
+    const EXTERNAL_COMMAND_UI = '.context-view,.monaco-menu,.monaco-menu-container,.menubar,' +
+      '.command-center,.part.titlebar,.part.activitybar,.part.statusbar,' +
+      '.monaco-sash,.imt-panel,.imt-dot,[role="menu"],[role="menubar"]';
+    // Toolbars and action bars act as external command UI only when outside any real content pane
+    // (e.g., editor-group or pane-header actions); clicking a toolbar inside a content pane selects that pane.
+    const TOOLBAR_UI = '.monaco-toolbar,.monaco-action-bar,.editor-actions,.title-actions,.tab-actions,' +
+      '.chat-input-toolbars,.chat-secondary-toolbar,[role="toolbar"]';
+    const PANE_WRAPPER = '.editor-group-container,.editor-instance,.pane,.pane-body,.chat-viewpane,.chat-viewpane-container';
+    const PANE_ANCESTOR = `.editor-container,${PANE_WRAPPER}`;
+    // Surfaces whose embedded .monaco-editor is a pane-owned input/search widget rather than a raw code editor.
+    const INPUT_EDITOR_SURFACES = new Set(['chat', 'settings']);
+    function isRawCodeEditor(element) {
+      const editor = element?.closest?.('.monaco-editor');
+      if (!editor) return false;
+      const region = rawRegionOf(editor);
+      return !(region && INPUT_EDITOR_SURFACES.has(region.key));
+    }
+    function isCommandUI(element) {
+      if (!element?.closest) return false;
+      const rawEditor = isRawCodeEditor(element);
+      const region = rawEditor ? null : rawRegionOf(element);
+      const ext = element.closest(EXTERNAL_COMMAND_UI);
+      if (ext && !(region && ext.contains(region.root) && ext !== region.root)) return true;
+      const quick = element.closest('.quick-input-widget');
+      if (quick && !(region && quick.contains(region.root) && quick !== region.root) && !element.closest('.interactive-session')) return true;
+      if (!element.closest(TOOLBAR_UI)) return false;
+      if (rawEditor) return false;
+      return !region;
+    }
+    function isVisibleElement(element) {
+      if (!element?.isConnected) return false;
+      const computed = win.getComputedStyle(element);
+      if (computed.display === 'none' || computed.visibility === 'hidden') return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 || rect.height > 0;
+    }
+    // Resolves a clicked or focused element to its specific content pane root, or null for non-translatable panes.
+    function paneOf(element) {
+      if (!element?.closest) return null;
+      if (scope !== 'workbench') return { key: scope, root: doc.body };
+      // A raw code editor (standalone or embedded, e.g. customizations raw file editing) keeps normal editor keys.
+      if (isRawCodeEditor(element)) return null;
+      const direct = rawRegionOf(element);
+      if (direct) return { key: direct.key, root: direct.root };
+      // Bare padding, group focus, or editor tab / pane header clicks inside a pane wrapper resolve to its sole
+      // visible supported region, excluding standalone code editors, terminals, trees/lists, inputs and webview iframes.
+      if (element.closest('.monaco-editor,.xterm,.monaco-list,.monaco-tree,iframe,input,textarea,select')) return null;
+      const wrapper = element.closest(PANE_WRAPPER);
+      if (!wrapper) return null;
+      if ([...wrapper.querySelectorAll('.monaco-editor,iframe,.xterm')].some(el => !rawRegionOf(el) && isVisibleElement(el))) return null;
+      const roots = [];
+      for (const [key, container] of REGIONS) {
+        for (const el of wrapper.querySelectorAll(container)) {
+          const root = outermost(el, container);
+          if (root && wrapper.contains(root) && isVisibleElement(root) && !roots.some(item => item.root === root)) {
+            roots.push({ key, root });
+          }
+        }
+      }
+      return roots.length === 1 ? roots[0] : null;
+    }
+    const recordPointerPane = event => {
+      if (scope !== 'workbench') return;
+      if (event.button !== undefined && event.button !== 0 && event.button !== 2) return;
+      const target = elementAt(event.target);
+      if (!target || isCommandUI(target)) return;
+      if (target.tagName === 'IFRAME') { lastPane = null; return; }
+      const pane = paneOf(target);
+      if (pane) {
+        lastPane = pane;
+        lastPanePressAt = Date.now();
+      } else {
+        lastPane = null;
+      }
+    };
+    const recordFocusPane = event => {
+      if (scope !== 'workbench') return;
+      const target = elementAt(event.target);
+      const related = elementAt(event.relatedTarget);
+      if (target?.tagName === 'IFRAME') { lastPane = null; return; }
+      if (!target || target === doc.body || target === doc.documentElement) return;
+      if (isCommandUI(target)) {
+        // Leaving a webview iframe into command UI must not revive a stale workbench pane.
+        if (related?.tagName === 'IFRAME') lastPane = null;
+        return;
+      }
+      const pane = paneOf(target);
+      if (pane) {
+        lastPane = pane;
+        return;
+      }
+      // Clicking non-focusable prose inside a pane often moves focus to its ancestor container
+      // (e.g. .editor-group-container or .pane); preserve the clicked pane instead of clearing it.
+      if (lastPane?.root?.isConnected && target.contains(lastPane.root) &&
+          (Date.now() - lastPanePressAt < 250 || target.matches(PANE_ANCESTOR))) {
+        return;
+      }
+      lastPane = null;
+    };
+    if (scope === 'workbench') {
+      win.addEventListener('pointerdown', recordPointerPane, { passive: true, capture: true });
+      win.addEventListener('mousedown', recordPointerPane, { passive: true, capture: true });
+      win.addEventListener('focusin', recordFocusPane, { passive: true, capture: true });
+      win.addEventListener('focusout', event => {
+        if (elementAt(event.target)?.tagName === 'IFRAME' && Date.now() - lastPanePressAt >= 250) lastPane = null;
+      }, { passive: true, capture: true });
+      win.addEventListener('blur', () => {
+        if (doc.activeElement?.tagName === 'IFRAME') lastPane = null;
+        setTimeout(() => { if (doc.activeElement?.tagName === 'IFRAME') lastPane = null; }, 0);
+      });
+    }
+    // The specific content pane the user is working in: the most recently clicked/focused one (retained across
+    // external command UI), never another editor group, sidebar, code editor, webview or detached pane.
+    function activePane(event) {
+      if (scope !== 'workbench') return surfaceOn(scope) ? { key: scope, root: doc.body } : null;
+      if (event?.target?.tagName === 'IFRAME' || doc.activeElement?.tagName === 'IFRAME') return null;
       const focus = doc.activeElement;
-      // The Chat input is a code editor too, but the page shortcut there clearly means "the Chat view".
-      if (focus?.closest?.(CHAT_SURFACE) && surfaceOn('chat')) return 'chat';
-      const focused = focus && focus !== doc.body ? regionOf(focus) : null;
-      if (focused) return focused.key;
-      if (focus?.closest?.('.monaco-editor')) return null;
+      const focusedIsCommandUI = !!(focus && focus !== doc.body && isCommandUI(focus));
+      if (focus && !focusedIsCommandUI && isRawCodeEditor(focus)) return null;
+      if (lastPane && !lastPane.root.isConnected) lastPane = null;
+      if (lastPane) return surfaceOn(lastPane.key) ? lastPane : null;
+      if (lastPane === null) return null;
+      const focused = focus && focus !== doc.body && !focusedIsCommandUI ? paneOf(focus) : null;
+      if (focused) return surfaceOn(focused.key) ? focused : null;
+      if (focusedIsCommandUI) return null;
       const target = hovered();
-      if (target?.closest?.(CHAT_SURFACE) && surfaceOn('chat')) return 'chat';
-      return regionOf(target)?.key || null;
+      const over = target && !isCommandUI(target) ? paneOf(target) : null;
+      return over && surfaceOn(over.key) ? over : null;
     }
     win.addEventListener('keydown', event => {
       if (disabled || event.repeat) return;
@@ -1407,13 +1622,14 @@ function immersiveUI(config) {
         return;
       }
       if (!pressed(event, settings.shortcuts.fullPage)) return;
-      // Only when the user is working in a supported surface; never steal the key from a text editor.
-      const surface = activeSurface();
-      if (!surface) return;
+      // Only when the user is working in a supported content pane; never steal the key from a text editor or webview.
+      const pane = activePane(event);
+      if (!pane) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (!fullSurfaces.has(surface)) shortcutUsed();
-      setFullMode(surface, !fullSurfaces.has(surface));
+      const on = !fullPanes.has(pane.root);
+      if (on) shortcutUsed();
+      setFullMode(pane.root, pane.key, on);
     }, true);
   }
 
